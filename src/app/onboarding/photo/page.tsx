@@ -8,7 +8,6 @@ import { Button, Logo } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { CameraCaptureModal } from "@/components/wardrobe/camera-capture-modal";
 import { processBodyPhotoForTryOn } from "@/lib/image";
-import { needsPhotoOnboarding } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import { useAetherStore } from "@/store/aether-store";
 
@@ -48,7 +47,8 @@ export default function PhotoOnboardingPage() {
       router.replace("/login");
       return;
     }
-    if (!needsPhotoOnboarding(user)) {
+    // Only auto-skip onboarding if they already finished a photo
+    if (user.avatarStatus === "ready") {
       router.replace("/today");
     }
   }, [hydrated, user, router]);
@@ -100,8 +100,7 @@ export default function PhotoOnboardingPage() {
     setError("");
     try {
       await setAvatar(preview, "ready");
-      // Hard navigate so the app gate re-reads ready status (avoids soft-redirect loops)
-      window.location.assign("/today");
+      window.location.href = "/today";
     } catch {
       setError("Couldn’t save your photo. Please try again.");
       setSaving(false);
@@ -281,6 +280,16 @@ export default function PhotoOnboardingPage() {
                   >
                     {saving ? "Saving…" : "Enter VoiceDress"}
                   </Button>
+                  <button
+                    type="button"
+                    disabled={saving || processing}
+                    onClick={() => {
+                      window.location.href = "/today";
+                    }}
+                    className="w-full text-center text-xs text-mist transition hover:text-ivory-muted"
+                  >
+                    Skip for now — open app
+                  </button>
                 </div>
               </div>
               <button

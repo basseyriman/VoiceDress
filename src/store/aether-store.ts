@@ -315,32 +315,47 @@ export const useAetherStore = create<AetherState>()(
         const user = get().user;
         if (!user) return;
 
-        let cloudUrl = url;
+        // Local-first: unlock the app immediately, sync to Storage in the background
         if (url.startsWith("data:")) {
           await saveAvatarBlob(url);
-          if (isCloudUid(user.uid)) {
-            try {
-              cloudUrl = await uploadUserAvatar(user.uid, url);
-            } catch {
-              cloudUrl = url;
-            }
-          }
         }
-
-        // Keep a local displayable URL in memory (data:) so Today never shows a broken Storage img
-        const displayUrl = url.startsWith("data:") ? url : cloudUrl;
 
         const next = {
           ...user,
-          avatarUrl: displayUrl,
-          photoURL: cloudUrl,
+          avatarUrl: url.startsWith("data:") ? url : url,
+          photoURL: user.photoURL,
           avatarStatus: status,
         };
         set({ user: next });
-        if (isCloudUid(user.uid)) {
+
+        if (url.startsWith("data:") && isCloudUid(user.uid)) {
+          void (async () => {
+            try {
+              const cloudUrl = await uploadUserAvatar(user.uid, url);
+              const current = get().user;
+              if (!current || current.uid !== user.uid) return;
+              set({
+                user: {
+                  ...current,
+                  photoURL: cloudUrl,
+                  avatarStatus: status,
+                },
+              });
+              void saveUserProfile(user.uid, {
+                avatarUrl: cloudUrl,
+                photoURL: cloudUrl,
+                avatarStatus: status,
+              }).catch(() => undefined);
+            } catch {
+              void saveUserProfile(user.uid, {
+                avatarStatus: status,
+              }).catch(() => undefined);
+            }
+          })();
+        } else if (isCloudUid(user.uid)) {
           void saveUserProfile(user.uid, {
-            avatarUrl: cloudUrl,
-            photoURL: cloudUrl,
+            avatarUrl: url,
+            photoURL: url,
             avatarStatus: status,
           }).catch(() => undefined);
         }
