@@ -136,10 +136,9 @@ export async function upsertGarment(
       `users/${uid}/garments/${garment.id}.jpg`,
       imageUrl
     );
-  } else if (imageUrl?.startsWith("/") && typeof window !== "undefined") {
-    // Keep relative public paths as absolute for cross-device try-on
-    imageUrl = `${window.location.origin}${imageUrl}`;
   }
+  // Keep /garments/* as relative paths — fal resolves them server-side as base64.
+  // Never rewrite to localhost; fal cannot fetch your machine.
 
   const next: Garment = {
     ...garment,
