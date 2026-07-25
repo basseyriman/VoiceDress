@@ -29,15 +29,30 @@ function alternateGarmentPath(rel: string): string | null {
 export async function resolveGarmentImageForFal(
   imageUrl: string
 ): Promise<string> {
-  if (
-    imageUrl.startsWith("data:") ||
-    imageUrl.startsWith("http://") ||
-    imageUrl.startsWith("https://")
-  ) {
-    return imageUrl;
+  // fal.ai cannot fetch localhost — turn those into filesystem paths
+  let url = imageUrl;
+  try {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      const parsed = new URL(url);
+      if (
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname === "0.0.0.0"
+      ) {
+        url = parsed.pathname;
+      } else {
+        return imageUrl;
+      }
+    }
+  } catch {
+    // keep url as-is
   }
 
-  const normalized = normalizeGarmentPublicUrl(imageUrl);
+  if (url.startsWith("data:")) {
+    return url;
+  }
+
+  const normalized = normalizeGarmentPublicUrl(url);
   const rel = normalized.replace(/^\//, "").split("?")[0];
   if (!rel.startsWith("garments/")) {
     throw new Error(`Unsupported garment path: ${imageUrl}`);
