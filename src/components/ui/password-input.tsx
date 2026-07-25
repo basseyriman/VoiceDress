@@ -32,9 +32,9 @@ export function PasswordInput({ className, ...props }: PasswordInputProps) {
         tabIndex={-1}
       >
         {visible ? (
-          <EyeOff className="h-4 w-4" aria-hidden />
-        ) : (
           <Eye className="h-4 w-4" aria-hidden />
+        ) : (
+          <EyeOff className="h-4 w-4" aria-hidden />
         )}
       </button>
     </div>
