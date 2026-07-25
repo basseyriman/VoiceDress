@@ -132,8 +132,10 @@ function finishPrompt(piece: Piece): string {
     return [
       KEEP_YOU,
       KEEP_FRAMING,
-      `Place the watch from image 2 (${look}) naturally on the person's wrist in image 1.`,
-      "Do not float it on the chest. Do not change the face or clothes.",
+      `Add the watch from image 2 (${look}) onto ONE clearly visible wrist in image 1.`,
+      "Prefer the wrist that is more visible to camera. Match metal color and face size from image 2.",
+      "The watch must be readable on the wrist — not floating, not on the chest, not omitted.",
+      "Keep face, clothes, shoes, and glasses unchanged.",
     ].join(" ");
   }
   return [
@@ -187,7 +189,11 @@ async function applyFinishPiece(opts: {
   const attempts =
     piece.category === "shoes"
       ? [7, 6, 5.5, 4.5]
-      : [4.5];
+      : isWatch(piece)
+        ? [6.5, 5.5, 4.5, 3.8]
+        : isEyewear(piece)
+          ? [5.5, 4.5]
+          : [4.5];
 
   let lastFail: TryResult = {
     ok: false,

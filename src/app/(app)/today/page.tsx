@@ -98,6 +98,7 @@ export default function TodayPage() {
     recognitionRef.current = rec;
     rec.continuous = false;
     rec.interimResults = true;
+    rec.lang = "en-GB";
 
     rec.onresult = (event: SpeechRecognitionEvent) => {
       let finalText = "";
@@ -120,19 +121,34 @@ export default function TodayPage() {
       }
     };
     rec.onend = () => setVoiceListening(false);
-    rec.onerror = () => setVoiceListening(false);
+    rec.onerror = (event: SpeechRecognitionErrorEvent) => {
+      // Aborted = we restarted; no-speech = user quiet — don't thrash UI
+      if (event.error === "aborted" || event.error === "no-speech") {
+        setVoiceListening(false);
+        return;
+      }
+      setVoiceListening(false);
+    };
   }, [router, setTranscript, setVoiceListening]);
 
   const startListen = () => {
     const rec = recognitionRef.current;
     if (!rec || !supported) return;
     setInterim("");
-    setVoiceListening(true);
     try {
-      rec.start();
+      rec.stop();
     } catch {
-      // already started
+      // not running
     }
+    // Brief pause so Chrome releases the previous session before restart
+    window.setTimeout(() => {
+      setVoiceListening(true);
+      try {
+        rec.start();
+      } catch {
+        setVoiceListening(false);
+      }
+    }, 180);
   };
 
   const stopListen = () => {

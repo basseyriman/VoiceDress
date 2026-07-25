@@ -19,16 +19,20 @@ export function FlowDock() {
   const router = useRouter();
   const [hint, setHint] = useState("");
   const recognitionRef = useRef<SpeechRecognition | null>(null);
-
   const listening = useAetherStore((s) => s.voiceListening);
   const setListening = useAetherStore((s) => s.setVoiceListening);
   const setTranscript = useAetherStore((s) => s.setTranscript);
 
+  const hidden =
+    pathname.startsWith("/today") || pathname.startsWith("/try-on");
+
   useEffect(() => {
+    if (hidden) return;
     const rec = createSpeechRecognizer();
     if (!rec) return;
     recognitionRef.current = rec;
     rec.interimResults = true;
+    rec.lang = "en-GB";
     rec.onresult = (event: SpeechRecognitionEvent) => {
       let finalText = "";
       let interimText = "";
@@ -59,23 +63,45 @@ export function FlowDock() {
     };
     rec.onend = () => setListening(false);
     rec.onerror = () => setListening(false);
-  }, [router, setTranscript, setListening, pathname]);
+    return () => {
+      try {
+        rec.stop();
+      } catch {
+        // ignore
+      }
+      recognitionRef.current = null;
+    };
+  }, [router, setTranscript, setListening, pathname, hidden]);
+
+  if (hidden) return null;
 
   const toggle = () => {
     const rec = recognitionRef.current;
     if (!rec) return;
     if (listening) {
-      rec.stop();
+      try {
+        rec.stop();
+      } catch {
+        // ignore
+      }
       setListening(false);
       return;
     }
     setHint("Listening…");
-    setListening(true);
     try {
-      rec.start();
+      rec.stop();
     } catch {
-      // ignore re-start errors
+      // not running
     }
+    window.setTimeout(() => {
+      setListening(true);
+      try {
+        rec.start();
+      } catch {
+        setListening(false);
+        setHint("");
+      }
+    }, 180);
   };
 
   return (

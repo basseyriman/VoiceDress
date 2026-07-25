@@ -187,21 +187,19 @@ export function OutfitStage({
         setWornUrl(data.imageUrl);
         setKeyConfigured(true);
 
-        const appliedCats = new Set(
-          (Array.isArray(data.steps) ? data.steps : []).map(
-            (s: { category?: string }) => s.category
-          )
+        const appliedNames = new Set(
+          (Array.isArray(data.steps) ? data.steps : [])
+            .map((s: { name?: string; category?: string }) => s.name || s.category)
+            .filter(Boolean) as string[]
         );
         const missed = lookPieces
-          .filter((p) => !appliedCats.has(p.category))
+          .filter((p) => !appliedNames.has(p.name) && !appliedNames.has(p.category))
           .map((p) => p.name);
 
-        // If shoes missed on the batch, one dedicated footwear retry
-        const shoe = finishPieces.find((p) => p.category === "shoes");
-        if (shoe && !appliedCats.has("shoes")) {
-          setStepLabel(`Retrying ${shoe.name}…`);
+        const retryFinish = async (piece: (typeof lookPieces)[number]) => {
+          setStepLabel(`Retrying ${piece.name}…`);
           setProgress(90);
-          const shoeRes = await fetch("/api/tryon/render", {
+          const res = await fetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -209,32 +207,41 @@ export function OutfitStage({
               stage: "finish",
               garments: [
                 {
-                  imageUrl: shoe.imageUrl,
-                  category: shoe.category,
-                  name: shoe.name,
-                  colors: shoe.colors,
-                  hexColors: shoe.hexColors,
-                  fabric: shoe.fabric,
-                  texture: shoe.texture,
-                  tags: shoe.tags,
+                  imageUrl: piece.imageUrl,
+                  category: piece.category,
+                  name: piece.name,
+                  colors: piece.colors,
+                  hexColors: piece.hexColors,
+                  fabric: piece.fabric,
+                  texture: piece.texture,
+                  tags: piece.tags,
                 },
               ],
             }),
           });
-          const shoeData = await shoeRes.json();
-          if (cancelled || myId !== requestId.current) return;
-          if (failOrBilling(shoeData)) return;
+          const retryData = await res.json();
+          if (cancelled || myId !== requestId.current) return false;
+          if (failOrBilling(retryData)) return false;
           if (
-            shoeData.ok &&
-            shoeData.imageUrl &&
-            Array.isArray(shoeData.steps) &&
-            shoeData.steps.length > 0
+            retryData.ok &&
+            retryData.imageUrl &&
+            Array.isArray(retryData.steps) &&
+            retryData.steps.length > 0
           ) {
-            current = shoeData.imageUrl;
-            setWornUrl(shoeData.imageUrl);
-            const i = missed.indexOf(shoe.name);
+            current = retryData.imageUrl;
+            setWornUrl(retryData.imageUrl);
+            const i = missed.indexOf(piece.name);
             if (i >= 0) missed.splice(i, 1);
+            return true;
           }
+          return false;
+        };
+
+        // Dedicated retries for finish pieces that often miss (shoes, watch, glasses)
+        for (const piece of finishPieces) {
+          if (appliedNames.has(piece.name)) continue;
+          await retryFinish(piece);
+          if (cancelled || myId !== requestId.current) return;
         }
 
         if (data.warning && missed.length) {
