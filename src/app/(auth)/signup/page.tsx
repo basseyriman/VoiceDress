@@ -98,7 +98,7 @@ export default function SignupPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-2xl border border-line bg-ink-soft px-4 py-3 text-sm text-ivory outline-none focus:border-champagne/50"
-              placeholder="Bassey"
+              placeholder="Your name"
             />
           </label>
           <label className="block">
