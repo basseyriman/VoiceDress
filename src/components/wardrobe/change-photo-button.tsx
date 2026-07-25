@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { Camera, ImageIcon } from "lucide-react";
 import { useAetherStore } from "@/store/aether-store";
-import { prepareProfilePhoto } from "@/lib/image";
+import { processBodyPhotoForTryOn } from "@/lib/image";
 import { CameraCaptureModal } from "@/components/wardrobe/camera-capture-modal";
 import { cn } from "@/lib/utils";
 
@@ -28,12 +28,11 @@ export function ChangePhotoButton({
     setBusy(true);
     setError("");
     try {
-      const prepared = await prepareProfilePhoto(file);
+      const prepared = await processBodyPhotoForTryOn(file, { minMs: 900 });
       if (prepared.error || !prepared.dataUrl) {
         setError(prepared.error || "Invalid photo");
         return;
       }
-      // Keep full-body framing for try-on (no square avatar crop)
       onChanged?.(prepared.dataUrl);
       await setAvatar(prepared.dataUrl, "ready");
     } catch {
@@ -68,7 +67,7 @@ export function ChangePhotoButton({
           className={btn}
         >
           <ImageIcon className={compact ? "h-3 w-3" : "h-3.5 w-3.5"} />
-          {busy ? "Updating…" : "Choose photo"}
+          {busy ? "Processing…" : "Choose photo"}
         </button>
         <button
           type="button"

@@ -83,6 +83,71 @@ export async function letterboxForTryOn(src: string): Promise<string> {
   return canvas.toDataURL("image/jpeg", 0.9);
 }
 
+/**
+ * Standardize a body photo for outfit try-on: 2:3 framing + soft studio grade.
+ * Does not crop the person — pads and grades so garments land cleanly.
+ */
+export async function normalizeBodyPhotoForTryOn(src: string): Promise<string> {
+  const framed = await letterboxForTryOn(src);
+  const img = await loadHtmlImage(framed);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return framed;
+
+  ctx.drawImage(img, 0, 0);
+
+  // Soft warm grade so the plate reads finished, not a phone dump
+  ctx.fillStyle = "rgba(201,168,124,0.06)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const vignette = ctx.createRadialGradient(
+    canvas.width / 2,
+    canvas.height * 0.42,
+    canvas.height * 0.18,
+    canvas.width / 2,
+    canvas.height * 0.5,
+    canvas.height * 0.78
+  );
+  vignette.addColorStop(0, "rgba(0,0,0,0)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.28)");
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Gentle lift on midtones for try-on contrast
+  ctx.globalCompositeOperation = "soft-light";
+  ctx.fillStyle = "rgba(245,240,232,0.12)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = "source-over";
+
+  return canvas.toDataURL("image/jpeg", 0.9);
+}
+
+/** Compress, then normalize for try-on. Optional minimum wait for UX ritual. */
+export async function processBodyPhotoForTryOn(
+  file: File,
+  options?: { minMs?: number }
+): Promise<{ dataUrl: string; error?: string }> {
+  const started = Date.now();
+  const prepared = await prepareProfilePhoto(file);
+  if (prepared.error || !prepared.dataUrl) {
+    return { dataUrl: "", error: prepared.error || "Invalid photo" };
+  }
+  try {
+    const dataUrl = await normalizeBodyPhotoForTryOn(prepared.dataUrl);
+    const minMs = options?.minMs ?? 0;
+    const wait = Math.max(0, minMs - (Date.now() - started));
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    return { dataUrl };
+  } catch {
+    return {
+      dataUrl: "",
+      error: "Couldn’t prepare that photo for dressing. Try another.",
+    };
+  }
+}
+
 function loadHtmlImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
