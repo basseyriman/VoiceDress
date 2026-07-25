@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Camera, ImageIcon } from "lucide-react";
+import { Camera, ImageIcon, Loader2 } from "lucide-react";
 import { Button, Logo } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { CameraCaptureModal } from "@/components/wardrobe/camera-capture-modal";
-import { prepareProfilePhoto } from "@/lib/image";
+import { processBodyPhotoForTryOn } from "@/lib/image";
 import { needsPhotoOnboarding } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import { useAetherStore } from "@/store/aether-store";
@@ -22,8 +22,10 @@ const BEATS = [
 const INTRO_PAUSE_MS = 1400;
 const BEAT_HOLD_MS = 3200;
 const EXIT_HOLD_MS = 1800;
+const PROCESS_MIN_MS = 1600;
 
 type Phase = "intro" | "capture";
+type PhotoStatus = "empty" | "processing" | "ready";
 
 export default function PhotoOnboardingPage() {
   const router = useRouter();
@@ -34,7 +36,7 @@ export default function PhotoOnboardingPage() {
   const [phase, setPhase] = useState<Phase>("intro");
   const [beat, setBeat] = useState(0);
   const [preview, setPreview] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [photoStatus, setPhotoStatus] = useState<PhotoStatus>("empty");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -54,7 +56,6 @@ export default function PhotoOnboardingPage() {
   useEffect(() => {
     if (phase !== "intro") return;
 
-    // beat 0 = quiet pause before first line; 1..n = show BEATS[beat-1]
     if (beat === 0) {
       const t = window.setTimeout(() => setBeat(1), INTRO_PAUSE_MS);
       return () => window.clearTimeout(t);
@@ -69,26 +70,32 @@ export default function PhotoOnboardingPage() {
 
   const onPhoto = async (file?: File) => {
     if (!file) return;
-    setBusy(true);
     setError("");
+    setPhotoStatus("processing");
+    setPreview(null);
     try {
-      const prepared = await prepareProfilePhoto(file);
+      const prepared = await processBodyPhotoForTryOn(file, {
+        minMs: PROCESS_MIN_MS,
+      });
       if (prepared.error || !prepared.dataUrl) {
         setError(prepared.error || "That photo couldn’t be used. Try another.");
+        setPhotoStatus("empty");
         setPreview(null);
         return;
       }
       setPreview(prepared.dataUrl);
+      setPhotoStatus("ready");
     } catch {
       setError("Couldn’t use that photo. Try a JPG or PNG.");
+      setPhotoStatus("empty");
+      setPreview(null);
     } finally {
-      setBusy(false);
       if (libraryRef.current) libraryRef.current.value = "";
     }
   };
 
   const enterApp = async () => {
-    if (!preview) return;
+    if (!preview || photoStatus !== "ready") return;
     setSaving(true);
     setError("");
     try {
@@ -100,6 +107,9 @@ export default function PhotoOnboardingPage() {
       setSaving(false);
     }
   };
+
+  const processing = photoStatus === "processing";
+  const canEnter = photoStatus === "ready" && Boolean(preview) && !saving;
 
   if (!hydrated || !user) {
     return (
@@ -184,18 +194,53 @@ export default function PhotoOnboardingPage() {
             >
               <div className="glass shine-border overflow-hidden rounded-[1.75rem]">
                 <div className="relative mx-auto aspect-[3/4] w-full max-w-[17.5rem] overflow-hidden bg-stone sm:max-w-[19rem]">
-                  {preview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={preview}
-                      alt="Your photo preview"
-                      className="absolute inset-0 h-full w-full object-cover object-top"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
-                      <div className="h-24 w-16 rounded-full border border-dashed border-line/80" />
-                      <p className="mt-4 text-sm text-mist">
-                        Full-body or clear standing portrait
+                  <AnimatePresence mode="wait">
+                    {preview && photoStatus === "ready" ? (
+                      <motion.div
+                        key="ready"
+                        initial={{ opacity: 0, scale: 1.03 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                        className="absolute inset-0"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={preview}
+                          alt="Your prepared photo"
+                          className="absolute inset-0 h-full w-full object-cover object-top"
+                        />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="placeholder"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center"
+                      >
+                        {!processing && (
+                          <>
+                            <div className="h-24 w-16 rounded-full border border-dashed border-line/80" />
+                            <p className="mt-4 text-sm text-mist">
+                              Full-body or clear standing portrait
+                            </p>
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {processing && (
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-ink/55 backdrop-blur-[2px]">
+                      <Loader2
+                        className="h-9 w-9 animate-spin text-champagne"
+                        aria-hidden
+                      />
+                      <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-champagne">
+                        Processing
+                      </p>
+                      <p className="mt-2 max-w-[12rem] text-center text-xs text-mist">
+                        Preparing your photo for dressing
                       </p>
                     </div>
                   )}
@@ -211,16 +256,16 @@ export default function PhotoOnboardingPage() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      disabled={busy || saving}
+                      disabled={processing || saving}
                       onClick={() => libraryRef.current?.click()}
                       className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-line bg-champagne/15 px-4 py-2.5 text-xs text-champagne transition hover:bg-champagne/25 disabled:opacity-50"
                     >
                       <ImageIcon className="h-3.5 w-3.5" />
-                      {busy ? "Preparing…" : "Choose photo"}
+                      Choose photo
                     </button>
                     <button
                       type="button"
-                      disabled={busy || saving}
+                      disabled={processing || saving}
                       onClick={() => setCameraOpen(true)}
                       className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-line bg-white/[0.04] px-4 py-2.5 text-xs text-ivory transition hover:border-champagne/40 disabled:opacity-50"
                     >
@@ -231,7 +276,7 @@ export default function PhotoOnboardingPage() {
                   <FieldError>{error}</FieldError>
                   <Button
                     className="w-full"
-                    disabled={!preview || saving}
+                    disabled={!canEnter}
                     onClick={() => void enterApp()}
                   >
                     {saving ? "Saving…" : "Enter VoiceDress"}
