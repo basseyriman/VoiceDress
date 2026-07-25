@@ -167,15 +167,36 @@ export const useAetherStore = create<AetherState>()(
         }
       },
       applyCloudSession: ({ profile, wardrobe, outfit, taste }) => {
+        const prev = get().user;
+        // Don't let a stale/empty cloud profile wipe a photo we just saved locally
+        const keepLocalPhoto =
+          prev &&
+          prev.uid === profile.uid &&
+          (prev.avatarStatus === "ready" ||
+            prev.avatarUrl?.startsWith("data:") ||
+            prev.avatarUrl === AVATAR_IDB_REF) &&
+          (!profile.avatarUrl ||
+            profile.avatarStatus === "none" ||
+            !profile.avatarStatus);
+
+        const merged = keepLocalPhoto
+          ? {
+              ...profile,
+              avatarUrl: prev.avatarUrl || profile.avatarUrl,
+              photoURL: prev.photoURL || profile.photoURL,
+              avatarStatus: "ready" as const,
+            }
+          : profile;
+
         set({
-          user: profile,
+          user: merged,
           wardrobe,
           currentOutfit: outfit || null,
           taste: taste || { rejectedIds: [], recentOutfitIds: [] },
           cloudReady: true,
         });
-        if (profile.avatarUrl?.startsWith("http")) {
-          void saveAvatarBlob(profile.avatarUrl).catch(() => undefined);
+        if (merged.avatarUrl?.startsWith("http")) {
+          void saveAvatarBlob(merged.avatarUrl).catch(() => undefined);
         }
       },
       bootstrapCloudUser: async ({ uid, email, displayName, avatarDataUrl }) => {

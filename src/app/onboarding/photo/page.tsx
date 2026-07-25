@@ -100,10 +100,10 @@ export default function PhotoOnboardingPage() {
     setError("");
     try {
       await setAvatar(preview, "ready");
-      router.replace("/today");
+      // Hard navigate so the app gate re-reads ready status (avoids soft-redirect loops)
+      window.location.assign("/today");
     } catch {
       setError("Couldn’t save your photo. Please try again.");
-    } finally {
       setSaving(false);
     }
   };
