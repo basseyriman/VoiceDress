@@ -139,16 +139,7 @@ export function OutfitStage({
       };
 
       try {
-        // One server round-trip: apparel + shoes/glasses/watch (much faster)
-        setActivePieceId(lookPieces[0]?.id ?? null);
-        setStepLabel("Dressing your full look…");
-        setProgress(8);
-
-        const tick = window.setInterval(() => {
-          setProgress((p) => (p < 86 ? p + 2.5 : p));
-        }, 900);
-
-        const garmentsPayload = lookPieces.map((piece) => ({
+        const toPayload = (piece: (typeof lookPieces)[number]) => ({
           imageUrl: piece.imageUrl,
           category: piece.category,
           name: piece.name,
@@ -157,109 +148,103 @@ export function OutfitStage({
           fabric: piece.fabric,
           texture: piece.texture,
           tags: piece.tags,
-        }));
-
-        const res = await fetch("/api/tryon/render", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            personImage: current,
-            stage: "auto",
-            maxPieces: 6,
-            garments: garmentsPayload,
-          }),
         });
-        window.clearInterval(tick);
 
-        const data = await res.json();
-        if (cancelled || myId !== requestId.current) return;
-        if (failOrBilling(data)) return;
+        const apparelPieces = lookPieces.filter(
+          (p) => !isFinishTryOnCategory(p.category)
+        );
+        const appliedNames = new Set<string>();
 
-        if (!data.ok || !data.imageUrl) {
-          const detail =
-            typeof data.detail === "string" ? data.detail.slice(0, 180) : "";
-          setError(
-            [data.error || "Couldn’t dress this look", detail]
-              .filter(Boolean)
-              .join(" — ")
-          );
-          setDressing(false);
-          return;
+        // Phase 1 — clothes first so you see yourself dressed sooner
+        if (apparelPieces.length) {
+          setActivePieceId(apparelPieces[0]?.id ?? null);
+          setStepLabel("Putting clothes on you…");
+          setProgress(10);
+
+          const tick = window.setInterval(() => {
+            setProgress((p) => (p < 48 ? p + 3 : p));
+          }, 700);
+
+          const apparelRes = await fetch("/api/tryon/render", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              personImage: current,
+              stage: "apparel",
+              maxPieces: 6,
+              garments: apparelPieces.map(toPayload),
+            }),
+          });
+          window.clearInterval(tick);
+
+          const apparelData = await apparelRes.json();
+          if (cancelled || myId !== requestId.current) return;
+          if (failOrBilling(apparelData)) return;
+
+          if (!apparelData.ok || !apparelData.imageUrl) {
+            const detail =
+              typeof apparelData.detail === "string"
+                ? apparelData.detail.slice(0, 180)
+                : "";
+            setError(
+              [apparelData.error || "Couldn’t dress this look", detail]
+                .filter(Boolean)
+                .join(" — ")
+            );
+            setDressing(false);
+            return;
+          }
+
+          current = apparelData.imageUrl;
+          setWornUrl(apparelData.imageUrl);
+          setKeyConfigured(true);
+          setProgress(55);
+          setStepLabel("Clothes on — adding shoes & extras…");
+          for (const s of Array.isArray(apparelData.steps)
+            ? apparelData.steps
+            : []) {
+            if (s?.name) appliedNames.add(s.name);
+          }
         }
 
-        current = data.imageUrl;
-        setWornUrl(data.imageUrl);
-        setKeyConfigured(true);
-
-        const appliedNames = new Set(
-          (Array.isArray(data.steps) ? data.steps : [])
-            .map((s: { name?: string; category?: string }) => s.name || "")
-            .filter(Boolean) as string[]
-        );
-
-        const stillMissing = () =>
-          lookPieces.filter((p) => !appliedNames.has(p.name));
-
-        const retryFinish = async (piece: (typeof lookPieces)[number]) => {
-          setStepLabel(`Retrying ${piece.name}…`);
+        // Phase 2 — shoes / glasses / watch one at a time (updates preview as each lands)
+        for (let i = 0; i < finishPieces.length; i++) {
+          const piece = finishPieces[i];
           setActivePieceId(piece.id);
-          setProgress((p) => Math.min(94, p + 4));
+          setStepLabel(`Adding ${piece.name}…`);
+          setProgress(55 + Math.round(((i + 1) / (finishPieces.length + 1)) * 40));
+
           const finishRes = await fetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               personImage: current,
               stage: "finish",
-              garments: [
-                {
-                  imageUrl: piece.imageUrl,
-                  category: piece.category,
-                  name: piece.name,
-                  colors: piece.colors,
-                  hexColors: piece.hexColors,
-                  fabric: piece.fabric,
-                  texture: piece.texture,
-                  tags: piece.tags,
-                },
-              ],
+              garments: [toPayload(piece)],
             }),
           });
-          const retryData = await finishRes.json();
-          if (cancelled || myId !== requestId.current) return false;
-          if (failOrBilling(retryData)) return false;
-          if (
-            retryData.ok &&
-            retryData.imageUrl &&
-            Array.isArray(retryData.steps) &&
-            retryData.steps.length > 0
-          ) {
-            current = retryData.imageUrl;
-            setWornUrl(retryData.imageUrl);
-            appliedNames.add(piece.name);
-            return true;
-          }
-          return false;
-        };
-
-        // Always retry finish pieces that didn't land (shoes / glasses / watch)
-        for (const piece of finishPieces) {
-          if (appliedNames.has(piece.name)) continue;
-          const ok = await retryFinish(piece);
+          const finishData = await finishRes.json();
           if (cancelled || myId !== requestId.current) return;
-          // Second pass for stubborn shoes / eyewear
-          if (!ok && (piece.category === "shoes" || /glass|frame|optic|sunglass|spec/i.test(`${piece.name} ${(piece.tags || []).join(" ")}`))) {
-            await retryFinish(piece);
-            if (cancelled || myId !== requestId.current) return;
+          if (failOrBilling(finishData)) return;
+
+          if (
+            finishData.ok &&
+            finishData.imageUrl &&
+            Array.isArray(finishData.steps) &&
+            finishData.steps.length > 0
+          ) {
+            current = finishData.imageUrl;
+            setWornUrl(finishData.imageUrl);
+            appliedNames.add(piece.name);
+            setKeyConfigured(true);
           }
         }
 
-        const missedPieces = stillMissing();
+        const missedPieces = lookPieces.filter((p) => !appliedNames.has(p.name));
         const missedNames = missedPieces.map((p) => p.name);
         setMissingIds(missedPieces.map((p) => p.id));
 
-        if (data.warning && missedNames.length) {
-          setNotice(String(data.warning));
-        } else if (missedNames.length) {
+        if (missedNames.length) {
           setNotice(
             `Not on photo yet: ${missedNames.join(", ")}. Tap a piece to swap, or retry.`
           );
@@ -596,7 +581,7 @@ export function OutfitStage({
 
           {(generating || dressing) && (
             <p className="mt-4 text-xs text-mist">
-              Stay on this screen while we dress each piece onto you.
+              Clothes first, then shoes and extras — preview updates as each piece lands.
             </p>
           )}
         </div>

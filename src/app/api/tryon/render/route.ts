@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveGarmentImageForFal } from "@/lib/garment-resolve";
 
-export const maxDuration = 300;
+export const maxDuration = 180;
 
 type Piece = {
   imageUrl: string;
@@ -87,9 +87,9 @@ async function fashnTryOn(opts: {
   garmentImage: string;
   category: "tops" | "bottoms" | "one-pieces";
 }): Promise<TryResult> {
-  // Prefer quality so face/body identity stays closer to the real photo.
-  // Catalog garments are flat product shots → flat-lay.
-  const call = async (mode: "quality" | "balanced" | "performance") => {
+  // Balanced is the speed/quality sweet spot. Quality is too slow for a
+  // multi-piece look; performance looks pasted-on.
+  const call = async (mode: "balanced" | "performance") => {
     const res = await fetch("https://fal.run/fal-ai/fashn/tryon/v1.6", {
       method: "POST",
       headers: {
@@ -105,52 +105,55 @@ async function fashnTryOn(opts: {
         moderation_level: "permissive",
         num_samples: 1,
         segmentation_free: true,
-        output_format: "png",
+        output_format: "jpeg",
       }),
     });
     return parseFalImages(res);
   };
-  const primary = await call("quality");
+  const primary = await call("balanced");
   if (primary.ok) return primary;
-  const mid = await call("balanced");
-  if (mid.ok) return mid;
   return call("performance");
 }
 
 const KEEP_YOU =
-  "Preserve identity perfectly from image 1: same face, facial features, skin tone, hair, body proportions, pose, hands, and background. Only change the clothing/accessory described. Photorealistic, natural fabric drape on the real body — not a pasted cutout.";
+  "Keep the exact same person from image 1: same face, skin, hair, body, pose, hands, lighting, and background. Photorealistic fabric on the real body — not a pasted cutout.";
 
 const KEEP_FRAMING =
-  "Keep the exact same camera distance, crop, and full-body framing as image 1. Do not zoom, do not reframe, do not change aspect ratio.";
+  "Keep the exact same camera distance, crop, and full-body framing. Do not zoom or reframe.";
 
-function finishPrompt(piece: Piece): string {
+function shoeGlassesPrompt(piece: Piece): string {
   const look = pieceLook(piece);
   if (piece.category === "shoes") {
     return [
       KEEP_YOU,
       KEEP_FRAMING,
-      `Replace ALL footwear on BOTH feet with the exact shoes from image 2 (${look}).`,
-      "Match color and material from image 2 precisely. Photorealistic on the real feet — no floating shoes.",
-      "Do not alter face, skin, or other clothes.",
-    ].join(" ");
-  }
-  if (isWatch(piece)) {
-    return [
-      KEEP_YOU,
-      KEEP_FRAMING,
-      `Add the watch from image 2 (${look}) on the most visible wrist.`,
-      "Natural size on the wrist, matching metal and strap from image 2. Do not change the face or clothes.",
+      `Replace ALL footwear on BOTH feet with the shoes from image 2 (${look}).`,
+      "Match color and material from image 2. Natural on the real feet.",
+      "Do not alter face or other clothes.",
     ].join(" ");
   }
   return [
     KEEP_YOU,
     KEEP_FRAMING,
     `Place the glasses from image 2 (${look}) on the person's face — on the nose and ears.`,
-    "Keep the exact same face underneath. Only add the frames. Photorealistic fit.",
+    "Same face underneath. Only add the frames.",
   ].join(" ");
 }
 
-/** Product-guided local edit — preserves framing (no VTO models that zoom/crop). */
+function watchTextPrompt(piece: Piece): string {
+  const look = pieceLook(piece);
+  return [
+    "Edit this photo only.",
+    "Keep the exact same person, face, body, pose, clothes, shoes, glasses, lighting, and background.",
+    "Keep the exact same full-body framing — do not zoom or crop.",
+    `Add one realistic wristwatch on the most visible wrist: ${look}.`,
+    "Small natural watch size with a clear case, dial, and strap. Sharp detail.",
+    "Do NOT paint white blobs, flares, circles, or abstract shapes on the wrist.",
+    "Do NOT change the hands or arms except for adding the watch.",
+  ].join(" ");
+}
+
+/** Product-guided edit for shoes / glasses (image 2 = product). */
 async function kontextProductEdit(opts: {
   falKey: string;
   personImage: string;
@@ -165,11 +168,11 @@ async function kontextProductEdit(opts: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      prompt: finishPrompt(opts.piece),
+      prompt: shoeGlassesPrompt(opts.piece),
       image_urls: [opts.personImage, opts.productImage],
       guidance_scale: opts.guidanceScale ?? 4.5,
       num_images: 1,
-      output_format: "png",
+      output_format: "jpeg",
       enhance_prompt: false,
       safety_tolerance: "5",
     }),
@@ -178,10 +181,35 @@ async function kontextProductEdit(opts: {
 }
 
 /**
- * Finish pieces (shoes/glasses/watch) via Kontext only.
- * Do NOT use flux-vto / image-apps — they reframe to waist-up fashion crops
- * and hide the feet (shoes become invisible).
+ * Watches: text-only Kontext on the dressed photo.
+ * Product shots are often a hand holding a white dial — multi-image Kontext
+ * copies that as a white blob on the wrist. Text edit avoids that.
  */
+async function kontextWatchTextEdit(opts: {
+  falKey: string;
+  personImage: string;
+  piece: Piece;
+  guidanceScale?: number;
+}): Promise<TryResult> {
+  const res = await fetch("https://fal.run/fal-ai/flux-pro/kontext", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${opts.falKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: watchTextPrompt(opts.piece),
+      image_url: opts.personImage,
+      guidance_scale: opts.guidanceScale ?? 3.5,
+      num_images: 1,
+      output_format: "jpeg",
+      enhance_prompt: false,
+      safety_tolerance: "5",
+    }),
+  });
+  return parseFalImages(res);
+}
+
 async function applyFinishPiece(opts: {
   falKey: string;
   personImage: string;
@@ -190,15 +218,28 @@ async function applyFinishPiece(opts: {
 }): Promise<TryResult & { provider?: string }> {
   const { falKey, personImage, productImage, piece } = opts;
 
-  const attempts =
-    piece.category === "shoes"
-      ? [7, 6, 5.5, 4.5]
-      : isWatch(piece)
-        ? [6.5, 5.5, 4.5, 3.8]
-        : isEyewear(piece)
-          ? [6, 5.5, 4.5, 3.8]
-          : [4.5];
+  // Few attempts — retries were making dress time feel endless.
+  if (isWatch(piece)) {
+    for (const guidance of [3.5, 2.8]) {
+      const edited = await kontextWatchTextEdit({
+        falKey,
+        personImage,
+        piece,
+        guidanceScale: guidance,
+      });
+      if (edited.ok && edited.url !== personImage) {
+        return { ...edited, provider: "kontext-watch-text" };
+      }
+      if (edited.ok === false && isFalBillingError(edited.detail)) return edited;
+    }
+    return {
+      ok: false,
+      status: 502,
+      detail: "watch text edit failed",
+    };
+  }
 
+  const attempts = piece.category === "shoes" ? [6, 4.5] : [5, 4];
   let lastFail: TryResult = {
     ok: false,
     status: 502,
@@ -347,17 +388,17 @@ export async function POST(req: NextRequest) {
   }
 
   if (runFinish && finish.length) {
-    // Dress every finishing piece. On failure, KEEP the current dressed photo
-    // (never snap back to the original undressed image).
     for (const g of finish) {
-      let productImage: string;
-      try {
-        productImage = await resolveGarmentImageForFal(g.imageUrl);
-      } catch (err) {
-        warnings.push(
-          `Skipped ${g.name}: ${err instanceof Error ? err.message : "load failed"}`
-        );
-        continue;
+      let productImage = "";
+      if (!isWatch(g)) {
+        try {
+          productImage = await resolveGarmentImageForFal(g.imageUrl);
+        } catch (err) {
+          warnings.push(
+            `Skipped ${g.name}: ${err instanceof Error ? err.message : "load failed"}`
+          );
+          continue;
+        }
       }
 
       const edited = await applyFinishPiece({
@@ -403,7 +444,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Client sends stage:"finish" one piece at a time — never pretend shoes applied.
   if (stage === "finish" && finish.length) {
     const appliedFinish = steps.some((s) =>
       finish.some(
@@ -443,6 +483,6 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     configured: Boolean(process.env.FAL_KEY?.trim()),
-    provider: "fashn apparel + kontext finish (no zoom VTO)",
+    provider: "fashn apparel + kontext finish (watch text-only)",
   });
 }
