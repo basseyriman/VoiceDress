@@ -12,6 +12,7 @@ import {
   isFirebaseConfigured,
   updateProfile,
 } from "@/lib/firebase";
+import { authErrorMessage } from "@/lib/auth-errors";
 import { prepareProfilePhoto } from "@/lib/image";
 import { cn } from "@/lib/utils";
 import { CameraCaptureModal } from "@/components/wardrobe/camera-capture-modal";
@@ -71,7 +72,7 @@ export default function SignupPage() {
       });
       router.push("/today");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create account");
+      setError(authErrorMessage(err, "Could not create account"));
     } finally {
       setLoading(false);
     }

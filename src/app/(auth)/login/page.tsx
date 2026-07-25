@@ -10,6 +10,7 @@ import {
   isFirebaseConfigured,
   signInWithEmailAndPassword,
 } from "@/lib/firebase";
+import { authErrorMessage } from "@/lib/auth-errors";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -51,7 +52,7 @@ export default function LoginPage() {
       }
       router.push("/today");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign in failed");
+      setError(authErrorMessage(err, "Sign in failed"));
     } finally {
       setLoading(false);
     }
