@@ -9,6 +9,7 @@ import { useAetherStore } from "@/store/aether-store";
 import { lookPiecesForTryOn, isFinishTryOnCategory } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
 import { letterboxForTryOn } from "@/lib/image";
+import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import Link from "next/link";
 
@@ -38,7 +39,21 @@ export function OutfitStage({
     [lookPieces]
   );
 
-  const hasAvatar = Boolean(avatarUrl && avatarUrl !== AVATAR_IDB_REF);
+  const [resolvedAvatar, setResolvedAvatar] = useState<string | undefined>();
+  useEffect(() => {
+    let cancelled = false;
+    void resolveDisplayAvatar(avatarUrl).then((url) => {
+      if (!cancelled) setResolvedAvatar(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [avatarUrl]);
+
+  const displayAvatar =
+    resolvedAvatar ||
+    (avatarUrl && avatarUrl !== AVATAR_IDB_REF ? avatarUrl : undefined);
+  const hasAvatar = Boolean(displayAvatar);
   const [wornUrl, setWornUrl] = useState<string | null>(null);
   const [dressing, setDressing] = useState(false);
   const [needsKey, setNeedsKey] = useState(false);
@@ -66,14 +81,14 @@ export function OutfitStage({
   useEffect(() => {
     const myId = ++requestId.current;
 
-    if (!hasAvatar || !avatarUrl) {
+    if (!hasAvatar || !displayAvatar) {
       setWornUrl(null);
       setDressing(false);
       return;
     }
 
     if (!lookPieces.length) {
-      setWornUrl(avatarUrl);
+      setWornUrl(displayAvatar);
       setDressing(false);
       return;
     }
@@ -87,11 +102,11 @@ export function OutfitStage({
       setNeedsKey(false);
       setNeedsBilling(false);
       setProgress(4);
-      setWornUrl(avatarUrl);
+      setWornUrl(displayAvatar);
 
-      let current = avatarUrl;
+      let current = displayAvatar;
       try {
-        current = await letterboxForTryOn(avatarUrl);
+        current = await letterboxForTryOn(displayAvatar);
         if (cancelled || myId !== requestId.current) return;
         setWornUrl(current);
       } catch {
@@ -252,7 +267,7 @@ export function OutfitStage({
     return () => {
       cancelled = true;
     };
-  }, [hasAvatar, avatarUrl, lookKey, retryNonce]);
+  }, [hasAvatar, displayAvatar, lookKey, retryNonce]);
 
   const alternatives = swapFor
     ? wardrobe.filter(
@@ -322,18 +337,28 @@ export function OutfitStage({
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_30%,rgba(201,168,124,0.08),transparent_60%)]" />
 
             <AnimatePresence mode="sync">
-              <motion.img
-                key={wornUrl || avatarUrl || "empty"}
-                src={wornUrl || avatarUrl || undefined}
-                alt="You in this outfit"
-                initial={{ opacity: 0.55 }}
-                animate={{
-                  opacity: 1,
-                  filter: dressing ? "brightness(0.92)" : "brightness(1)",
-                }}
-                transition={{ duration: 0.45, ease: "easeOut" }}
-                className="relative z-[1] mx-auto block h-auto max-h-[min(72vh,42rem)] w-full object-contain object-center"
-              />
+              {(wornUrl || displayAvatar) && (
+                <motion.img
+                  key={wornUrl || displayAvatar || "empty"}
+                  src={wornUrl || displayAvatar || undefined}
+                  alt="You in this outfit"
+                  initial={{ opacity: 0.55 }}
+                  animate={{
+                    opacity: 1,
+                    filter: dressing ? "brightness(0.92)" : "brightness(1)",
+                  }}
+                  transition={{ duration: 0.45, ease: "easeOut" }}
+                  className="relative z-[1] mx-auto block h-auto max-h-[min(72vh,42rem)] w-full object-contain object-center"
+                  onError={() => {
+                    void resolveDisplayAvatar(avatarUrl).then((url) => {
+                      if (url) {
+                        setResolvedAvatar(url);
+                        setWornUrl(url);
+                      }
+                    });
+                  }}
+                />
+              )}
             </AnimatePresence>
 
             {!hasAvatar && (

@@ -294,29 +294,32 @@ export const useAetherStore = create<AetherState>()(
         const user = get().user;
         if (!user) return;
 
-        let finalUrl = url;
+        let cloudUrl = url;
         if (url.startsWith("data:")) {
           await saveAvatarBlob(url);
           if (isCloudUid(user.uid)) {
             try {
-              finalUrl = await uploadUserAvatar(user.uid, url);
+              cloudUrl = await uploadUserAvatar(user.uid, url);
             } catch {
-              finalUrl = url;
+              cloudUrl = url;
             }
           }
         }
 
+        // Keep a local displayable URL in memory (data:) so Today never shows a broken Storage img
+        const displayUrl = url.startsWith("data:") ? url : cloudUrl;
+
         const next = {
           ...user,
-          avatarUrl: finalUrl,
-          photoURL: finalUrl,
+          avatarUrl: displayUrl,
+          photoURL: cloudUrl,
           avatarStatus: status,
         };
         set({ user: next });
         if (isCloudUid(user.uid)) {
           void saveUserProfile(user.uid, {
-            avatarUrl: finalUrl,
-            photoURL: finalUrl,
+            avatarUrl: cloudUrl,
+            photoURL: cloudUrl,
             avatarStatus: status,
           }).catch(() => undefined);
         }

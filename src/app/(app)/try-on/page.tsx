@@ -6,7 +6,7 @@ import { OutfitStage } from "@/components/wardrobe/outfit-stage";
 import { VoiceOrb } from "@/components/voice/voice-orb";
 import { useAetherStore } from "@/store/aether-store";
 import { prepareProfilePhoto } from "@/lib/image";
-import { AVATAR_IDB_REF, loadAvatarBlob } from "@/lib/avatar-storage";
+import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { CameraCaptureModal } from "@/components/wardrobe/camera-capture-modal";
 
 export default function TryOnPage() {
@@ -24,17 +24,10 @@ export default function TryOnPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const fromStore = user?.avatarUrl || user?.photoURL;
-      if (
-        fromStore &&
-        fromStore !== AVATAR_IDB_REF &&
-        fromStore.startsWith("data:")
-      ) {
-        if (!cancelled) setLocalAvatar(fromStore);
-        return;
-      }
-      const blob = await loadAvatarBlob();
-      if (!cancelled && blob) setLocalAvatar(blob);
+      const resolved = await resolveDisplayAvatar(
+        user?.avatarUrl || user?.photoURL
+      );
+      if (!cancelled && resolved) setLocalAvatar(resolved);
     })();
     return () => {
       cancelled = true;

@@ -13,7 +13,6 @@ import { VoiceOrb } from "@/components/voice/voice-orb";
 import { OutfitStage } from "@/components/wardrobe/outfit-stage";
 import { useAetherStore } from "@/store/aether-store";
 import type { WeatherSnapshot } from "@/lib/types";
-import { AVATAR_IDB_REF, loadAvatarBlob } from "@/lib/avatar-storage";
 import { cn } from "@/lib/utils";
 import { Waveform } from "@/components/voice/waveform";
 import { useRouter } from "next/navigation";
@@ -65,13 +64,11 @@ export default function TodayPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const fromStore = user?.avatarUrl || user?.photoURL;
-      if (fromStore && fromStore !== AVATAR_IDB_REF) {
-        if (!cancelled) setAvatarUrl(fromStore);
-        return;
-      }
-      const blob = await loadAvatarBlob();
-      if (!cancelled && blob) setAvatarUrl(blob);
+      const { resolveDisplayAvatar } = await import("@/lib/resolve-avatar");
+      const resolved = await resolveDisplayAvatar(
+        user?.avatarUrl || user?.photoURL
+      );
+      if (!cancelled && resolved) setAvatarUrl(resolved);
     })();
     return () => {
       cancelled = true;

@@ -303,14 +303,23 @@ export async function processBodyPhotoForTryOn(
 }
 
 function loadHtmlImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    if (src.startsWith("http://") || src.startsWith("https://")) {
-      img.crossOrigin = "anonymous";
+  return new Promise(async (resolve, reject) => {
+    try {
+      let url = src;
+      // Avoid CORS tainting Firebase / CDN URLs for canvas letterbox
+      if (src.startsWith("http://") || src.startsWith("https://")) {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error("image fetch failed");
+        const blob = await res.blob();
+        url = URL.createObjectURL(blob);
+      }
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("image load failed"));
+      img.src = url;
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("image load failed"));
     }
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("image load failed"));
-    img.src = src;
   });
 }
 
