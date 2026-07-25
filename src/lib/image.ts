@@ -126,18 +126,57 @@ export async function normalizeBodyPhotoForTryOn(src: string): Promise<string> {
 
 /**
  * Place a transparent cutout on a clean VoiceDress studio plate (2:3).
+ * Crops to the subject’s opaque bounds so the person fills the frame.
  */
 export async function composeCutoutOnStudio(cutoutSrc: string): Promise<string> {
   const img = await loadHtmlImage(cutoutSrc);
   const targetRatio = 2 / 3;
   const maxEdge = 1296;
 
-  let canvasH = Math.min(maxEdge, Math.max(img.height, 960));
+  let canvasH = Math.min(maxEdge, 1200);
   let canvasW = Math.round(canvasH * targetRatio);
   if (canvasW > maxEdge) {
     canvasW = maxEdge;
     canvasH = Math.round(canvasW / targetRatio);
   }
+
+  // Measure opaque subject so we don't keep rembg's empty padding
+  const measure = document.createElement("canvas");
+  measure.width = img.width;
+  measure.height = img.height;
+  const mctx = measure.getContext("2d", { willReadFrequently: true });
+  if (!mctx) return cutoutSrc;
+  mctx.drawImage(img, 0, 0);
+  const { data } = mctx.getImageData(0, 0, img.width, img.height);
+  let minX = img.width;
+  let minY = img.height;
+  let maxX = 0;
+  let maxY = 0;
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const a = data[(y * img.width + x) * 4 + 3];
+      if (a > 12) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX <= minX || maxY <= minY) {
+    minX = 0;
+    minY = 0;
+    maxX = img.width - 1;
+    maxY = img.height - 1;
+  }
+  // Small pad around subject
+  const pad = Math.round(Math.max(img.width, img.height) * 0.02);
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(img.width - 1, maxX + pad);
+  maxY = Math.min(img.height - 1, maxY + pad);
+  const subW = maxX - minX + 1;
+  const subH = maxY - minY + 1;
 
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
@@ -145,7 +184,6 @@ export async function composeCutoutOnStudio(cutoutSrc: string): Promise<string> 
   const ctx = canvas.getContext("2d");
   if (!ctx) return cutoutSrc;
 
-  // Studio backdrop — soft ink + champagne glow
   const bg = ctx.createRadialGradient(
     canvasW * 0.5,
     canvasH * 0.32,
@@ -160,27 +198,20 @@ export async function composeCutoutOnStudio(cutoutSrc: string): Promise<string> 
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, canvasW, canvasH);
 
-  // Floor fade
-  const floor = ctx.createLinearGradient(0, canvasH * 0.72, 0, canvasH);
-  floor.addColorStop(0, "rgba(0,0,0,0)");
-  floor.addColorStop(1, "rgba(0,0,0,0.35)");
-  ctx.fillStyle = floor;
-  ctx.fillRect(0, 0, canvasW, canvasH);
-
-  // Fit person into plate with small margins (never crop)
-  const marginX = canvasW * 0.06;
-  const marginY = canvasH * 0.04;
+  // Fill ~92% of plate height with the person
+  const marginX = canvasW * 0.04;
+  const marginTop = canvasH * 0.03;
+  const marginBottom = canvasH * 0.02;
   const boxW = canvasW - marginX * 2;
-  const boxH = canvasH - marginY * 2;
-  const scale = Math.min(boxW / img.width, boxH / img.height);
-  const drawW = img.width * scale;
-  const drawH = img.height * scale;
+  const boxH = canvasH - marginTop - marginBottom;
+  const scale = Math.min(boxW / subW, boxH / subH);
+  const drawW = subW * scale;
+  const drawH = subH * scale;
   const dx = (canvasW - drawW) / 2;
-  const dy = canvasH - marginY - drawH; // stand on the floor line
+  const dy = marginTop + (boxH - drawH) / 2;
 
-  ctx.drawImage(img, dx, dy, drawW, drawH);
+  ctx.drawImage(img, minX, minY, subW, subH, dx, dy, drawW, drawH);
 
-  // Soft vignette
   const vignette = ctx.createRadialGradient(
     canvasW / 2,
     canvasH * 0.4,
@@ -190,11 +221,8 @@ export async function composeCutoutOnStudio(cutoutSrc: string): Promise<string> 
     canvasH * 0.78
   );
   vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.32)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.28)");
   ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, canvasW, canvasH);
-
-  ctx.fillStyle = "rgba(201,168,124,0.05)";
   ctx.fillRect(0, 0, canvasW, canvasH);
 
   return canvas.toDataURL("image/jpeg", 0.92);
@@ -225,12 +253,12 @@ async function removeBackgroundViaApi(
 }
 
 /**
- * Compress, clear background (fal), composite on studio plate.
- * Falls back to local normalize if rembg unavailable.
+ * Prefer the user’s real photo (framed for try-on).
+ * Optional studio clear is off by default — most people want to look like themselves.
  */
 export async function processBodyPhotoForTryOn(
   file: File,
-  options?: { minMs?: number }
+  options?: { minMs?: number; clearBackground?: boolean }
 ): Promise<{ dataUrl: string; error?: string; clearedBackground?: boolean }> {
   const started = Date.now();
   const prepared = await prepareProfilePhoto(file);
@@ -239,23 +267,27 @@ export async function processBodyPhotoForTryOn(
   }
 
   try {
-    const rembg = await removeBackgroundViaApi(prepared.dataUrl);
     let dataUrl: string;
     let clearedBackground = false;
 
-    if (rembg.cutoutUrl) {
-      dataUrl = await composeCutoutOnStudio(rembg.cutoutUrl);
-      clearedBackground = true;
-    } else if (rembg.needsKey) {
-      return {
-        dataUrl: "",
-        error:
-          rembg.error ||
-          "Add FAL_KEY in .env.local to clear photo backgrounds for try-on.",
-      };
+    if (options?.clearBackground) {
+      const rembg = await removeBackgroundViaApi(prepared.dataUrl);
+      if (rembg.cutoutUrl) {
+        dataUrl = await composeCutoutOnStudio(rembg.cutoutUrl);
+        clearedBackground = true;
+      } else if (rembg.needsKey) {
+        return {
+          dataUrl: "",
+          error:
+            rembg.error ||
+            "Add FAL_KEY in .env.local to clear photo backgrounds for try-on.",
+        };
+      } else {
+        dataUrl = await letterboxForTryOn(prepared.dataUrl);
+      }
     } else {
-      // Soft fallback if fal fails mid-request — still better than blocking forever
-      dataUrl = await normalizeBodyPhotoForTryOn(prepared.dataUrl);
+      // Keep the real photo — pad to 2:3 without shrinking the person
+      dataUrl = await letterboxForTryOn(prepared.dataUrl);
     }
 
     const minMs = options?.minMs ?? 0;

@@ -240,7 +240,7 @@ export default function PhotoOnboardingPage() {
                         Processing
                       </p>
                       <p className="mt-2 max-w-[13rem] text-center text-xs text-mist">
-                        Clearing the background and building your studio plate
+                        Preparing your photo for dressing
                       </p>
                     </div>
                   )}
