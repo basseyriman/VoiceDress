@@ -66,6 +66,7 @@ export function OutfitStage({
   const [swapFor, setSwapFor] = useState<Garment["category"] | null>(null);
   const [keyConfigured, setKeyConfigured] = useState<boolean | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [missingIds, setMissingIds] = useState<string[]>([]);
   const requestId = useRef(0);
 
   const lookKey = lookPieces.map((g) => g.id).join("|");
@@ -84,12 +85,14 @@ export function OutfitStage({
     if (!hasAvatar || !displayAvatar) {
       setWornUrl(null);
       setDressing(false);
+      setMissingIds([]);
       return;
     }
 
     if (!lookPieces.length) {
       setWornUrl(displayAvatar);
       setDressing(false);
+      setMissingIds([]);
       return;
     }
 
@@ -99,6 +102,7 @@ export function OutfitStage({
       setDressing(true);
       setError("");
       setNotice("");
+      setMissingIds([]);
       setNeedsKey(false);
       setNeedsBilling(false);
       setProgress(4);
@@ -189,17 +193,18 @@ export function OutfitStage({
 
         const appliedNames = new Set(
           (Array.isArray(data.steps) ? data.steps : [])
-            .map((s: { name?: string; category?: string }) => s.name || s.category)
+            .map((s: { name?: string; category?: string }) => s.name || "")
             .filter(Boolean) as string[]
         );
-        const missed = lookPieces
-          .filter((p) => !appliedNames.has(p.name) && !appliedNames.has(p.category))
-          .map((p) => p.name);
+
+        const stillMissing = () =>
+          lookPieces.filter((p) => !appliedNames.has(p.name));
 
         const retryFinish = async (piece: (typeof lookPieces)[number]) => {
           setStepLabel(`Retrying ${piece.name}…`);
-          setProgress(90);
-          const res = await fetch("/api/tryon/render", {
+          setActivePieceId(piece.id);
+          setProgress((p) => Math.min(94, p + 4));
+          const finishRes = await fetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -219,7 +224,7 @@ export function OutfitStage({
               ],
             }),
           });
-          const retryData = await res.json();
+          const retryData = await finishRes.json();
           if (cancelled || myId !== requestId.current) return false;
           if (failOrBilling(retryData)) return false;
           if (
@@ -230,33 +235,41 @@ export function OutfitStage({
           ) {
             current = retryData.imageUrl;
             setWornUrl(retryData.imageUrl);
-            const i = missed.indexOf(piece.name);
-            if (i >= 0) missed.splice(i, 1);
+            appliedNames.add(piece.name);
             return true;
           }
           return false;
         };
 
-        // Dedicated retries for finish pieces that often miss (shoes, watch, glasses)
+        // Always retry finish pieces that didn't land (shoes / glasses / watch)
         for (const piece of finishPieces) {
           if (appliedNames.has(piece.name)) continue;
-          await retryFinish(piece);
+          const ok = await retryFinish(piece);
           if (cancelled || myId !== requestId.current) return;
+          // Second pass for stubborn shoes / eyewear
+          if (!ok && (piece.category === "shoes" || /glass|frame|optic|sunglass|spec/i.test(`${piece.name} ${(piece.tags || []).join(" ")}`))) {
+            await retryFinish(piece);
+            if (cancelled || myId !== requestId.current) return;
+          }
         }
 
-        if (data.warning && missed.length) {
+        const missedPieces = stillMissing();
+        const missedNames = missedPieces.map((p) => p.name);
+        setMissingIds(missedPieces.map((p) => p.id));
+
+        if (data.warning && missedNames.length) {
           setNotice(String(data.warning));
-        } else if (missed.length) {
+        } else if (missedNames.length) {
           setNotice(
-            `Couldn’t put on: ${missed.join(", ")} — the rest stayed on you.`
+            `Not on photo yet: ${missedNames.join(", ")}. Tap a piece to swap, or retry.`
           );
         }
 
         if (myId === requestId.current) {
           setActivePieceId(null);
           setStepLabel(
-            missed.length
-              ? `Look on you — missing: ${missed.join(", ")}`
+            missedNames.length
+              ? `Look on you — ${missedNames.length} piece${missedNames.length > 1 ? "s" : ""} missing`
               : "Full look on you"
           );
           setProgress(100);
@@ -520,6 +533,7 @@ export function OutfitStage({
                   garment={g}
                   active={swapFor === g.category || activePieceId === g.id}
                   dressing={dressing && activePieceId === g.id}
+                  missing={missingIds.includes(g.id)}
                   onClick={() =>
                     setSwapFor((c) => (c === g.category ? null : g.category))
                   }
@@ -596,12 +610,14 @@ export function GarmentTile({
   active,
   dressing,
   badge,
+  missing,
   onClick,
 }: {
   garment: Garment;
   active?: boolean;
   dressing?: boolean;
   badge?: string;
+  missing?: boolean;
   onClick?: () => void;
 }) {
   const [broken, setBroken] = useState(false);
@@ -613,9 +629,11 @@ export function GarmentTile({
       onClick={onClick}
       className={cn(
         "group flex w-full gap-3 rounded-2xl border p-3 text-left transition duration-300",
-        active
-          ? "border-champagne/60 bg-champagne/10"
-          : "border-line bg-white/[0.02] hover:border-champagne/40",
+        missing
+          ? "border-danger/35 bg-danger/5"
+          : active
+            ? "border-champagne/60 bg-champagne/10"
+            : "border-line bg-white/[0.02] hover:border-champagne/40",
         dressing && "ring-1 ring-champagne/40"
       )}
     >
@@ -635,17 +653,29 @@ export function GarmentTile({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <p className="truncate text-sm text-ivory">{garment.name}</p>
-          {badge && (
-            <span className="shrink-0 rounded-full border border-line px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-mist">
-              {badge}
+          {(badge || missing) && (
+            <span
+              className={cn(
+                "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
+                missing
+                  ? "border-danger/40 text-[#e8b4ac]"
+                  : "border-line text-mist"
+              )}
+            >
+              {missing ? "Not on photo" : badge}
             </span>
           )}
         </div>
         <p className="truncate text-xs text-mist">
           {garment.brand} · {garment.category}
         </p>
-        <p className="mt-2 text-[10px] uppercase tracking-wider text-mist">
-          Tap to change
+        <p
+          className={cn(
+            "mt-2 text-[10px] uppercase tracking-wider",
+            missing ? "text-[#e8b4ac]" : "text-mist"
+          )}
+        >
+          {missing ? "Suggested · tap to retry swap" : "Tap to change"}
         </p>
       </div>
     </button>

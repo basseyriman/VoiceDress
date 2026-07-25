@@ -123,9 +123,9 @@ function finishPrompt(piece: Piece): string {
     return [
       KEEP_YOU,
       KEEP_FRAMING,
-      `Replace ONLY the footwear on BOTH feet in image 1 with the shoes from image 2 (${look}).`,
-      "Match image 2 color and material exactly. Remove sneakers/trainers currently worn.",
-      "Feet must remain visible in-frame — never zoom to hide them. Keep all clothing unchanged.",
+      `Replace ALL footwear on BOTH feet in image 1 with the exact shoes from image 2 (${look}).`,
+      "Match image 2 color, material, and silhouette exactly (e.g. tan suede Chelsea must not stay black).",
+      "Remove the currently worn shoes completely. Feet stay in frame. Keep clothes and face unchanged.",
     ].join(" ");
   }
   if (isWatch(piece)) {
@@ -141,8 +141,9 @@ function finishPrompt(piece: Piece): string {
   return [
     KEEP_YOU,
     KEEP_FRAMING,
-    `Replace ONLY the eyewear on the person in image 1 with the glasses from image 2 (${look}).`,
-    "Remove old sunglasses if present. Do not change the face identity or clothes.",
+    `Put the glasses from image 2 (${look}) on the person's face in image 1.`,
+    "They must sit on the nose bridge and ears — clearly visible. Remove any old eyewear.",
+    "Do not change face identity, hair, clothes, or shoes.",
   ].join(" ");
 }
 
