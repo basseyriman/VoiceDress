@@ -116,10 +116,10 @@ async function fashnTryOn(opts: {
 }
 
 const KEEP_YOU =
-  "Keep the exact same person from image 1: same face, skin, hair, body, pose, hands, lighting, and background. Photorealistic fabric on the real body — not a pasted cutout.";
+  "CRITICAL: Keep the EXACT same person from image 1 — same face identity, facial features, skin tone, hair, body proportions, pose, hands, lighting, and background. Do not generate a different face or lookalike. Only change the clothing item described.";
 
 const KEEP_FRAMING =
-  "Keep the exact same camera distance, crop, and full-body framing. Do not zoom or reframe.";
+  "CRITICAL FRAMING: Keep the EXACT same full-body camera distance and crop as image 1. Head and both feet must stay fully visible. Do not zoom in, do not crop to waist-up, do not change aspect ratio.";
 
 function shoeGlassesPrompt(piece: Piece): string {
   const look = pieceLook(piece);
@@ -281,13 +281,20 @@ function apparelCategory(
   return null;
 }
 
-/** Full suggested look order for finishing: shoes → eyewear → watch */
-function orderFinishPieces(garments: Piece[]): Piece[] {
+/** Finishing order. Accessories that touch the face are opt-in — they morph identity. */
+function orderFinishPieces(
+  garments: Piece[],
+  includeFaceAccessories: boolean
+): Piece[] {
   const shoes = garments.filter((g) => g.category === "shoes").slice(0, 1);
   const accessories = garments.filter((g) => g.category === "accessory");
   const eyewear = accessories.filter(isEyewear);
   const watches = accessories.filter(isWatch);
   const other = accessories.filter((g) => !isEyewear(g) && !isWatch(g));
+  if (!includeFaceAccessories) {
+    // Shoes only — glasses/watch Kontext passes often rewrite the face and crop the body.
+    return shoes;
+  }
   return [...shoes, ...eyewear, ...watches, ...other];
 }
 
@@ -298,6 +305,8 @@ export async function POST(req: NextRequest) {
   const garments = (body.garments || []) as Piece[];
   const stage = (body.stage as string) || "auto";
   const maxPieces = Math.min(Number(body.maxPieces) || 6, 6);
+  // Face accessories (glasses/watch) only when client explicitly asks — they morph identity.
+  const includeFaceAccessories = Boolean(body.includeFaceAccessories);
 
   if (!personImage) {
     return NextResponse.json({ error: "personImage required" }, { status: 400 });
@@ -316,7 +325,10 @@ export async function POST(req: NextRequest) {
   const apparel = apparelOrder
     .map((cat) => garments.find((g) => g.category === cat))
     .filter(Boolean) as Piece[];
-  const finish = orderFinishPieces(garments);
+  const finish = orderFinishPieces(
+    garments,
+    includeFaceAccessories || stage === "finish"
+  );
 
   let current = personImage;
   const steps: { category: string; name?: string; url: string; provider?: string }[] =

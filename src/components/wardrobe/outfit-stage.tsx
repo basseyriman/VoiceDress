@@ -8,7 +8,7 @@ import { AVATAR_IDB_REF } from "@/lib/avatar-storage";
 import { useAetherStore } from "@/store/aether-store";
 import { lookPiecesForTryOn, isFinishTryOnCategory } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import Link from "next/link";
@@ -109,8 +109,10 @@ export function OutfitStage({
       setWornUrl(displayAvatar);
 
       let current = displayAvatar;
+      let identityPhoto = displayAvatar;
       try {
         current = await letterboxForTryOn(displayAvatar);
+        identityPhoto = current;
         if (cancelled || myId !== requestId.current) return;
         setWornUrl(current);
       } catch {
@@ -138,6 +140,15 @@ export function OutfitStage({
         return false;
       };
 
+      const lockMyFace = async (dressed: string) => {
+        try {
+          const locked = await lockFaceIdentity(identityPhoto, dressed);
+          return locked;
+        } catch {
+          return dressed;
+        }
+      };
+
       try {
         const toPayload = (piece: (typeof lookPieces)[number]) => ({
           imageUrl: piece.imageUrl,
@@ -153,6 +164,8 @@ export function OutfitStage({
         const apparelPieces = lookPieces.filter(
           (p) => !isFinishTryOnCategory(p.category)
         );
+        // Auto: shoes only. Glasses/watch AI rewrites your face and often crops the body.
+        const shoePieces = finishPieces.filter((p) => p.category === "shoes");
         const appliedNames = new Set<string>();
 
         // Phase 1 — clothes first so you see yourself dressed sooner
@@ -195,11 +208,12 @@ export function OutfitStage({
             return;
           }
 
-          current = apparelData.imageUrl;
-          setWornUrl(apparelData.imageUrl);
+          current = await lockMyFace(apparelData.imageUrl);
+          if (cancelled || myId !== requestId.current) return;
+          setWornUrl(current);
           setKeyConfigured(true);
           setProgress(55);
-          setStepLabel("Clothes on — adding shoes & extras…");
+          setStepLabel("Clothes on — locking your face…");
           for (const s of Array.isArray(apparelData.steps)
             ? apparelData.steps
             : []) {
@@ -207,12 +221,12 @@ export function OutfitStage({
           }
         }
 
-        // Phase 2 — shoes / glasses / watch one at a time (updates preview as each lands)
-        for (let i = 0; i < finishPieces.length; i++) {
-          const piece = finishPieces[i];
+        // Phase 2 — shoes only (keeps full-body framing; skips face-morphing accessories)
+        for (let i = 0; i < shoePieces.length; i++) {
+          const piece = shoePieces[i];
           setActivePieceId(piece.id);
           setStepLabel(`Adding ${piece.name}…`);
-          setProgress(55 + Math.round(((i + 1) / (finishPieces.length + 1)) * 40));
+          setProgress(60 + Math.round(((i + 1) / (shoePieces.length + 1)) * 30));
 
           const finishRes = await fetch("/api/tryon/render", {
             method: "POST",
@@ -233,18 +247,29 @@ export function OutfitStage({
             Array.isArray(finishData.steps) &&
             finishData.steps.length > 0
           ) {
-            current = finishData.imageUrl;
-            setWornUrl(finishData.imageUrl);
+            current = await lockMyFace(finishData.imageUrl);
+            if (cancelled || myId !== requestId.current) return;
+            setWornUrl(current);
             appliedNames.add(piece.name);
             setKeyConfigured(true);
           }
         }
 
+        // Final identity lock so you still look like you
+        current = await lockMyFace(current);
+        if (cancelled || myId !== requestId.current) return;
+        setWornUrl(current);
+
         const missedPieces = lookPieces.filter((p) => !appliedNames.has(p.name));
         const missedNames = missedPieces.map((p) => p.name);
         setMissingIds(missedPieces.map((p) => p.id));
 
-        if (missedNames.length) {
+        const accessoryMiss = missedPieces.filter((p) => p.category === "accessory");
+        if (accessoryMiss.length && appliedNames.size) {
+          setNotice(
+            `Your face stays yours. ${accessoryMiss.map((p) => p.name).join(", ")} skipped for now — they were rewriting your face.`
+          );
+        } else if (missedNames.length) {
           setNotice(
             `Not on photo yet: ${missedNames.join(", ")}. Tap a piece to swap, or retry.`
           );
@@ -254,8 +279,8 @@ export function OutfitStage({
           setActivePieceId(null);
           setStepLabel(
             missedNames.length
-              ? `Look on you — ${missedNames.length} piece${missedNames.length > 1 ? "s" : ""} missing`
-              : "Full look on you"
+              ? `Look on you — face locked`
+              : "Full look on you — it’s still you"
           );
           setProgress(100);
           setDressing(false);
@@ -581,7 +606,7 @@ export function OutfitStage({
 
           {(generating || dressing) && (
             <p className="mt-4 text-xs text-mist">
-              Clothes first, then shoes and extras — preview updates as each piece lands.
+              Clothes and shoes on your real photo — your face stays locked as you.
             </p>
           )}
         </div>

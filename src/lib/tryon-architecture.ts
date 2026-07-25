@@ -4,10 +4,11 @@
  * Full suggested look on the body — nothing left as a “wishlist”.
  *
  * 1. Apparel (top / bottom / dress / outerwear) → fal FASHN (keeps you).
- * 2. Shoes → glasses → watch → fal Kontext with product photos.
- * 3. Never run a separate “face restore” pass (that was snapping back to
- *    the original undressed photo). If a finish piece fails, keep the
- *    already-dressed result and continue.
+ * 2. Shoes → fal Kontext (feet only). Glasses/watch skipped by default —
+ *    those edits often rewrite the face and crop the body.
+ * 3. Client locks the original face back onto the dressed photo.
+ * 4. Never snap back to the undressed original. If a finish piece fails,
+ *    keep the already-dressed result and continue.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [

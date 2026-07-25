@@ -41,28 +41,35 @@ export async function prepareProfilePhoto(file: File): Promise<{
 /**
  * Pad (never crop) to FASHN’s 2:3 canvas so try-on keeps head-to-toe framing
  * instead of zooming into a waist-up fashion crop.
+ * Extra margin around the person so feet/head don’t get clipped by the model.
  */
 export async function letterboxForTryOn(src: string): Promise<string> {
   const img = await loadHtmlImage(src);
   const targetRatio = 2 / 3; // width / height — FASHN native
-  const srcRatio = img.width / img.height;
+  // Keep breathing room so FASHN/Kontext don’t chew the head or shoes
+  const edgePad = 0.08;
+  const contentW = img.width;
+  const contentH = img.height;
+  const paddedW = contentW * (1 + edgePad * 2);
+  const paddedH = contentH * (1 + edgePad * 2);
+  const paddedRatio = paddedW / paddedH;
 
   let canvasW: number;
   let canvasH: number;
-  if (srcRatio > targetRatio) {
-    canvasW = img.width;
-    canvasH = Math.round(img.width / targetRatio);
+  if (paddedRatio > targetRatio) {
+    canvasW = paddedW;
+    canvasH = paddedW / targetRatio;
   } else {
-    canvasH = img.height;
-    canvasW = Math.round(img.height * targetRatio);
+    canvasH = paddedH;
+    canvasW = paddedH * targetRatio;
   }
 
   const maxEdge = 1296;
   const scale = Math.min(1, maxEdge / Math.max(canvasW, canvasH));
   canvasW = Math.max(1, Math.round(canvasW * scale));
   canvasH = Math.max(1, Math.round(canvasH * scale));
-  const drawW = Math.round(img.width * scale);
-  const drawH = Math.round(img.height * scale);
+  const drawW = Math.round(contentW * scale);
+  const drawH = Math.round(contentH * scale);
 
   const canvas = document.createElement("canvas");
   canvas.width = canvasW;
@@ -80,7 +87,67 @@ export async function letterboxForTryOn(src: string): Promise<string> {
     drawH
   );
 
-  return canvas.toDataURL("image/jpeg", 0.9);
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+/**
+ * Paste the real face/head from the original photo onto the dressed result
+ * so AI try-on can’t replace you with a lookalike.
+ */
+export async function lockFaceIdentity(
+  identitySrc: string,
+  dressedSrc: string
+): Promise<string> {
+  const [identity, dressed] = await Promise.all([
+    loadHtmlImage(identitySrc),
+    loadHtmlImage(dressedSrc),
+  ]);
+
+  const w = dressed.width;
+  const h = dressed.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dressedSrc;
+
+  ctx.drawImage(dressed, 0, 0, w, h);
+
+  // Full-body shots: face sits in the upper center. Soft ellipse, not a hard stamp.
+  const cx = w * 0.5;
+  const cy = h * 0.18;
+  const rx = w * 0.22;
+  const ry = h * 0.14;
+
+  const faceLayer = document.createElement("canvas");
+  faceLayer.width = w;
+  faceLayer.height = h;
+  const fctx = faceLayer.getContext("2d");
+  if (!fctx) return dressedSrc;
+
+  // Scale identity to dressed canvas (same letterbox framing expected)
+  fctx.drawImage(identity, 0, 0, w, h);
+
+  const mask = document.createElement("canvas");
+  mask.width = w;
+  mask.height = h;
+  const mctx = mask.getContext("2d");
+  if (!mctx) return dressedSrc;
+
+  const grad = mctx.createRadialGradient(cx, cy, ry * 0.35, cx, cy, ry);
+  grad.addColorStop(0, "rgba(0,0,0,1)");
+  grad.addColorStop(0.72, "rgba(0,0,0,0.85)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  mctx.fillStyle = grad;
+  mctx.beginPath();
+  mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  mctx.fill();
+
+  fctx.globalCompositeOperation = "destination-in";
+  fctx.drawImage(mask, 0, 0);
+
+  ctx.drawImage(faceLayer, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.92);
 }
 
 /**
