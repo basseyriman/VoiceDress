@@ -33,11 +33,11 @@ export default function BillingPage() {
       setSubscription("trialing");
       setMessage(
         data.message ||
-          "7-day trial started. Add live Stripe Price IDs (£19 / £149) to enable Checkout."
+          "Your 7-day trial has started. Complete Stripe setup to enable live checkout."
       );
     } catch {
       setSubscription("trialing");
-      setMessage("Trial started locally. Configure Stripe for live billing.");
+      setMessage("Your trial started. Billing will activate once Stripe is fully connected.");
     } finally {
       setLoading(null);
     }
@@ -53,10 +53,12 @@ export default function BillingPage() {
           VoiceDress membership
         </h1>
         <p className="mt-2 max-w-xl text-sm text-mist">
-          £19/month or £149/year. Every plan starts with a 7-day free trial.
+          £19/month or £149/year — every plan includes a 7-day free trial.
           Status:{" "}
-          <span className="text-champagne">
-            {user?.subscriptionStatus || "none"}
+          <span className="capitalize text-champagne">
+            {user?.subscriptionStatus === "none" || !user?.subscriptionStatus
+              ? "Not started"
+              : user.subscriptionStatus}
           </span>
         </p>
       </div>

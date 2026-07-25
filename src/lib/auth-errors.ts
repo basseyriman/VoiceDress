@@ -29,13 +29,13 @@ export function authErrorMessage(err: unknown, fallback = "Something went wrong"
     case "auth/user-disabled":
       return "This account has been disabled.";
     case "auth/email-already-in-use":
-      return "An account with this email already exists.";
+      return "An account with this email already exists. Try signing in.";
     case "auth/weak-password":
       return "Password should be at least 6 characters.";
     case "auth/network-request-failed":
       return "Network error. Check your connection and try again.";
     case "auth/operation-not-allowed":
-      return "Email sign-in is not enabled for this project.";
+      return "Email sign-in isn’t available right now.";
     default:
       return fallback;
   }
