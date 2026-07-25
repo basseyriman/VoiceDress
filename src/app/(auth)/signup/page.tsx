@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Camera, ImageIcon } from "lucide-react";
 import { Button, Logo } from "@/components/ui/button";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useAetherStore } from "@/store/aether-store";
 import {
   createUserWithEmailAndPassword,
@@ -117,14 +118,13 @@ export default function SignupPage() {
             <span className="mb-1.5 block text-xs uppercase tracking-wider text-mist">
               Password
             </span>
-            <input
+            <PasswordInput
               required
-              type="password"
               minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-2xl border border-line bg-ink-soft px-4 py-3 text-sm text-ivory outline-none focus:border-champagne/50"
               placeholder="••••••••"
+              autoComplete="new-password"
             />
           </label>
           <div className="block">
