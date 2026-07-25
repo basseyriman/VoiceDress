@@ -14,6 +14,7 @@ import {
   signInWithEmailAndPassword,
 } from "@/lib/firebase";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { postAuthPath } from "@/lib/onboarding";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,10 +48,10 @@ export default function LoginPage() {
           email: cred.user.email || email,
           displayName:
             cred.user.displayName || email.split("@")[0] || "VoiceDress Member",
-          avatarDataUrl: undefined,
         });
       }
-      router.push("/today");
+      const user = useAetherStore.getState().user;
+      router.push(postAuthPath(user));
     } catch (err) {
       setError(authErrorMessage(err, "Couldn’t sign in. Please try again."));
     } finally {
@@ -65,7 +66,10 @@ export default function LoginPage() {
       footer={
         <>
           New here?{" "}
-          <Link href="/signup" className="text-champagne transition hover:text-[#d4b68c]">
+          <Link
+            href="/signup"
+            className="text-champagne transition hover:text-[#d4b68c]"
+          >
             Create account
           </Link>
         </>

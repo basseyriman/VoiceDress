@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
+import { needsPhotoOnboarding } from "@/lib/onboarding";
 import { useAetherStore } from "@/store/aether-store";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -11,10 +12,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hydrated = useAetherStore((s) => s.hydrated);
 
   useEffect(() => {
-    if (hydrated && !user) router.replace("/login");
+    if (!hydrated) return;
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    if (needsPhotoOnboarding(user)) {
+      router.replace("/onboarding/photo");
+    }
   }, [hydrated, user, router]);
 
-  if (!hydrated || !user) {
+  if (!hydrated || !user || needsPhotoOnboarding(user)) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-mist">
         Preparing your wardrobe…
