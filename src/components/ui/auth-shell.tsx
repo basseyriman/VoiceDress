@@ -28,7 +28,9 @@ export function AuthShell({
       </div>
 
       <div className={cn("mx-auto w-full max-w-md", className)}>
-        <Logo className="mb-10 justify-center" />
+        <div className="mb-10 flex justify-center">
+          <Logo />
+        </div>
         <div className="glass shine-border rounded-[1.75rem] p-7 sm:p-8">
           <h1 className="font-display text-[2rem] leading-tight tracking-tight text-ivory sm:text-[2.15rem]">
             {title}
