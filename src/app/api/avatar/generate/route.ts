@@ -2,21 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Avatar generation adapter for Tripo3D / Meshy.
- * With TRIPO_API_KEY or MESHY_API_KEY, calls the provider.
- * Otherwise returns a premium portrait pipeline fallback using the uploaded photo.
+ * Client already stylizes + stores the lookalike locally.
+ * With API keys, kick off 3D mesh jobs for a future viewer.
  */
 export async function POST(req: NextRequest) {
-  const { imageDataUrl, name } = await req.json();
-  if (!imageDataUrl) {
-    return NextResponse.json({ error: "imageDataUrl required" }, { status: 400 });
-  }
-
+  const body = await req.json().catch(() => ({}));
+  const name = body.name as string | undefined;
   const tripo = process.env.TRIPO_API_KEY;
   const meshy = process.env.MESHY_API_KEY;
 
-  if (tripo) {
+  if (tripo && body.imageDataUrl) {
     try {
-      // Tripo image-to-model kickoff — store task id for polling in production
       await fetch("https://api.tripo3d.ai/v2/openapi/task", {
         method: "POST",
         headers: {
@@ -25,15 +21,18 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           type: "image_to_model",
-          file: { type: "jpg", data: imageDataUrl.split(",")[1] },
+          file: {
+            type: "jpg",
+            data: String(body.imageDataUrl).split(",")[1],
+          },
         }),
       });
     } catch {
-      // fall through to photo avatar
+      // optional
     }
   }
 
-  if (meshy) {
+  if (meshy && typeof body.imageUrl === "string") {
     try {
       await fetch("https://api.meshy.ai/openapi/v1/image-to-3d", {
         method: "POST",
@@ -41,19 +40,14 @@ export async function POST(req: NextRequest) {
           Authorization: `Bearer ${meshy}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          image_url: imageDataUrl.startsWith("http") ? imageDataUrl : undefined,
-          enable_pbr: true,
-        }),
+        body: JSON.stringify({ image_url: body.imageUrl, enable_pbr: true }),
       });
     } catch {
-      // fall through
+      // optional
     }
   }
 
-  // Instant lookalike: use portrait as avatar canvas until 3D mesh is ready
   return NextResponse.json({
-    avatarUrl: imageDataUrl,
     status: "ready",
     provider: tripo ? "tripo" : meshy ? "meshy" : "portrait",
     message: name

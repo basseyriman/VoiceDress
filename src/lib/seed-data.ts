@@ -1,12 +1,46 @@
 import type { Garment } from "./types";
 
-/** Seed wardrobe so the product feels complete before commerce sync. */
+/** Bump to force-refresh local seed wardrobe images/labels. */
+export const WARDROBE_SEED_VERSION = 11;
+
+/**
+ * Controlled local garment images — names, colors, and files must match.
+ * Paths are served from /public/garments and converted to data URLs for fal try-on.
+ */
 export function seedWardrobe(userId: string): Garment[] {
   const now = new Date().toISOString();
   const base: Omit<Garment, "id" | "userId" | "createdAt" | "updatedAt">[] = [
     {
+      name: "White Oxford Shirt",
+      brand: "VoiceDress Basics",
+      category: "top",
+      colors: ["white"],
+      hexColors: ["#FFFFFF"],
+      fabric: "cotton",
+      texture: "poplin",
+      formality: "business",
+      season: ["all"],
+      imageUrl: "/garments/white-oxford.jpg",
+      source: "manual",
+      tags: ["classic", "white"],
+    },
+    {
+      name: "Tailored Charcoal Trousers",
+      brand: "VoiceDress Tailoring",
+      category: "bottom",
+      colors: ["charcoal", "dark grey"],
+      hexColors: ["#2F343A"],
+      fabric: "wool",
+      texture: "smooth",
+      formality: "business",
+      season: ["all"],
+      imageUrl: "/garments/charcoal-trousers.jpg",
+      source: "manual",
+      tags: ["old money", "tailored", "charcoal"],
+    },
+    {
       name: "Ivory Ribbed Quarter-Zip",
-      brand: "Aether Edit",
+      brand: "VoiceDress Edit",
       category: "top",
       colors: ["ivory"],
       hexColors: ["#F5F0E6"],
@@ -14,40 +48,23 @@ export function seedWardrobe(userId: string): Garment[] {
       texture: "ribbed",
       formality: "smart_casual",
       season: ["autumn", "winter", "all"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?w=600&q=80",
+      imageUrl: "/garments/ivory-quarterzip.jpg",
       source: "manual",
       tags: ["quiet luxury", "knit"],
-    },
-    {
-      name: "Tailored Charcoal Trousers",
-      brand: "Aether Tailoring",
-      category: "bottom",
-      colors: ["charcoal"],
-      hexColors: ["#36454F"],
-      fabric: "wool",
-      texture: "smooth",
-      formality: "business",
-      season: ["all"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=600&q=80",
-      source: "manual",
-      tags: ["old money", "tailored"],
     },
     {
       name: "Stone Wide Pleat Trousers",
       brand: "Studio Forme",
       category: "bottom",
-      colors: ["stone"],
+      colors: ["stone", "khaki"],
       hexColors: ["#C2B8A3"],
       fabric: "cotton twill",
       texture: "matte",
       formality: "smart_casual",
       season: ["spring", "summer", "autumn"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=600&q=80",
+      imageUrl: "/garments/stone-trousers.jpg",
       source: "manual",
-      tags: ["relaxed", "old money"],
+      tags: ["relaxed", "stone"],
     },
     {
       name: "Midnight Navy Blazer",
@@ -59,38 +76,21 @@ export function seedWardrobe(userId: string): Garment[] {
       texture: "structured",
       formality: "formal",
       season: ["all"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=600&q=80",
+      imageUrl: "/garments/navy-blazer.jpg",
       source: "manual",
       tags: ["boardroom", "formal"],
-    },
-    {
-      name: "White Oxford Shirt",
-      brand: "Aether Basics",
-      category: "top",
-      colors: ["white"],
-      hexColors: ["#FFFFFF"],
-      fabric: "cotton",
-      texture: "poplin",
-      formality: "business",
-      season: ["all"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=600&q=80",
-      source: "manual",
-      tags: ["classic"],
     },
     {
       name: "Ribbed Indigo Jeans",
       brand: "Denim Atelier",
       category: "bottom",
-      colors: ["indigo"],
+      colors: ["indigo", "blue"],
       hexColors: ["#3F4C6B"],
       fabric: "denim",
       texture: "ribbed denim",
       formality: "casual",
       season: ["all"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1542272454315-7f6b1807cdfd?w=600&q=80",
+      imageUrl: "/garments/indigo-jeans.jpg",
       source: "manual",
       tags: ["casual", "denim"],
     },
@@ -98,14 +98,13 @@ export function seedWardrobe(userId: string): Garment[] {
       name: "Cognac Leather Loafers",
       brand: "London Last",
       category: "shoes",
-      colors: ["cognac"],
+      colors: ["cognac", "brown"],
       hexColors: ["#8B5A2B"],
       fabric: "leather",
       texture: "polished",
       formality: "business",
       season: ["all"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1533867617858-e7b97e060509?w=600&q=80",
+      imageUrl: "/garments/cognac-loafers.jpg",
       source: "manual",
       tags: ["footwear", "old money"],
     },
@@ -113,16 +112,15 @@ export function seedWardrobe(userId: string): Garment[] {
       name: "Suede Chelsea Boots",
       brand: "North Bridge",
       category: "shoes",
-      colors: ["taupe"],
-      hexColors: ["#8B7E66"],
+      colors: ["taupe", "sandy brown", "light brown"],
+      hexColors: ["#C4A882", "#8B7E66"],
       fabric: "suede",
-      texture: "suede",
+      texture: "suede nap",
       formality: "smart_casual",
       season: ["autumn", "winter"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1608256246200-53e635b5b65f?w=600&q=80",
+      imageUrl: "/garments/chelsea-boots.jpg",
       source: "manual",
-      tags: ["boots"],
+      tags: ["boots", "taupe", "chelsea"],
     },
     {
       name: "Gold Rimless Frames",
@@ -134,14 +132,27 @@ export function seedWardrobe(userId: string): Garment[] {
       texture: "brushed metal",
       formality: "smart_casual",
       season: ["all"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1574258495973-f010dfbb5147?w=600&q=80",
+      imageUrl: "/garments/gold-frames.jpg",
       source: "manual",
-      tags: ["frames", "metallic sync"],
+      tags: ["frames", "eyeglasses"],
+    },
+    {
+      name: "Silver Link Watch",
+      brand: "VoiceDress Time",
+      category: "accessory",
+      colors: ["silver"],
+      hexColors: ["#C0C0C0"],
+      fabric: "steel",
+      texture: "brushed steel",
+      formality: "smart_casual",
+      season: ["all"],
+      imageUrl: "/garments/silver-watch.jpg",
+      source: "manual",
+      tags: ["watch", "wristwatch"],
     },
     {
       name: "Camel Overcoat",
-      brand: "Aether Outer",
+      brand: "VoiceDress Outer",
       category: "outerwear",
       colors: ["camel"],
       hexColors: ["#C19A6B"],
@@ -149,8 +160,7 @@ export function seedWardrobe(userId: string): Garment[] {
       texture: "brushed",
       formality: "formal",
       season: ["autumn", "winter"],
-      imageUrl:
-        "https://images.unsplash.com/photo-1544923246-77307dd654cb?w=600&q=80",
+      imageUrl: "/garments/camel-overcoat.jpg",
       source: "manual",
       tags: ["coat", "old money"],
     },
@@ -158,9 +168,16 @@ export function seedWardrobe(userId: string): Garment[] {
 
   return base.map((item, i) => ({
     ...item,
-    id: `seed_${i + 1}`,
+    id: `seed_v${WARDROBE_SEED_VERSION}_${i + 1}`,
     userId,
     createdAt: now,
     updatedAt: now,
   }));
+}
+
+export function isSeedWardrobe(items: Garment[]) {
+  return (
+    items.length > 0 &&
+    items.every((g) => g.id.startsWith("seed_") || g.id.startsWith("seed_v"))
+  );
 }

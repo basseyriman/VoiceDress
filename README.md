@@ -1,43 +1,48 @@
-# Aether
+# VoiceDress
 
 **Dress without deciding.**
 
-Aether is a premium, voice-first AI wardrobe. It auto-ingests clothing purchases from Amazon, eBay, Temu, SHEIN, ASOS, and Zara, suggests weather-aware outfits, and shows them on your lookalike avatar — so you never photograph or tag your closet by hand.
-
-## Product pillars
-
-1. **Zero-friction ingest** — retailer purchase sync (no bed-scan mandatory path)
-2. **Voice styling** — speak occasions and swaps (Web Speech + AssemblyAI)
-3. **Weather-aware engine** — Open-Meteo live context
-4. **Lookalike try-on** — signup photo → avatar (Tripo3D / Meshy adapters)
-5. **Membership** — Stripe subscriptions
+Voice-first wardrobe: speak the occasion, get the best look from *your* clothes, see it dressed on your photo. Membership via Stripe (£19/mo or £149/yr).
 
 ## Stack
 
 - Next.js 16 (App Router) + TypeScript + Tailwind CSS 4
-- Firebase Auth / Firestore (`wardrobe-2135e`)
+- **Firebase Auth + Firestore + Storage** (source of truth for users, wardrobe, photos)
 - Stripe Checkout + webhooks
-- Framer Motion, Zustand, Lucide
+- fal.ai try-on, OpenAI for occasion/voice/ingest
+- Framer Motion, Zustand
 
 ## Quick start
 
 ```bash
 npm install
 cp .env.example .env.local
-# fill Firebase, Stripe, optional AssemblyAI / Tripo / Meshy keys
+# fill Firebase, Stripe, OPENAI_API_KEY, FAL_KEY, Shopify keys
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Firebase rules
+## Firebase (required for paid product)
 
-Deploy rules from `firebase/firestore.rules` in the [Firebase console](https://console.firebase.google.com/project/wardrobe-2135e/firestore/databases/-default-/security/rules).
+1. Enable **Authentication** → Email/Password (done).
+2. Create **Firestore** database → paste rules from [`firestore.rules`](firestore.rules).
+3. Create **Storage** → paste rules from [`storage.rules`](storage.rules).
+4. Set all `NEXT_PUBLIC_FIREBASE_*` in `.env.local` **and** Vercel → Project → Settings → Environment Variables (Production + Preview), then redeploy.
 
-## Environment
+Cloud paths:
 
-See `.env.example`. Never commit secrets. Rotate any key that was pasted into chat.
+- `users/{uid}` — profile + taste
+- `users/{uid}/garments/{id}` — wardrobe
+- `users/{uid}/outfits/{id}` — looks
+- Storage: `users/{uid}/avatar.jpg`, `users/{uid}/garments/{id}.jpg`
+
+Browser localStorage/IndexedDB is only a cache.
+
+## Vercel
+
+Add the same env vars as `.env.example`. After Firebase rules are live, redeploy so production uses cloud sync.
 
 ## Brand
 
-**Aether** — elevated presence; the air you move through when getting dressed is effortless.
+**VoiceDress** — dress without deciding.

@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
   },
+  serverExternalPackages: ["heic-convert", "libheif-js"],
 };
 
 export default nextConfig;

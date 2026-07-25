@@ -32,8 +32,8 @@ export default function WardrobePage() {
         <p className="text-xs uppercase tracking-[0.28em] text-champagne">Closet</p>
         <h1 className="mt-2 font-display text-4xl text-ivory">Your wardrobe</h1>
         <p className="mt-2 text-sm text-mist">
-          Auto-filled from connected stores. {wardrobe.length} pieces indexed with
-          color, fabric, and formality — zero typing required.
+          {wardrobe.length} pieces for Today. Add more via Connect — Shopify
+          orders or a receipt / product photo.
         </p>
       </div>
 

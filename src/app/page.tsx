@@ -2,29 +2,29 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, CloudSun, Link2, Mic, Sparkles, UserRound } from "lucide-react";
+import { ArrowRight, CloudSun, Mic, Sparkles, UserRound } from "lucide-react";
 import { Button, Logo } from "@/components/ui/button";
 
 const pillars = [
   {
-    icon: Link2,
-    title: "Zero-friction ingest",
-    body: "Connect Amazon, eBay, Temu, SHEIN and more. Successful purchases land in your wardrobe automatically — no typing, no bed scans.",
-  },
-  {
     icon: Mic,
     title: "Voice, not forms",
-    body: "Say the occasion. Swap a piece. Ask for old money. Aether listens and restyles in real time.",
-  },
-  {
-    icon: CloudSun,
-    title: "Weather-aware mind",
-    body: "Live forecasts shape every suggestion so you never overdress for July or underprepare for London rain.",
+    body: "Say the occasion. Swap a piece. Ask for old money. VoiceDress listens and restyles in real time.",
   },
   {
     icon: UserRound,
-    title: "Lookalike try-on",
-    body: "One signup photo becomes your avatar. See the full outfit on you before you leave the house.",
+    title: "Full look on you",
+    body: "Clothes, shoes, glasses, watch — dressed onto your photo so you see yourself leaving the house.",
+  },
+  {
+    icon: CloudSun,
+    title: "Weather-aware",
+    body: "Live forecasts shape every suggestion so you never overdress for July or underprepare for London rain.",
+  },
+  {
+    icon: Sparkles,
+    title: "One look, not a feed",
+    body: "One confident suggestion for today. Don’t like a piece? Tap it or say “change the shoes.”",
   },
 ];
 
@@ -56,19 +56,25 @@ export default function LandingPage() {
             <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/50" />
           </div>
 
-          <motion.p
+          <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
-            className="text-xs uppercase tracking-[0.35em] text-champagne"
+            className="flex items-center gap-3"
           >
-            Aether
-          </motion.p>
+            <span className="flex h-11 w-11 items-center justify-center rounded-[0.85rem] border border-champagne/20 bg-[#121110]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.svg" alt="" className="h-[1.55rem] w-auto" />
+            </span>
+            <p className="font-display text-base font-medium tracking-[0.18em] text-champagne">
+              VoiceDress
+            </p>
+          </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.85, delay: 0.08 }}
-            className="mt-4 max-w-3xl font-display text-5xl leading-[1.05] text-ivory sm:text-7xl"
+            className="mt-6 max-w-3xl font-display text-5xl font-medium italic leading-[1.08] text-ivory sm:text-7xl"
           >
             Dress without deciding.
           </motion.h1>
@@ -78,9 +84,8 @@ export default function LandingPage() {
             transition={{ duration: 0.85, delay: 0.16 }}
             className="mt-6 max-w-xl text-base leading-relaxed text-ivory-muted sm:text-lg"
           >
-            Your wardrobe fills itself from the stores you already shop. Speak the
-            day — Aether dresses your lookalike avatar for weather, occasion, and
-            quiet luxury.
+            Speak the day — VoiceDress dresses the full look on your photo.
+            Weather-aware. One suggestion. Swap by voice.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 18 }}
@@ -105,7 +110,7 @@ export default function LandingPage() {
         <section className="mx-auto max-w-7xl px-4 py-24 sm:px-6">
           <div className="mb-12 max-w-2xl">
             <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-              Why Aether
+              Why VoiceDress
             </p>
             <h2 className="mt-3 font-display text-4xl text-ivory">
               Decision fatigue ends here.
@@ -151,13 +156,13 @@ export default function LandingPage() {
                   Speak once. Walk out certain.
                 </h2>
                 <p className="mt-4 text-sm leading-relaxed text-mist">
-                  “Parents-in-law are coming — change the ribbed jeans to something
-                  old money.” Aether swaps, rebalances color and formality, and
-                  shows the new look on your avatar.
+                  “Parents-in-law are coming — change the shoes.” VoiceDress
+                  swaps the piece, keeps the rest of the look, and shows it on
+                  your photo — not a wishlist.
                 </p>
                 <Link href="/signup" className="mt-8">
                   <Button>
-                    Create your Aether
+                    Create your VoiceDress
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
@@ -167,7 +172,7 @@ export default function LandingPage() {
         </section>
 
         <footer className="border-t border-line/50 px-4 py-10 text-center text-xs text-mist sm:px-6">
-          © {new Date().getFullYear()} Aether · Dress without deciding
+          © {new Date().getFullYear()} VoiceDress · Dress without deciding
         </footer>
       </div>
     </div>

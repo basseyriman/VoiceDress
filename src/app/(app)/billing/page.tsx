@@ -30,15 +30,14 @@ export default function BillingPage() {
         window.location.href = data.url;
         return;
       }
-      // Local / demo success when Stripe price IDs aren't configured yet
-      setSubscription("active");
+      setSubscription("trialing");
       setMessage(
         data.message ||
-          "Subscription activated in trial mode. Add live Stripe Price IDs to enable Checkout."
+          "7-day trial started. Add live Stripe Price IDs (£19 / £149) to enable Checkout."
       );
     } catch {
-      setSubscription("active");
-      setMessage("Activated locally. Configure STRIPE_SECRET_KEY for live billing.");
+      setSubscription("trialing");
+      setMessage("Trial started locally. Configure Stripe for live billing.");
     } finally {
       setLoading(null);
     }
@@ -47,11 +46,18 @@ export default function BillingPage() {
   return (
     <div className="space-y-8 pb-20">
       <div>
-        <p className="text-xs uppercase tracking-[0.28em] text-champagne">Membership</p>
-        <h1 className="mt-2 font-display text-4xl text-ivory">Aether membership</h1>
-        <p className="mt-2 text-sm text-mist">
+        <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+          Membership
+        </p>
+        <h1 className="mt-2 font-display text-4xl text-ivory">
+          VoiceDress membership
+        </h1>
+        <p className="mt-2 max-w-xl text-sm text-mist">
+          £19/month or £149/year. Every plan starts with a 7-day free trial.
           Status:{" "}
-          <span className="text-champagne">{user?.subscriptionStatus || "none"}</span>
+          <span className="text-champagne">
+            {user?.subscriptionStatus || "none"}
+          </span>
         </p>
       </div>
 
@@ -63,7 +69,15 @@ export default function BillingPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {PLANS.map((plan) => (
-          <div key={plan.id} className="glass shine-border rounded-[2rem] p-8">
+          <div
+            key={plan.id}
+            className="glass shine-border relative rounded-[2rem] p-8"
+          >
+            {plan.badge && (
+              <span className="absolute right-6 top-6 rounded-full border border-champagne/40 bg-champagne/15 px-3 py-1 text-[10px] uppercase tracking-wider text-champagne">
+                {plan.badge}
+              </span>
+            )}
             <p className="text-xs uppercase tracking-[0.28em] text-champagne">
               {plan.interval}
             </p>
@@ -75,7 +89,10 @@ export default function BillingPage() {
             <p className="mt-3 text-sm text-mist">{plan.description}</p>
             <ul className="mt-6 space-y-2">
               {plan.features.map((f) => (
-                <li key={f} className="flex items-start gap-2 text-sm text-ivory-muted">
+                <li
+                  key={f}
+                  className="flex items-start gap-2 text-sm text-ivory-muted"
+                >
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-champagne" />
                   {f}
                 </li>
@@ -86,7 +103,7 @@ export default function BillingPage() {
               disabled={loading === plan.id}
               onClick={() => checkout(plan.id)}
             >
-              {loading === plan.id ? "Redirecting…" : "Subscribe"}
+              {loading === plan.id ? "Redirecting…" : "Start 7-day trial"}
             </Button>
           </div>
         ))}

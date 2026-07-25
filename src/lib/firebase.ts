@@ -37,7 +37,7 @@ const firebaseConfig = {
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "wardrobe-2135e",
   storageBucket:
     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
-    "wardrobe-2135e.appspot.com",
+    "wardrobe-2135e.firebasestorage.app",
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };

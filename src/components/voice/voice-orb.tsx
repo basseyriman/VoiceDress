@@ -1,29 +1,38 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AnimatePresence, motion } from "framer-motion";
+import { Mic, Square, Sparkles } from "lucide-react";
 import {
   createSpeechRecognizer,
-  handleVoiceCommand,
-  speak,
+  handleVoiceCommandAsync,
 } from "@/lib/voice";
+import { buildVoiceHandlers } from "@/lib/voice-handlers";
 import { useAetherStore } from "@/store/aether-store";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Waveform } from "@/components/voice/waveform";
+
+const PROMPTS = [
+  "I have a work meeting",
+  "Birthday dinner tonight",
+  "Change the shoes",
+];
 
 export function VoiceOrb({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [supported, setSupported] = useState(true);
   const [interim, setInterim] = useState("");
+  const [phase, setPhase] = useState<"idle" | "listening" | "thinking" | "done">(
+    "idle"
+  );
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const voiceListening = useAetherStore((s) => s.voiceListening);
   const setVoiceListening = useAetherStore((s) => s.setVoiceListening);
   const setTranscript = useAetherStore((s) => s.setTranscript);
   const lastTranscript = useAetherStore((s) => s.lastTranscript);
-  const generateOutfit = useAetherStore((s) => s.generateOutfit);
-  const swapFromVoice = useAetherStore((s) => s.swapFromVoice);
   const currentOutfit = useAetherStore((s) => s.currentOutfit);
 
   useEffect(() => {
@@ -33,6 +42,9 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
       return;
     }
     recognitionRef.current = rec;
+    rec.continuous = false;
+    rec.interimResults = true;
+
     rec.onresult = (event: SpeechRecognitionEvent) => {
       let finalText = "";
       let interimText = "";
@@ -43,110 +55,188 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
       }
       setInterim(interimText);
       if (finalText) {
-        setTranscript(finalText.trim());
-        handleVoiceCommand(finalText.trim(), {
-          generateOutfit,
-          swapFromVoice,
-          onOpenWardrobe: () => router.push("/wardrobe"),
+        const text = finalText.trim();
+        setTranscript(text);
+        setPhase("thinking");
+        setVoiceListening(false);
+        void handleVoiceCommandAsync(
+          text,
+          buildVoiceHandlers(router, pathname)
+        ).then(() => {
+          setPhase("done");
+          setTimeout(() => setPhase("idle"), 2200);
         });
       }
     };
-    rec.onend = () => setVoiceListening(false);
-    rec.onerror = () => setVoiceListening(false);
-  }, [generateOutfit, swapFromVoice, router, setTranscript, setVoiceListening]);
-
-  const toggle = () => {
-    const rec = recognitionRef.current;
-    if (!rec) {
-      speak("Voice is not available in this browser. Try Chrome.");
-      return;
-    }
-    if (voiceListening) {
-      rec.stop();
+    rec.onend = () => {
       setVoiceListening(false);
-      return;
-    }
+      setPhase((p) => (p === "listening" ? "idle" : p));
+    };
+    rec.onerror = () => {
+      setVoiceListening(false);
+      setPhase("idle");
+    };
+  }, [router, pathname, setTranscript, setVoiceListening]);
+
+  const start = () => {
+    const rec = recognitionRef.current;
+    if (!rec) return;
     setInterim("");
+    setPhase("listening");
     setVoiceListening(true);
-    speak("I'm listening. Tell me the occasion or what to change.");
-    setTimeout(() => rec.start(), 700);
+    try {
+      rec.start();
+    } catch {
+      // already started
+    }
   };
 
+  const stop = () => {
+    recognitionRef.current?.stop();
+    setVoiceListening(false);
+    setPhase("idle");
+  };
+
+  const toggle = () => {
+    if (!supported) return;
+    if (voiceListening) stop();
+    else start();
+  };
+
+  const runPrompt = (prompt: string) => {
+    setTranscript(prompt);
+    setPhase("thinking");
+    void handleVoiceCommandAsync(
+      prompt,
+      buildVoiceHandlers(router, pathname)
+    ).then(() => {
+      setPhase("done");
+      setTimeout(() => setPhase("idle"), 1800);
+    });
+  };
+
+  const liveLine = voiceListening
+    ? interim || "Listening…"
+    : phase === "thinking"
+      ? "Styling…"
+      : lastTranscript
+        ? lastTranscript
+        : "Tap Speak — say where you’re going";
+
   return (
-    <div
+    <motion.div
       id="voice"
+      layout
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
-        "glass shine-border relative overflow-hidden rounded-3xl p-6",
-        compact ? "p-4" : "p-8"
+        "glass shine-border relative overflow-hidden rounded-[2rem]",
+        compact ? "p-5" : "p-7 sm:p-9"
       )}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(201,168,124,0.12),transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(201,168,124,0.14),transparent_55%)]" />
+
       <div className="relative z-10 flex flex-col items-center text-center">
-        <p className="mb-2 text-xs uppercase tracking-[0.28em] text-champagne">
-          Voice styling
+        <p className="text-[11px] uppercase tracking-[0.32em] text-champagne">
+          Change anything
         </p>
-        <h3 className="font-display text-2xl text-ivory sm:text-3xl">
-          Speak the room. We dress the look.
+        <h3 className="mt-2 font-display text-2xl text-ivory sm:text-3xl">
+          Don&apos;t like a piece? Say so.
         </h3>
-        <p className="mt-3 max-w-md text-sm text-mist">
-          Try: “My in-laws are coming — swap the ribbed jeans for an old money fit.”
+        <p className="mt-2 max-w-md text-sm text-mist">
+          Tap once and speak — “change the shoes”, “different glasses”, or a new
+          occasion. VoiceDress restyles the look on your photo.
         </p>
 
-        <button
+        <motion.button
+          type="button"
           onClick={toggle}
+          disabled={!supported}
+          whileTap={{ scale: 0.98 }}
           className={cn(
-            "relative mt-8 flex h-24 w-24 items-center justify-center rounded-full border border-champagne/40 bg-champagne/10 text-champagne transition",
-            voiceListening && "voice-pulse bg-champagne text-ink"
+            "mt-8 flex w-full max-w-xl items-center gap-4 rounded-full border px-5 py-3.5 text-left transition-colors duration-300",
+            voiceListening
+              ? "border-champagne/50 bg-champagne/15 shadow-[0_0_40px_rgba(201,168,124,0.18)]"
+              : "border-line bg-white/[0.03] hover:border-champagne/35 hover:bg-white/[0.05]"
           )}
-          aria-label={voiceListening ? "Stop listening" : "Start listening"}
         >
-          {voiceListening ? <MicOff className="h-8 w-8" /> : <Mic className="h-8 w-8" />}
-        </button>
+          <span
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors",
+              voiceListening
+                ? "bg-champagne text-ink"
+                : "bg-champagne/15 text-champagne"
+            )}
+          >
+            {voiceListening ? (
+              <Square className="h-4 w-4" />
+            ) : (
+              <Mic className="h-5 w-5" />
+            )}
+          </span>
 
-        <p className="mt-4 min-h-[1.25rem] text-sm text-ivory-muted">
-          {voiceListening
-            ? interim || "Listening…"
-            : lastTranscript
-              ? `“${lastTranscript}”`
-              : supported
-                ? "Tap to speak — no typing"
-                : "Browser speech unavailable — use Chrome for full voice"}
-        </p>
+          <div className="min-w-0 flex-1">
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={liveLine}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.22 }}
+                className={cn(
+                  "truncate text-sm",
+                  voiceListening || interim ? "text-ivory" : "text-ivory-muted"
+                )}
+              >
+                {liveLine}
+              </motion.p>
+            </AnimatePresence>
+            <p className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-mist">
+              {phase === "listening"
+                ? "Listening"
+                : phase === "thinking"
+                  ? "Composing"
+                  : supported
+                    ? "Tap to speak"
+                    : "Use Chrome for voice"}
+            </p>
+          </div>
+
+          <Waveform active={voiceListening} />
+        </motion.button>
 
         {!compact && (
           <div className="mt-6 flex flex-wrap justify-center gap-2">
-            {[
-              "Dress me for a board meeting",
-              "Old money for dinner with in-laws",
-              "Swap the jeans",
-            ].map((prompt) => (
-              <Button
+            {PROMPTS.map((prompt) => (
+              <motion.button
                 key={prompt}
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setTranscript(prompt);
-                  const parsed = handleVoiceCommand(prompt, {
-                    generateOutfit,
-                    swapFromVoice,
-                    onOpenWardrobe: () => router.push("/wardrobe"),
-                  });
-                  speak(parsed.reply);
-                }}
+                type="button"
+                whileHover={{ y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => runPrompt(prompt)}
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.03] px-3.5 py-2 text-xs text-ivory-muted transition hover:border-champagne/40 hover:text-ivory"
               >
-                <Sparkles className="h-3 w-3" />
+                <Sparkles className="h-3 w-3 text-champagne" />
                 {prompt}
-              </Button>
+              </motion.button>
             ))}
           </div>
         )}
 
-        {currentOutfit && (
-          <p className="mt-6 max-w-lg text-xs leading-relaxed text-mist">
-            {currentOutfit.rationale}
-          </p>
-        )}
+        <AnimatePresence>
+          {currentOutfit && phase !== "listening" && (
+            <motion.p
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="mt-6 max-w-lg text-xs leading-relaxed text-mist"
+            >
+              {currentOutfit.rationale}
+            </motion.p>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </motion.div>
   );
 }

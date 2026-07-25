@@ -13,7 +13,8 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
-  const signInLocal = useAetherStore((s) => s.signInLocal);
+  const hydrateFromCloud = useAetherStore((s) => s.hydrateFromCloud);
+  const bootstrapCloudUser = useAetherStore((s) => s.bootstrapCloudUser);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,34 +25,33 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      if (isFirebaseConfigured) {
-        const auth = getFirebaseAuth();
-        if (auth) {
-          const cred = await signInWithEmailAndPassword(auth, email, password);
-          signInLocal({
-            email: cred.user.email || email,
-            displayName: cred.user.displayName || email.split("@")[0],
-            photoURL: cred.user.photoURL || undefined,
-            subscriptionStatus: "active",
-          });
-          router.push("/today");
-          return;
-        }
+      if (!isFirebaseConfigured) {
+        setError(
+          "Firebase is not configured. Add NEXT_PUBLIC_FIREBASE_* keys to .env.local (and Vercel)."
+        );
+        return;
       }
-      signInLocal({
-        email,
-        displayName: email.split("@")[0] || "Aether Member",
-        subscriptionStatus: "trialing",
-      });
+      const auth = getFirebaseAuth();
+      if (!auth) {
+        setError("Firebase Auth unavailable.");
+        return;
+      }
+
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const ok = await hydrateFromCloud(cred.user.uid);
+      if (!ok) {
+        // First login after Auth existed before cloud bootstrap
+        await bootstrapCloudUser({
+          uid: cred.user.uid,
+          email: cred.user.email || email,
+          displayName:
+            cred.user.displayName || email.split("@")[0] || "VoiceDress Member",
+          avatarDataUrl: undefined,
+        });
+      }
       router.push("/today");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
-      signInLocal({
-        email,
-        displayName: email.split("@")[0] || "Aether Member",
-        subscriptionStatus: "trialing",
-      });
-      router.push("/today");
     } finally {
       setLoading(false);
     }
@@ -62,7 +62,9 @@ export default function LoginPage() {
       <Logo className="mb-10 justify-center" />
       <div className="glass shine-border rounded-[2rem] p-8">
         <h1 className="font-display text-3xl text-ivory">Welcome back</h1>
-        <p className="mt-2 text-sm text-mist">Your wardrobe is already thinking.</p>
+        <p className="mt-2 text-sm text-mist">
+          Your wardrobe restores from the cloud.
+        </p>
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
           <label className="block">
             <span className="mb-1.5 block text-xs uppercase tracking-wider text-mist">
@@ -96,7 +98,7 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-xs text-mist">
           New here?{" "}
           <Link href="/signup" className="text-champagne hover:underline">
-            Create Aether
+            Create VoiceDress
           </Link>
         </p>
       </div>

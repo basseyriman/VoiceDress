@@ -28,7 +28,11 @@ export async function POST(req: NextRequest) {
   }
 
   // Detect unresolved placeholder names
-  if (priceId.includes("aether")) {
+  if (
+    priceId.includes("voicedress") ||
+    priceId.includes("vestoir") ||
+    priceId.includes("aether")
+  ) {
     return NextResponse.json({
       ok: true,
       demo: true,
@@ -45,6 +49,10 @@ export async function POST(req: NextRequest) {
     cancel_url: `${origin}/billing?canceled=1`,
     metadata: { planId, name: name || "" },
     allow_promotion_codes: true,
+    subscription_data: {
+      trial_period_days: 7,
+      metadata: { planId },
+    },
   });
 
   return NextResponse.json({ url: session.url });

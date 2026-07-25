@@ -16,6 +16,7 @@ export type CommerceSource =
   | "shein"
   | "asos"
   | "zara"
+  | "shopify"
   | "manual"
   | "receipt";
 
@@ -100,14 +101,27 @@ export interface VoiceCommandResult {
     | "change_occasion"
     | "weather_check"
     | "open_wardrobe"
+    | "explain_look"
+    | "open_page"
+    | "add_from_photo"
     | "unknown";
   entities: {
     item?: string;
     style?: string;
     occasion?: string;
     replaceWith?: string;
+    garmentQuery?: string;
+    path?: string;
+    garmentId?: string;
   };
   reply: string;
+  confidence?: "high" | "medium" | "low";
+}
+
+export interface TasteMemory {
+  rejectedIds: string[];
+  recentOutfitIds: string[];
+  preferredStyle?: string;
 }
 
 export interface CommerceConnection {

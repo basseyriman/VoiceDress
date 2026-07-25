@@ -30,8 +30,8 @@
   --color-line: var(--line);
   --color-success: var(--success);
   --color-danger: var(--danger);
-  --font-display: var(--font-fraunces);
-  --font-sans: var(--font-sora);
+  --font-display: var(--font-cormorant);
+  --font-sans: var(--font-outfit);
 }
 
 * {
@@ -48,7 +48,7 @@ body {
     radial-gradient(900px 500px at -10% 30%, rgba(245, 240, 232, 0.05), transparent 50%),
     linear-gradient(180deg, #0b0b0c 0%, #121110 45%, #0b0b0c 100%);
   color: var(--ivory);
-  font-family: var(--font-sora), system-ui, sans-serif;
+  font-family: var(--font-outfit), system-ui, sans-serif;
   min-height: 100vh;
 }
 
@@ -58,7 +58,7 @@ body {
 }
 
 .font-display {
-  font-family: var(--font-fraunces), Georgia, serif;
+  font-family: var(--font-cormorant), "Times New Roman", serif;
 }
 
 .grain {
@@ -124,13 +124,26 @@ body {
 }
 
 .animate-rise {
-  animation: rise 0.8s ease-out both;
+  animation: rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-rise-delay {
-  animation: rise 0.9s ease-out 0.15s both;
+  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
 }
 
 .animate-rise-delay-2 {
-  animation: rise 1s ease-out 0.3s both;
+  animation: rise 1s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both;
+}
+
+/* Soft continuous flow feel */
+@media (prefers-reduced-motion: no-preference) {
+  a,
+  button {
+    transition:
+      color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
 }

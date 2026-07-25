@@ -1,32 +1,49 @@
 import type { CommerceConnection, CommerceSource, Garment } from "./types";
 
+/** Real commerce surfaces — no fake sample SKUs. */
 const STORE_META: Record<
-  Exclude<CommerceSource, "manual" | "receipt">,
-  { label: string; blurb: string }
+  Exclude<CommerceSource, "manual">,
+  { label: string; blurb: string; kind: "oauth" | "ingest" }
 > = {
+  shopify: {
+    label: "Shopify",
+    blurb: "Connect your Shopify store — new orders sync into your wardrobe automatically.",
+    kind: "oauth",
+  },
+  receipt: {
+    label: "Order / receipt photo",
+    blurb: "Upload a receipt, order screenshot, or product photo — AI adds the piece to your wardrobe.",
+    kind: "ingest",
+  },
   amazon: {
     label: "Amazon",
-    blurb: "Auto-import successful clothing orders with product images and metadata.",
-  },
-  ebay: {
-    label: "eBay",
-    blurb: "Sync purchased apparel listings the moment payment clears.",
-  },
-  temu: {
-    label: "Temu",
-    blurb: "Capture order thumbnails, titles, colors, and brands automatically.",
-  },
-  shein: {
-    label: "SHEIN",
-    blurb: "Pull confirmed fashion purchases into your living wardrobe.",
+    blurb: "Upload your Amazon order screenshot or product photo to add pieces.",
+    kind: "ingest",
   },
   asos: {
     label: "ASOS",
-    blurb: "Connect order history for precise stock imagery and sizing.",
+    blurb: "Upload an ASOS order confirmation or product shot.",
+    kind: "ingest",
   },
   zara: {
     label: "Zara",
-    blurb: "Import boutique purchases with fabric and color intelligence.",
+    blurb: "Upload a Zara order or product photo.",
+    kind: "ingest",
+  },
+  ebay: {
+    label: "eBay",
+    blurb: "Upload an eBay purchase screenshot or listing photo.",
+    kind: "ingest",
+  },
+  shein: {
+    label: "SHEIN",
+    blurb: "Upload a SHEIN order or product photo.",
+    kind: "ingest",
+  },
+  temu: {
+    label: "Temu",
+    blurb: "Upload a Temu order or product photo.",
+    kind: "ingest",
   },
 };
 
@@ -37,146 +54,6 @@ export function listCommerceStores() {
   }));
 }
 
-/** Simulated commerce purchase ingestion — production wires retailer OAuth + webhooks. */
-export function simulatePurchaseIngest(
-  userId: string,
-  source: CommerceSource
-): Garment[] {
-  const catalog: Record<string, Omit<Garment, "id" | "userId" | "createdAt" | "updatedAt">[]> = {
-    amazon: [
-      {
-        name: "Merino Quarter-Zip",
-        brand: "Amazon Essentials Edit",
-        category: "top",
-        colors: ["ivory"],
-        hexColors: ["#F5F0E6"],
-        fabric: "merino wool",
-        texture: "fine knit",
-        formality: "smart_casual",
-        season: ["autumn", "winter", "all"],
-        imageUrl:
-          "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?w=600&q=80",
-        source: "amazon",
-        price: 68,
-        currency: "GBP",
-        orderId: "AMZ-88421",
-        tags: ["knit", "layering", "quiet luxury"],
-      },
-    ],
-    ebay: [
-      {
-        name: "Vintage Leather Loafers",
-        brand: "Church's",
-        category: "shoes",
-        colors: ["cognac"],
-        hexColors: ["#8B5A2B"],
-        fabric: "leather",
-        texture: "polished",
-        formality: "business",
-        season: ["all"],
-        imageUrl:
-          "https://images.unsplash.com/photo-1533867617858-e7b97e060509?w=600&q=80",
-        source: "ebay",
-        price: 210,
-        currency: "GBP",
-        orderId: "EBY-22901",
-        tags: ["old money", "footwear"],
-      },
-    ],
-    temu: [
-      {
-        name: "Relaxed Linen Shirt",
-        brand: "Temu Studio",
-        category: "top",
-        colors: ["sage"],
-        hexColors: ["#9CAF88"],
-        fabric: "linen",
-        texture: "woven",
-        formality: "casual",
-        season: ["spring", "summer"],
-        imageUrl:
-          "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600&q=80",
-        source: "temu",
-        price: 22,
-        currency: "GBP",
-        orderId: "TMU-1102",
-        tags: ["breathable", "summer"],
-      },
-    ],
-    shein: [
-      {
-        name: "Structured Wide Trousers",
-        brand: "SHEIN Premium",
-        category: "bottom",
-        colors: ["charcoal"],
-        hexColors: ["#36454F"],
-        fabric: "wool blend",
-        texture: "crepe",
-        formality: "business",
-        season: ["all"],
-        imageUrl:
-          "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?w=600&q=80",
-        source: "shein",
-        price: 34,
-        currency: "GBP",
-        orderId: "SHN-7781",
-        tags: ["tailored", "office"],
-      },
-    ],
-    asos: [
-      {
-        name: "Cashmere Crew",
-        brand: "ASOS DESIGN",
-        category: "top",
-        colors: ["navy"],
-        hexColors: ["#1B2A41"],
-        fabric: "cashmere",
-        texture: "soft knit",
-        formality: "smart_casual",
-        season: ["autumn", "winter"],
-        imageUrl:
-          "https://images.unsplash.com/photo-1576566588028-4147f3842f27?w=600&q=80",
-        source: "asos",
-        price: 55,
-        currency: "GBP",
-        orderId: "ASO-4410",
-        tags: ["knitwear"],
-      },
-    ],
-    zara: [
-      {
-        name: "Double-Breasted Blazer",
-        brand: "Zara",
-        category: "outerwear",
-        colors: ["black"],
-        hexColors: ["#0B0B0C"],
-        fabric: "wool",
-        texture: "structured",
-        formality: "formal",
-        season: ["all"],
-        imageUrl:
-          "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=600&q=80",
-        source: "zara",
-        price: 129,
-        currency: "GBP",
-        orderId: "ZAR-9921",
-        tags: ["tailoring", "old money"],
-      },
-    ],
-  };
-
-  const now = new Date().toISOString();
-  const items = catalog[source] || [];
-  return items.map((item, i) => ({
-    ...item,
-    id: `${source}_${Date.now()}_${i}`,
-    userId,
-    purchaseDate: now,
-    createdAt: now,
-    updatedAt: now,
-  }));
-}
-
 export function defaultConnections(): CommerceConnection[] {
   return listCommerceStores().map((s) => ({
     source: s.source,
@@ -184,4 +61,38 @@ export function defaultConnections(): CommerceConnection[] {
     itemCount: 0,
     status: "idle",
   }));
+}
+
+/** Heuristic category from product title when LLM is unavailable. */
+export function categorizeFromTitle(title: string): Garment["category"] {
+  const t = title.toLowerCase();
+  if (/dress|gown/.test(t)) return "dress";
+  if (/shoe|boot|loafer|sneaker|heel|sandal/.test(t)) return "shoes";
+  if (/jacket|coat|blazer|parka|trench/.test(t)) return "outerwear";
+  if (/jean|trouser|pant|skirt|short|chino/.test(t)) return "bottom";
+  if (/bag|tote|handbag|clutch/.test(t)) return "bag";
+  if (/belt|watch|glass|scarf|hat|jewelry|jewellery/.test(t)) return "accessory";
+  return "top";
+}
+
+export function colorNameToHex(color: string): string {
+  const map: Record<string, string> = {
+    black: "#0B0B0C",
+    white: "#F5F5F5",
+    ivory: "#F5F0E6",
+    cream: "#F5F0E6",
+    navy: "#1B2A41",
+    charcoal: "#36454F",
+    grey: "#6B7280",
+    gray: "#6B7280",
+    beige: "#D4C4A8",
+    brown: "#5C4033",
+    cognac: "#8B5A2B",
+    green: "#2C3E2D",
+    blue: "#1E3A5F",
+    red: "#7C3A4A",
+    pink: "#D4A5A5",
+  };
+  const key = color.toLowerCase().trim();
+  return map[key] || "#8A8580";
 }

@@ -1,5 +1,5 @@
 {
-  "name": "aether",
+  "name": "voicedress",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,12 +9,16 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.20",
     "@stripe/stripe-js": "^9.12.0",
+    "ai": "^7.0.37",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "firebase": "^12.16.0",
     "framer-motion": "^12.42.2",
+    "heic-convert": "^2.1.0",
+    "heic2any": "^0.0.4",
     "lucide-react": "^1.26.0",
     "next": "16.2.11",
     "react": "19.2.4",

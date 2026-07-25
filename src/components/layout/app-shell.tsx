@@ -5,10 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   CalendarDays,
   CloudSun,
-  CreditCard,
-  Link2,
   LogOut,
-  Mic,
   Shirt,
   Sparkles,
   UserRound,
@@ -16,14 +13,15 @@ import {
 import { Logo } from "@/components/ui/button";
 import { useAetherStore } from "@/store/aether-store";
 import { cn } from "@/lib/utils";
+import { PageTransition } from "@/components/layout/page-transition";
+import { FlowDock } from "@/components/voice/flow-dock";
+import { motion } from "framer-motion";
 
 const nav = [
   { href: "/today", label: "Today", icon: Sparkles },
+  { href: "/try-on", label: "Photo", icon: UserRound },
   { href: "/wardrobe", label: "Wardrobe", icon: Shirt },
-  { href: "/try-on", label: "Try-On", icon: UserRound },
-  { href: "/connect", label: "Connect", icon: Link2 },
-  { href: "/billing", label: "Plan", icon: CreditCard },
-  { href: "/settings", label: "Settings", icon: CalendarDays },
+  { href: "/settings", label: "More", icon: CalendarDays },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -34,8 +32,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const signOutLocal = useAetherStore((s) => s.signOutLocal);
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-line/60 bg-ink/80 backdrop-blur-xl">
+    <div className="min-h-screen pb-28 md:pb-16">
+      <header className="sticky top-0 z-40 border-b border-line/50 bg-ink/70 backdrop-blur-2xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-8">
             <Logo />
@@ -48,14 +46,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs tracking-wide transition",
-                      active
-                        ? "bg-white/[0.07] text-champagne"
-                        : "text-mist hover:text-ivory"
+                      "relative inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs tracking-wide transition-colors",
+                      active ? "text-champagne" : "text-mist hover:text-ivory"
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" />
-                    {item.label}
+                    {active && (
+                      <motion.span
+                        layoutId="nav-pill"
+                        className="absolute inset-0 rounded-full bg-white/[0.07]"
+                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                      />
+                    )}
+                    <Icon className="relative z-10 h-3.5 w-3.5" />
+                    <span className="relative z-10">{item.label}</span>
                   </Link>
                 );
               })}
@@ -68,19 +71,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {Math.round(weather.tempC)}° · {weather.condition}
               </div>
             )}
-            <Link
-              href="/today#voice"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-champagne/40 text-champagne hover:bg-champagne/10"
-              aria-label="Voice"
-            >
-              <Mic className="h-4 w-4" />
-            </Link>
             <button
               onClick={() => {
-                signOutLocal();
-                router.push("/");
+                void signOutLocal().then(() => router.push("/login"));
               }}
-              className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs text-mist hover:text-ivory"
+              className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs text-mist transition hover:text-ivory"
             >
               <span className="hidden sm:inline">{user?.displayName?.split(" ")[0]}</span>
               <LogOut className="h-3.5 w-3.5" />
@@ -89,11 +84,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+        <PageTransition>{children}</PageTransition>
+      </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line/60 bg-ink/90 backdrop-blur-xl md:hidden">
+      <FlowDock />
+
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line/50 bg-ink/90 backdrop-blur-2xl md:hidden">
         <div className="flex justify-around px-2 py-2">
-          {nav.slice(0, 5).map((item) => {
+          {nav.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
             return (
@@ -101,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-1 rounded-lg px-3 py-1.5 text-[10px]",
+                  "flex flex-col items-center gap-1 rounded-lg px-3 py-1.5 text-[10px] transition",
                   active ? "text-champagne" : "text-mist"
                 )}
               >

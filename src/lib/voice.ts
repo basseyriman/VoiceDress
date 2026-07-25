@@ -1,6 +1,9 @@
 "use client";
 
-import { parseVoiceIntent } from "@/lib/outfit-engine";
+import {
+  isHighConfidenceVoiceIntent,
+  parseVoiceIntent,
+} from "@/lib/outfit-engine";
 import type { Garment } from "@/lib/types";
 
 export type SpeakFn = (text: string) => void;
@@ -29,7 +32,9 @@ export function createSpeechRecognizer(): SpeechRecognition | null {
   return recognition;
 }
 
-export async function transcribeWithAssemblyAI(audioBlob: Blob): Promise<string | null> {
+export async function transcribeWithAssemblyAI(
+  audioBlob: Blob
+): Promise<string | null> {
   const form = new FormData();
   form.append("audio", audioBlob, "voice.webm");
   const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
@@ -38,47 +43,200 @@ export async function transcribeWithAssemblyAI(audioBlob: Blob): Promise<string 
   return data.text || null;
 }
 
+export type VoiceActionHandlers = {
+  generateOutfit: (occasion?: string, style?: string) => unknown;
+  generateOutfitAsync?: (
+    occasion?: string,
+    style?: string
+  ) => Promise<unknown>;
+  swapFromVoice: (
+    category: Garment["category"],
+    style?: string,
+    occasion?: string,
+    garmentQuery?: string
+  ) => unknown;
+  pickGarmentById?: (garmentId: string) => unknown;
+  onOpenWardrobe?: () => void;
+  onNavigate?: (path: string) => void;
+  onExplainLook?: () => string | void;
+  onWeather?: () => string | void;
+  getContext?: () => Record<string, unknown>;
+};
+
+type VoiceAction = {
+  tool: string;
+  occasion?: string | null;
+  style?: string | null;
+  category?: Garment["category"] | null;
+  garmentId?: string | null;
+  garmentQuery?: string | null;
+  path?: string | null;
+};
+
+/** Hybrid: keyword fast-path, else LLM understand API. */
+export async function handleVoiceCommandAsync(
+  transcript: string,
+  actions: VoiceActionHandlers
+) {
+  const useLocal = isHighConfidenceVoiceIntent(transcript);
+
+  if (useLocal) {
+    const parsed = parseVoiceIntent(transcript);
+    const reply = applyLocalIntent(parsed, actions);
+    speak(reply);
+    return { reply, source: "keyword" as const, parsed };
+  }
+
+  try {
+    const res = await fetch("/api/voice/understand", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transcript,
+        context: actions.getContext?.() || {},
+      }),
+    });
+    if (!res.ok) {
+      const parsed = parseVoiceIntent(transcript);
+      const reply = applyLocalIntent(parsed, actions);
+      speak(reply);
+      return { reply, source: "keyword" as const, parsed };
+    }
+    const data = await res.json();
+    const reply = await applyActions(data.actions || [], actions, data.reply);
+    speak(reply);
+    return { reply, source: data.source || "llm", actions: data.actions };
+  } catch {
+    const parsed = parseVoiceIntent(transcript);
+    const reply = applyLocalIntent(parsed, actions);
+    speak(reply);
+    return { reply, source: "keyword" as const, parsed };
+  }
+}
+
+/** Sync wrapper for callers that haven't migrated — prefers local parse. */
 export function handleVoiceCommand(
   transcript: string,
-  actions: {
-    generateOutfit: (occasion?: string, style?: string) => unknown;
-    swapFromVoice: (
-      category: Garment["category"],
-      style?: string,
-      occasion?: string
-    ) => unknown;
-    onOpenWardrobe?: () => void;
-  }
+  actions: VoiceActionHandlers
 ) {
   const parsed = parseVoiceIntent(transcript);
+  const reply = applyLocalIntent(parsed, actions);
+  speak(reply);
+  return parsed;
+}
+
+function applyLocalIntent(
+  parsed: ReturnType<typeof parseVoiceIntent>,
+  actions: VoiceActionHandlers
+): string {
   const catMap: Record<string, Garment["category"]> = {
     top: "top",
     bottom: "bottom",
     shoes: "shoes",
     outerwear: "outerwear",
     accessory: "accessory",
+    dress: "dress",
+    bag: "bag",
   };
 
   switch (parsed.intent) {
     case "swap_item": {
       const cat = catMap[parsed.entities.item || "bottom"] || "bottom";
-      actions.swapFromVoice(cat, parsed.entities.style, parsed.entities.occasion);
+      actions.swapFromVoice(
+        cat,
+        parsed.entities.style,
+        parsed.entities.occasion,
+        parsed.entities.garmentQuery
+      );
       break;
     }
     case "change_style":
-      actions.generateOutfit("today", parsed.entities.style);
+      void (actions.generateOutfitAsync || actions.generateOutfit)(
+        "today",
+        parsed.entities.style
+      );
       break;
     case "open_wardrobe":
       actions.onOpenWardrobe?.();
+      actions.onNavigate?.("/wardrobe");
       break;
+    case "weather_check": {
+      const w = actions.onWeather?.();
+      if (typeof w === "string" && w) return w;
+      break;
+    }
+    case "explain_look": {
+      const e = actions.onExplainLook?.();
+      if (typeof e === "string" && e) return e;
+      break;
+    }
     case "suggest_outfit":
     default:
-      actions.generateOutfit(parsed.entities.occasion, parsed.entities.style);
+      void (actions.generateOutfitAsync || actions.generateOutfit)(
+        parsed.entities.occasion,
+        parsed.entities.style
+      );
       break;
   }
+  return parsed.reply;
+}
 
-  speak(parsed.reply);
-  return parsed;
+async function applyActions(
+  list: VoiceAction[],
+  actions: VoiceActionHandlers,
+  fallbackReply: string
+): Promise<string> {
+  let reply = fallbackReply;
+  for (const a of list) {
+    switch (a.tool) {
+      case "suggest_look":
+        await (actions.generateOutfitAsync || actions.generateOutfit)(
+          a.occasion || "today",
+          a.style || undefined
+        );
+        break;
+      case "swap_piece":
+        if (a.category) {
+          actions.swapFromVoice(
+            a.category,
+            a.style || undefined,
+            a.occasion || undefined,
+            a.garmentQuery || undefined
+          );
+        }
+        break;
+      case "pick_garment":
+        if (a.garmentId) actions.pickGarmentById?.(a.garmentId);
+        else if (a.garmentQuery && a.category) {
+          actions.swapFromVoice(
+            a.category,
+            undefined,
+            undefined,
+            a.garmentQuery
+          );
+        }
+        break;
+      case "explain_look": {
+        const e = actions.onExplainLook?.();
+        if (typeof e === "string" && e) reply = e;
+        break;
+      }
+      case "check_weather": {
+        const w = actions.onWeather?.();
+        if (typeof w === "string" && w) reply = w;
+        break;
+      }
+      case "open_page":
+        if (a.path) actions.onNavigate?.(a.path);
+        break;
+      case "add_from_photo":
+        actions.onNavigate?.("/connect");
+        break;
+      default:
+        break;
+    }
+  }
+  return reply;
 }
 
 declare global {
