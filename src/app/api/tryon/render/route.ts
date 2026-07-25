@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveGarmentImageForFal } from "@/lib/garment-resolve";
 
-export const maxDuration = 180;
+export const maxDuration = 300;
 
 type Piece = {
   imageUrl: string;
@@ -87,7 +87,9 @@ async function fashnTryOn(opts: {
   garmentImage: string;
   category: "tops" | "bottoms" | "one-pieces";
 }): Promise<TryResult> {
-  const call = async (mode: "balanced" | "performance") => {
+  // Prefer quality so face/body identity stays closer to the real photo.
+  // Catalog garments are flat product shots → flat-lay.
+  const call = async (mode: "quality" | "balanced" | "performance") => {
     const res = await fetch("https://fal.run/fal-ai/fashn/tryon/v1.6", {
       method: "POST",
       headers: {
@@ -99,23 +101,27 @@ async function fashnTryOn(opts: {
         garment_image: opts.garmentImage,
         category: opts.category,
         mode,
-        garment_photo_type: "auto",
+        garment_photo_type: "flat-lay",
+        moderation_level: "permissive",
         num_samples: 1,
-        output_format: "jpeg",
+        segmentation_free: true,
+        output_format: "png",
       }),
     });
     return parseFalImages(res);
   };
-  const primary = await call("performance");
+  const primary = await call("quality");
   if (primary.ok) return primary;
-  return call("balanced");
+  const mid = await call("balanced");
+  if (mid.ok) return mid;
+  return call("performance");
 }
 
 const KEEP_YOU =
-  "Keep the EXACT same person from image 1 — same face, skin tone, hair, body shape, pose, and background. Do not invent a different person. Image 2 is a PRODUCT only.";
+  "Preserve identity perfectly from image 1: same face, facial features, skin tone, hair, body proportions, pose, hands, and background. Only change the clothing/accessory described. Photorealistic, natural fabric drape on the real body — not a pasted cutout.";
 
 const KEEP_FRAMING =
-  "CRITICAL FRAMING: Keep the EXACT same camera distance, crop, and full-body framing as image 1. Do NOT zoom in. Do NOT crop to waist-up or portrait bust. Head-to-toe (or whatever is visible in image 1) must stay fully visible. Same aspect ratio.";
+  "Keep the exact same camera distance, crop, and full-body framing as image 1. Do not zoom, do not reframe, do not change aspect ratio.";
 
 function finishPrompt(piece: Piece): string {
   const look = pieceLook(piece);
@@ -123,27 +129,24 @@ function finishPrompt(piece: Piece): string {
     return [
       KEEP_YOU,
       KEEP_FRAMING,
-      `Replace ALL footwear on BOTH feet in image 1 with the exact shoes from image 2 (${look}).`,
-      "Match image 2 color, material, and silhouette exactly (e.g. tan suede Chelsea must not stay black).",
-      "Remove the currently worn shoes completely. Feet stay in frame. Keep clothes and face unchanged.",
+      `Replace ALL footwear on BOTH feet with the exact shoes from image 2 (${look}).`,
+      "Match color and material from image 2 precisely. Photorealistic on the real feet — no floating shoes.",
+      "Do not alter face, skin, or other clothes.",
     ].join(" ");
   }
   if (isWatch(piece)) {
     return [
       KEEP_YOU,
       KEEP_FRAMING,
-      `Add the watch from image 2 (${look}) onto ONE clearly visible wrist in image 1.`,
-      "Prefer the wrist that is more visible to camera. Match metal color and face size from image 2.",
-      "The watch must be readable on the wrist — not floating, not on the chest, not omitted.",
-      "Keep face, clothes, shoes, and glasses unchanged.",
+      `Add the watch from image 2 (${look}) on the most visible wrist.`,
+      "Natural size on the wrist, matching metal and strap from image 2. Do not change the face or clothes.",
     ].join(" ");
   }
   return [
     KEEP_YOU,
     KEEP_FRAMING,
-    `Put the glasses from image 2 (${look}) on the person's face in image 1.`,
-    "They must sit on the nose bridge and ears — clearly visible. Remove any old eyewear.",
-    "Do not change face identity, hair, clothes, or shoes.",
+    `Place the glasses from image 2 (${look}) on the person's face — on the nose and ears.`,
+    "Keep the exact same face underneath. Only add the frames. Photorealistic fit.",
   ].join(" ");
 }
 
@@ -166,7 +169,7 @@ async function kontextProductEdit(opts: {
       image_urls: [opts.personImage, opts.productImage],
       guidance_scale: opts.guidanceScale ?? 4.5,
       num_images: 1,
-      output_format: "jpeg",
+      output_format: "png",
       enhance_prompt: false,
       safety_tolerance: "5",
     }),
@@ -193,7 +196,7 @@ async function applyFinishPiece(opts: {
       : isWatch(piece)
         ? [6.5, 5.5, 4.5, 3.8]
         : isEyewear(piece)
-          ? [5.5, 4.5]
+          ? [6, 5.5, 4.5, 3.8]
           : [4.5];
 
   let lastFail: TryResult = {

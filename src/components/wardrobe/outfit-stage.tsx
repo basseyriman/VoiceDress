@@ -334,7 +334,7 @@ export function OutfitStage({
                 Your look
               </p>
               <p className="text-xs text-mist">
-                See yourself already dressed
+                Your face and body stay yours — only the clothes change
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -518,7 +518,7 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "Clothes, shoes, glasses, watch — the full look, on your photo. Don’t like a piece? Tap it or say “change the shoes.”"
+              ? "Your real face and body — with this outfit on you. Clothes, shoes, glasses, watch. Don’t like a piece? Tap it or say “change the shoes.”"
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
 
