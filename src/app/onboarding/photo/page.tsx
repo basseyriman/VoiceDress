@@ -22,7 +22,7 @@ const BEATS = [
 const INTRO_PAUSE_MS = 1400;
 const BEAT_HOLD_MS = 3200;
 const EXIT_HOLD_MS = 1800;
-const PROCESS_MIN_MS = 1600;
+const PROCESS_MIN_MS = 900;
 
 type Phase = "intro" | "capture";
 type PhotoStatus = "empty" | "processing" | "ready";
@@ -239,8 +239,8 @@ export default function PhotoOnboardingPage() {
                       <p className="mt-4 text-[11px] uppercase tracking-[0.22em] text-champagne">
                         Processing
                       </p>
-                      <p className="mt-2 max-w-[12rem] text-center text-xs text-mist">
-                        Preparing your photo for dressing
+                      <p className="mt-2 max-w-[13rem] text-center text-xs text-mist">
+                        Clearing the background and building your studio plate
                       </p>
                     </div>
                   )}
