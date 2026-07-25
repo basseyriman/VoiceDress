@@ -183,16 +183,16 @@ export default function PhotoOnboardingPage() {
               className="mx-auto mt-10 w-full max-w-md space-y-5"
             >
               <div className="glass shine-border overflow-hidden rounded-[1.75rem]">
-                <div className="relative aspect-[3/4] max-h-[22rem] bg-stone">
+                <div className="relative mx-auto aspect-[3/4] w-full max-w-[17.5rem] overflow-hidden bg-stone sm:max-w-[19rem]">
                   {preview ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={preview}
                       alt="Your photo preview"
-                      className="h-full w-full object-cover object-top"
+                      className="absolute inset-0 h-full w-full object-cover object-top"
                     />
                   ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-6 text-center">
                       <div className="h-24 w-16 rounded-full border border-dashed border-line/80" />
                       <p className="mt-4 text-sm text-mist">
                         Full-body or clear standing portrait
