@@ -18,6 +18,11 @@ const BEATS = [
   "Even light, no heavy filters — so we can dress the look on you.",
 ];
 
+/** Deliberate Wispr-like pacing (ms) */
+const INTRO_PAUSE_MS = 1400;
+const BEAT_HOLD_MS = 3200;
+const EXIT_HOLD_MS = 1800;
+
 type Phase = "intro" | "capture";
 
 export default function PhotoOnboardingPage() {
@@ -48,11 +53,17 @@ export default function PhotoOnboardingPage() {
 
   useEffect(() => {
     if (phase !== "intro") return;
-    if (beat >= BEATS.length) {
-      const t = window.setTimeout(() => setPhase("capture"), 700);
+
+    // beat 0 = quiet pause before first line; 1..n = show BEATS[beat-1]
+    if (beat === 0) {
+      const t = window.setTimeout(() => setBeat(1), INTRO_PAUSE_MS);
       return () => window.clearTimeout(t);
     }
-    const t = window.setTimeout(() => setBeat((b) => b + 1), beat === 0 ? 900 : 1600);
+    if (beat > BEATS.length) {
+      const t = window.setTimeout(() => setPhase("capture"), EXIT_HOLD_MS);
+      return () => window.clearTimeout(t);
+    }
+    const t = window.setTimeout(() => setBeat((b) => b + 1), BEAT_HOLD_MS);
     return () => window.clearTimeout(t);
   }, [phase, beat]);
 
@@ -125,31 +136,50 @@ export default function PhotoOnboardingPage() {
           </p>
 
           {phase === "intro" && (
-            <div className="mx-auto mt-12 flex min-h-[11rem] w-full max-w-md flex-col justify-center gap-4">
-              <AnimatePresence mode="sync">
-                {BEATS.slice(0, beat).map((line, i) => (
-                  <motion.p
-                    key={line}
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            <div className="mx-auto mt-14 flex min-h-[13rem] w-full max-w-lg flex-col items-center justify-center">
+              <div className="relative flex min-h-[6.5rem] w-full items-center justify-center px-2">
+                <AnimatePresence mode="wait">
+                  {beat >= 1 && beat <= BEATS.length ? (
+                    <motion.p
+                      key={BEATS[beat - 1]}
+                      initial={{ opacity: 0, y: 18, filter: "blur(6px)" }}
+                      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                      exit={{ opacity: 0, y: -10, filter: "blur(4px)" }}
+                      transition={{
+                        duration: 0.9,
+                        ease: [0.22, 1, 0.36, 1],
+                      }}
+                      className="absolute inset-x-0 text-center font-display text-[1.35rem] leading-[1.35] text-ivory sm:text-[1.65rem]"
+                    >
+                      {BEATS[beat - 1]}
+                    </motion.p>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+
+              <div className="mt-10 flex items-center gap-2.5">
+                {BEATS.map((_, i) => (
+                  <span
+                    key={BEATS[i]}
                     className={cn(
-                      "text-center font-display text-xl leading-snug text-ivory sm:text-2xl",
-                      i < beat - 1 && "text-ivory-muted/80"
+                      "h-1 rounded-full transition-all duration-700",
+                      beat > i + 1
+                        ? "w-4 bg-champagne/50"
+                        : beat === i + 1
+                          ? "w-7 bg-champagne"
+                          : "w-4 bg-white/15"
                     )}
-                  >
-                    {line}
-                  </motion.p>
+                  />
                 ))}
-              </AnimatePresence>
+              </div>
             </div>
           )}
 
           {phase === "capture" && (
             <motion.div
-              initial={{ opacity: 0, y: 18 }}
+              initial={{ opacity: 0, y: 22 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55 }}
+              transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
               className="mx-auto mt-10 w-full max-w-md space-y-5"
             >
               <div className="glass shine-border overflow-hidden rounded-[1.75rem]">
