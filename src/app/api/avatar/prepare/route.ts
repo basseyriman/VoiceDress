@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 /**
  * Prepare a body photo for try-on: remove background with fal BiRefNet.
  * Client composites the cutout onto a studio plate.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const falKey = process.env.FAL_KEY?.trim();
   const body = await req.json().catch(() => ({}));
   const imageDataUrl = body.imageDataUrl as string | undefined;

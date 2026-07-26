@@ -9,8 +9,12 @@ import {
   inferOccasionProfile,
   occasionProfileSchema,
 } from "@/lib/occasion-profile";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const body = await req.json();
   const occasion = String(body.occasion || "today");
   const styleHint = body.style ? String(body.style) : undefined;

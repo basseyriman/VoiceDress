@@ -247,6 +247,9 @@ export async function bootstrapUserCloud(input: {
   }
 
   const now = new Date().toISOString();
+  const trialEndsAt = new Date(
+    Date.now() + 7 * 24 * 60 * 60 * 1000
+  ).toISOString();
   const profile: UserProfile = {
     uid: input.uid,
     email: input.email,
@@ -259,6 +262,7 @@ export async function bootstrapUserCloud(input: {
     lon: -0.1278,
     stylePrefs: ["quiet luxury", "old money"],
     subscriptionStatus: "trialing",
+    trialEndsAt,
     connectedStores: [],
     voiceEnabled: true,
     createdAt: now,

@@ -7,6 +7,7 @@ import { VoiceOrb } from "@/components/voice/voice-orb";
 import { useAetherStore } from "@/store/aether-store";
 import { prepareProfilePhoto } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
+import { authFetch } from "@/lib/auth-fetch";
 import { CameraCaptureModal } from "@/components/wardrobe/camera-capture-modal";
 
 export default function TryOnPage() {
@@ -47,7 +48,7 @@ export default function TryOnPage() {
       setLocalAvatar(prepared.dataUrl);
       await setAvatar(prepared.dataUrl, "ready");
 
-      void fetch("/api/avatar/generate", {
+      void authFetch("/api/avatar/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -374,12 +374,18 @@ export async function composeCutoutOnStudio(cutoutSrc: string): Promise<string> 
 async function removeBackgroundViaApi(
   imageDataUrl: string
 ): Promise<{ cutoutUrl?: string; error?: string; needsKey?: boolean }> {
-  const res = await fetch("/api/avatar/prepare", {
+  const { authFetch } = await import("@/lib/auth-fetch");
+  const res = await authFetch("/api/avatar/prepare", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ imageDataUrl }),
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 402) {
+    return {
+      error: "Your trial has ended — open Billing to continue.",
+    };
+  }
   if (!res.ok || !data.ok) {
     return {
       error:

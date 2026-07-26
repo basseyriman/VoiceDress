@@ -7,6 +7,7 @@ import {
   isOutfitConversation,
   parseVoiceIntent,
 } from "@/lib/outfit-engine";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 const voicePlanSchema = z.object({
   reply: z.string(),
@@ -47,6 +48,9 @@ const voicePlanSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const body = await req.json();
   const transcript = String(body.transcript || "").trim();
   if (!transcript) {

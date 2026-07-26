@@ -1,5 +1,6 @@
 "use client";
 
+import { authFetch } from "@/lib/auth-fetch";
 import {
   isHighConfidenceVoiceIntent,
   isOutfitConversation,
@@ -56,7 +57,10 @@ export async function transcribeWithAssemblyAI(
 ): Promise<string | null> {
   const form = new FormData();
   form.append("audio", audioBlob, "voice.webm");
-  const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
+  const res = await authFetch("/api/voice/transcribe", {
+    method: "POST",
+    body: form,
+  });
   if (!res.ok) return null;
   const data = await res.json();
   return data.text || null;
@@ -140,7 +144,7 @@ export async function handleVoiceCommandAsync(
   }
 
   try {
-    const res = await fetch("/api/voice/understand", {
+    const res = await authFetch("/api/voice/understand", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -197,7 +201,7 @@ async function runOutfitChat(
 ): Promise<string> {
   const ctx = actions.getContext?.() || {};
   try {
-    const res = await fetch("/api/outfit/chat", {
+    const res = await authFetch("/api/outfit/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -211,6 +215,10 @@ async function runOutfitChat(
         rationale: ctx.rationale || "",
       }),
     });
+    if (res.status === 402) {
+      actions.onNavigate?.("/billing");
+      return "Your trial has ended — open Billing to keep styling.";
+    }
     if (!res.ok) {
       const e = actions.onExplainLook?.();
       return typeof e === "string" && e
@@ -252,9 +260,28 @@ async function applyLocalIntent(
     bag: "bag",
   };
 
+  const suggestBlocked = (): string | null => {
+    const ctx = actions.getContext?.() || {};
+    const wardrobeLen = Array.isArray(ctx.wardrobeFull)
+      ? ctx.wardrobeFull.length
+      : Array.isArray(ctx.wardrobe)
+        ? ctx.wardrobe.length
+        : 0;
+    if (!ctx.weatherFull && !ctx.weather) {
+      return "I need your weather first — open Today and I’ll dress you for the forecast.";
+    }
+    if (wardrobeLen < 2) {
+      actions.onNavigate?.("/wardrobe");
+      return "Add a few pieces to your wardrobe first, then ask me for an outfit.";
+    }
+    return null;
+  };
+
   switch (parsed.intent) {
     case "swap_item": {
       const cat = catMap[parsed.entities.item || "bottom"] || "bottom";
+      const blocked = suggestBlocked();
+      if (blocked) return blocked;
       actions.swapFromVoice(
         cat,
         parsed.entities.style,
@@ -264,6 +291,8 @@ async function applyLocalIntent(
       return parsed.reply;
     }
     case "change_style": {
+      const blocked = suggestBlocked();
+      if (blocked) return blocked;
       const outfit = (await (actions.generateOutfitAsync ||
         actions.generateOutfit)(
         "today",
@@ -295,6 +324,8 @@ async function applyLocalIntent(
       return runOutfitChat(parsed.transcript, actions);
     case "suggest_outfit":
     default: {
+      const blocked = suggestBlocked();
+      if (blocked) return blocked;
       const outfit = (await (actions.generateOutfitAsync ||
         actions.generateOutfit)(
         parsed.entities.occasion,
@@ -305,6 +336,12 @@ async function applyLocalIntent(
           transcript: parsed.transcript,
         }
       )) as { stylingGuide?: string; name?: string } | null | undefined;
+      if (!outfit) {
+        return (
+          suggestBlocked() ||
+          "I couldn’t build a look from your wardrobe yet — add a few more pieces."
+        );
+      }
       if (outfit?.stylingGuide) return outfit.stylingGuide;
       return parsed.reply;
     }

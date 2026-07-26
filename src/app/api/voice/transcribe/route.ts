@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const key = process.env.ASSEMBLYAI_API_KEY;
   const form = await req.formData();
   const audio = form.get("audio");

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { DEFAULT_CHAT_MODEL, getOpenAI, hasAIKey } from "@/lib/ai";
 import { buildStylingGuide, groundSpokenSuggest } from "@/lib/styling-guide";
 import type { Formality, Garment, WeatherSnapshot } from "@/lib/types";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 const stylingSchema = z.object({
   steps: z
@@ -24,6 +25,9 @@ const stylingSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const body = await req.json();
   const garments = (body.garments || []) as Garment[];
   const weather = body.weather as WeatherSnapshot | undefined;

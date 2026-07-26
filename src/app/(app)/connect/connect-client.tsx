@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Link2, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listCommerceStores } from "@/lib/commerce";
+import { authFetch } from "@/lib/auth-fetch";
 import { useAetherStore } from "@/store/aether-store";
 import type { CommerceSource, Garment } from "@/lib/types";
 
@@ -77,18 +78,21 @@ export default function ConnectPageClient() {
     setToast("");
     try {
       const dataUrl = await fileToDataUrl(file);
-      const res = await fetch("/api/commerce/ingest", {
+      const res = await authFetch("/api/commerce/ingest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageDataUrl: dataUrl,
-          userId: user?.uid || "voicedress_local_user",
           source: ingestSource,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Ingest failed");
+        setError(
+          res.status === 402
+            ? "Your trial has ended — open Billing to continue."
+            : data.error || "Ingest failed"
+        );
         return;
       }
       const items = (data.items || []) as Garment[];

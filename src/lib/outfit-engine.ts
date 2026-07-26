@@ -929,10 +929,17 @@ export function isOutfitConversation(transcript: string): boolean {
   const t = transcript.toLowerCase().trim();
   if (!t) return false;
   // Fresh occasion / dress-me asks are suggestions, not chat
+  if (wantsOutfitSuggestion(t)) return false;
   if (
-    wantsOutfitSuggestion(t) &&
-    /\b(going|heading|off to|wedding|dinner|interview|meeting|drinks?)\b/.test(t)
+    /\b(going|heading|off to|wedding|dinner|interview|meeting|drinks?|date)\b/.test(
+      t
+    ) &&
+    /\b(what|wear|outfit|suggest|pick|help|should i)\b/.test(t)
   ) {
+    return false;
+  }
+  // Weather what-ifs should re-suggest, not chat
+  if (parseSpokenWeather(t) || /\b(what if|feeling cold|feeling hot|degrees|°)\b/.test(t)) {
     return false;
   }
   if (wantsOpenWardrobe(t)) return false;
@@ -971,7 +978,9 @@ export function shouldPreferOutfitChat(
     return false;
   }
   if (isOutfitConversation(t)) return true;
-  return /\b(tuck|untuck|shirt|oxford|knit|rib|trouser|shoe|boot|loafer|blazer|coat|belt|sock|stocking|sleeve|hem|button|layer|how to wear|wear it|this look|the look)\b/.test(
+  // Don't steal weather what-ifs or occasion asks into chat
+  if (parseSpokenWeather(t) || wantsOutfitSuggestion(t)) return false;
+  return /\b(tuck|untuck|shirt|oxford|knit|rib|trouser|belt|sock|stocking|sleeve|hem|button|layer|how to wear|wear it|this look|the look)\b/.test(
     t
   );
 }
@@ -996,6 +1005,11 @@ export function wantsOutfitSuggestion(t: string): boolean {
 export function wantsOpenWardrobe(t: string): boolean {
   const s = t.toLowerCase();
   if (wantsOutfitSuggestion(s)) return false;
+  if (
+    /\b(outfit|wear|suggest|pick|dinner|wedding|drinks?|date|meeting)\b/.test(s)
+  ) {
+    return false;
+  }
   if (
     /\b(open|show|go to|take me to|see)\b/.test(s) &&
     /\b(wardrobe|closet)\b/.test(s)
@@ -1027,13 +1041,23 @@ export function parseVoiceIntent(transcript: string) {
       t
     );
   const swapAsk =
-    /\b(swap|change|replace|different|another|new|instead|other)\b/.test(t) ||
-    t.includes("don't like") ||
-    t.includes("dont like");
+    /\b(swap|change|replace|different|another|instead|don't like|dont like)\b/.test(
+      t
+    );
+  // Only treat footwear as a swap when they clearly want a different pair
+  const shoeSwap =
+    shoeAsk &&
+    (swapAsk ||
+      /\b(swap|change|different|other|new)\s+(the\s+)?(shoe|shoes|boot|boots)\b/.test(
+        t
+      ) ||
+      /\b(shoe|shoes|boot|boots)\b.*\b(swap|change|different|don't like|dont like)\b/.test(
+        t
+      ));
 
-  if (swapAsk || (shoeAsk && !t.includes("meeting"))) {
+  if (swapAsk || shoeSwap) {
     let item = inferCategoryFromSpeech(t) || (shoeAsk ? "shoes" : "bottom");
-    if (shoeAsk) item = "shoes";
+    if (shoeAsk && shoeSwap) item = "shoes";
 
     let style: string | undefined;
     if (t.includes("old money")) style = "old money";

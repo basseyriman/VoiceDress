@@ -11,6 +11,7 @@ import {
   colorNameToHex,
 } from "@/lib/commerce";
 import type { CommerceSource, Formality, Garment } from "@/lib/types";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 const garmentExtractSchema = z.object({
   items: z.array(
@@ -45,9 +46,12 @@ const garmentExtractSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const body = await req.json();
   const imageDataUrl = String(body.imageDataUrl || "");
-  const userId = String(body.userId || "voicedress_local_user");
+  const userId = auth.uid;
   const preferredSource = (body.source || "receipt") as CommerceSource;
 
   if (!imageDataUrl.startsWith("data:image")) {

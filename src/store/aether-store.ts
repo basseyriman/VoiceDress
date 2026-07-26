@@ -107,6 +107,8 @@ interface AetherState {
   ) => Outfit | null;
   pickGarmentById: (garmentId: string) => Outfit | null;
   rejectPiece: (garmentId: string) => void;
+  /** Log a confirmed wear (e.g. after successful try-on) — not every suggestion. */
+  confirmWear: (outfit?: Outfit | null) => void;
   setCurrentOutfit: (o: Outfit | null) => void;
   markShopifyConnected: (shop: string, itemCount?: number) => void;
   disconnectStore: (source: CommerceSource) => void;
@@ -159,7 +161,8 @@ async function fetchOccasionProfile(
   style?: string
 ): Promise<OccasionProfile> {
   try {
-    const res = await fetch("/api/outfit/understand-occasion", {
+    const { authFetch } = await import("@/lib/auth-fetch");
+    const res = await authFetch("/api/outfit/understand-occasion", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ occasion, style }),
@@ -182,7 +185,8 @@ async function fetchStylingGuide(input: {
   transcript?: string;
 }) {
   try {
-    const res = await fetch("/api/outfit/styling", {
+    const { authFetch } = await import("@/lib/auth-fetch");
+    const res = await authFetch("/api/outfit/styling", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
@@ -296,7 +300,9 @@ export const useAetherStore = create<AetherState>()(
             lon: data.profile.lon ?? -0.1278,
             stylePrefs: data.profile.stylePrefs || ["quiet luxury", "old money"],
             subscriptionStatus: data.profile.subscriptionStatus || "trialing",
+            trialEndsAt: data.profile.trialEndsAt,
             stripeCustomerId: data.profile.stripeCustomerId,
+            stripeSubscriptionId: data.profile.stripeSubscriptionId,
             connectedStores: data.profile.connectedStores || [],
             voiceEnabled: data.profile.voiceEnabled ?? true,
             createdAt: data.profile.createdAt || new Date().toISOString(),
@@ -341,10 +347,20 @@ export const useAetherStore = create<AetherState>()(
         const next = { ...user, ...patch };
         set({ user: next });
         if (isCloudUid(user.uid)) {
-          void saveUserProfile(user.uid, {
-            ...patch,
-            taste: get().taste,
-          }).catch(() => undefined);
+          // Entitlement fields are server-owned (Admin / Stripe webhook).
+          const {
+            subscriptionStatus: _s,
+            trialEndsAt: _t,
+            stripeCustomerId: _c,
+            stripeSubscriptionId: _sub,
+            ...safePatch
+          } = patch;
+          if (Object.keys(safePatch).length) {
+            void saveUserProfile(user.uid, {
+              ...safePatch,
+              taste: get().taste,
+            }).catch(() => undefined);
+          }
         }
       },
       signInLocal: (profile) => {
@@ -444,7 +460,7 @@ export const useAetherStore = create<AetherState>()(
       },
       generateOutfit: (occasion = "today", style, opts) => {
         const { wardrobe, weather, user, taste, currentOutfit } = get();
-        if (!weather) return null;
+        if (!weather || !wardrobe.length) return null;
         const stylePrefs = user?.stylePrefs;
         const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
         const spoken =
@@ -488,8 +504,9 @@ export const useAetherStore = create<AetherState>()(
           demotePenalty: -6,
         });
         const nextTaste: TasteMemory = {
-          ...withWearLog(taste, outfit),
+          ...taste,
           preferredStyle: stylePrefs?.[0] || outfit.style,
+          recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
         };
         set({ currentOutfit: outfit, taste: nextTaste });
         persistOutfitAndTaste(user?.uid, outfit, nextTaste);
@@ -497,7 +514,7 @@ export const useAetherStore = create<AetherState>()(
       },
       generateOutfitAsync: async (occasion = "today", style, opts) => {
         const { wardrobe, weather, user, taste, currentOutfit } = get();
-        if (!weather) return null;
+        if (!weather || !wardrobe.length) return null;
         const stylePrefs = user?.stylePrefs;
         const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
         const spoken =
@@ -588,8 +605,9 @@ export const useAetherStore = create<AetherState>()(
         }
 
         const nextTaste: TasteMemory = {
-          ...withWearLog(taste, outfit),
+          ...taste,
           preferredStyle: stylePrefs?.[0] || outfit.style,
+          recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
         };
         set({ currentOutfit: outfit, taste: nextTaste });
         persistOutfitAndTaste(user?.uid, outfit, nextTaste);
@@ -597,7 +615,7 @@ export const useAetherStore = create<AetherState>()(
       },
       swapFromVoice: (category, style, occasion, garmentQuery) => {
         const { wardrobe, weather, currentOutfit, user, taste } = get();
-        if (!weather) return null;
+        if (!weather || !wardrobe.length) return null;
         const stylePrefs = user?.stylePrefs;
         const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
 
@@ -614,15 +632,7 @@ export const useAetherStore = create<AetherState>()(
           if (named) forceGarmentId = named.id;
         }
 
-        const nextTaste: TasteMemory = {
-          ...taste,
-          rejectedIds: rejectedFromCurrent
-            ? Array.from(
-                new Set([rejectedFromCurrent, ...taste.rejectedIds])
-              ).slice(0, 40)
-            : taste.rejectedIds,
-        };
-
+        // Soft demote only — don't permanently blacklist on a casual swap.
         const outfit = suggestOutfit({
           wardrobe,
           weather,
@@ -632,27 +642,27 @@ export const useAetherStore = create<AetherState>()(
           swapCategory: forceGarmentId ? undefined : category,
           forceGarmentId,
           currentOutfit: currentOutfit?.garments,
-          taste: nextTaste,
+          taste,
+          demoteIds: rejectedFromCurrent ? [rejectedFromCurrent] : undefined,
+          demotePenalty: -10,
         });
-        const logged = withWearLog(nextTaste, outfit);
-        set({ currentOutfit: outfit, taste: logged });
-        persistOutfitAndTaste(user?.uid, outfit, logged);
+        const nextTaste: TasteMemory = {
+          ...taste,
+          preferredStyle: stylePrefs?.[0] || outfit.style,
+          recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
+        };
+        set({ currentOutfit: outfit, taste: nextTaste });
+        persistOutfitAndTaste(user?.uid, outfit, nextTaste);
         return outfit;
       },
       pickGarmentById: (garmentId) => {
         const { wardrobe, weather, currentOutfit, taste, user } = get();
-        if (!weather || !currentOutfit?.garments) return null;
+        if (!weather || !currentOutfit?.garments || !wardrobe.length) return null;
         const piece = wardrobe.find((g) => g.id === garmentId);
         if (!piece) return null;
-        const rejected = currentOutfit.garments.find(
+        const replaced = currentOutfit.garments.find(
           (g) => g.category === piece.category
         )?.id;
-        const nextTaste: TasteMemory = {
-          ...taste,
-          rejectedIds: rejected
-            ? Array.from(new Set([rejected, ...taste.rejectedIds])).slice(0, 40)
-            : taste.rejectedIds,
-        };
         const outfit = suggestOutfit({
           wardrobe,
           weather,
@@ -661,11 +671,17 @@ export const useAetherStore = create<AetherState>()(
           stylePrefs: user?.stylePrefs,
           forceGarmentId: garmentId,
           currentOutfit: currentOutfit.garments,
-          taste: nextTaste,
+          taste,
+          demoteIds: replaced ? [replaced] : undefined,
+          demotePenalty: -8,
         });
-        const logged = withWearLog(nextTaste, outfit);
-        set({ currentOutfit: outfit, taste: logged });
-        persistOutfitAndTaste(user?.uid, outfit, logged);
+        const nextTaste: TasteMemory = {
+          ...taste,
+          preferredStyle: user?.stylePrefs?.[0] || outfit.style,
+          recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
+        };
+        set({ currentOutfit: outfit, taste: nextTaste });
+        persistOutfitAndTaste(user?.uid, outfit, nextTaste);
         return outfit;
       },
       rejectPiece: (garmentId) => {
@@ -676,6 +692,18 @@ export const useAetherStore = create<AetherState>()(
             new Set([garmentId, ...taste.rejectedIds])
           ).slice(0, 40),
         };
+        set({ taste: nextTaste });
+        if (isCloudUid(user?.uid) && user) {
+          void saveUserProfile(user.uid, { taste: nextTaste }).catch(
+            () => undefined
+          );
+        }
+      },
+      confirmWear: (outfitArg) => {
+        const { taste, user, currentOutfit } = get();
+        const outfit = outfitArg || currentOutfit;
+        if (!outfit?.garmentIds?.length) return;
+        const nextTaste = withWearLog(taste, outfit);
         set({ taste: nextTaste });
         if (isCloudUid(user?.uid) && user) {
           void saveUserProfile(user.uid, { taste: nextTaste }).catch(
@@ -769,14 +797,10 @@ export const useAetherStore = create<AetherState>()(
       setVoiceListening: (v) => set({ voiceListening: v }),
       setTranscript: (t) => set({ lastTranscript: t }),
       setSubscription: (status) => {
+        // Local UI only — Stripe webhook / ensure-trial API own Firestore entitlement.
         const user = get().user;
         if (!user) return;
         set({ user: { ...user, subscriptionStatus: status } });
-        if (isCloudUid(user.uid)) {
-          void saveUserProfile(user.uid, { subscriptionStatus: status }).catch(
-            () => undefined
-          );
-        }
       },
     }),
     {

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Garment, Outfit } from "@/lib/types";
+import { authFetch } from "@/lib/auth-fetch";
 import { cn } from "@/lib/utils";
 import { AVATAR_IDB_REF } from "@/lib/avatar-storage";
 import { useAetherStore } from "@/store/aether-store";
@@ -26,6 +27,7 @@ export function OutfitStage({
   const wardrobe = useAetherStore((s) => s.wardrobe);
   const swapFromVoice = useAetherStore((s) => s.swapFromVoice);
   const setCurrentOutfit = useAetherStore((s) => s.setCurrentOutfit);
+  const confirmWear = useAetherStore((s) => s.confirmWear);
 
   const lookPieces = useMemo(() => {
     const pieces = lookPiecesForTryOn(garments);
@@ -76,7 +78,7 @@ export function OutfitStage({
   const lookKey = lookPieces.map((g) => g.id).join("|");
 
   useEffect(() => {
-    fetch("/api/tryon/render")
+    authFetch("/api/tryon/render")
       .then((r) => r.json())
       .then((d) => setKeyConfigured(Boolean(d.configured)))
       .catch(() => setKeyConfigured(false));
@@ -127,17 +129,27 @@ export function OutfitStage({
         needsKey?: boolean;
         needsBilling?: boolean;
         error?: string;
+        code?: string;
         detail?: string;
         imageUrl?: string;
-      }) => {
+      }, status?: number) => {
         if (data.needsKey) {
           setNeedsKey(true);
           setKeyConfigured(false);
           setDressing(false);
           return true;
         }
-        if (data.needsBilling) {
+        if (
+          data.needsBilling ||
+          status === 402 ||
+          data.code === "entitlement_required"
+        ) {
           setNeedsBilling(true);
+          setDressing(false);
+          return true;
+        }
+        if (status === 401 || data.code === "auth_required") {
+          setError("Sign in to run virtual try-on.");
           setDressing(false);
           return true;
         }
@@ -193,7 +205,7 @@ export function OutfitStage({
             setProgress((p) => (p < 48 ? p + 2.5 : p));
           }, 800);
 
-          const apparelRes = await fetch("/api/tryon/render", {
+          const apparelRes = await authFetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -207,7 +219,7 @@ export function OutfitStage({
 
           const apparelData = await apparelRes.json();
           if (cancelled || myId !== requestId.current) return;
-          if (failOrBilling(apparelData)) return;
+          if (failOrBilling(apparelData, apparelRes.status)) return;
 
           if (!apparelData.ok || !apparelData.imageUrl) {
             const detail =
@@ -248,7 +260,7 @@ export function OutfitStage({
             setStepLabel("Layering the look…");
             setProgress(55);
             try {
-              const styleRes = await fetch("/api/tryon/render", {
+              const styleRes = await authFetch("/api/tryon/render", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -260,7 +272,7 @@ export function OutfitStage({
               const styleData = await styleRes.json();
               if (cancelled || myId !== requestId.current) return;
               if (
-                !failOrBilling(styleData) &&
+                !failOrBilling(styleData, styleRes.status) &&
                 styleData.ok &&
                 styleData.imageUrl &&
                 !styleData.skipped
@@ -293,7 +305,7 @@ export function OutfitStage({
             50 + Math.round(((i + 1) / (finishQueue.length + 1)) * 40)
           );
 
-          const finishRes = await fetch("/api/tryon/render", {
+          const finishRes = await authFetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -305,7 +317,7 @@ export function OutfitStage({
           });
           const finishData = await finishRes.json();
           if (cancelled || myId !== requestId.current) return;
-          if (failOrBilling(finishData)) return;
+          if (failOrBilling(finishData, finishRes.status)) return;
 
           if (
             finishData.ok &&
@@ -353,6 +365,9 @@ export function OutfitStage({
           setStepLabel(missed.length ? "Almost ready" : "Full look on you");
           setProgress(100);
           setDressing(false);
+          if (appliedNames.size > 0) {
+            confirmWear(outfit);
+          }
         }
       } catch (err) {
         if (cancelled || myId !== requestId.current) return;
@@ -366,7 +381,7 @@ export function OutfitStage({
     return () => {
       cancelled = true;
     };
-  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces, styledExtras]);
+  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces, styledExtras, outfit, confirmWear]);
 
   const alternatives = swapFor
     ? wardrobe.filter(

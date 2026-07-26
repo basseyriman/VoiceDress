@@ -1,15 +1,30 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Clients cannot self-grant paid membership — Stripe webhook (Admin) owns these fields.
+    function subscriptionFieldsUnchanged() {
+      return request.resource.data.subscriptionStatus == resource.data.subscriptionStatus
+        && request.resource.data.get('stripeCustomerId', '') == resource.data.get('stripeCustomerId', '')
+        && request.resource.data.get('stripeSubscriptionId', '') == resource.data.get('stripeSubscriptionId', '')
+        && request.resource.data.get('trialEndsAt', '') == resource.data.get('trialEndsAt', '');
+    }
+
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && request.resource.data.subscriptionStatus in ['trialing', 'none'];
+      allow update: if isOwner(userId) && subscriptionFieldsUnchanged();
 
       match /garments/{garmentId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isOwner(userId);
       }
 
       match /outfits/{outfitId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isOwner(userId);
       }
     }
   }

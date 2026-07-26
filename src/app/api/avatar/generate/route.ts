@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 /**
  * Avatar generation adapter for Tripo3D / Meshy.
@@ -6,6 +7,9 @@ import { NextRequest, NextResponse } from "next/server";
  * With API keys, kick off 3D mesh jobs for a future viewer.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const body = await req.json().catch(() => ({}));
   const name = body.name as string | undefined;
   const tripo = process.env.TRIPO_API_KEY;

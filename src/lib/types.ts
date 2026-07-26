@@ -92,7 +92,10 @@ export interface UserProfile {
   lon?: number;
   stylePrefs: string[];
   subscriptionStatus: "trialing" | "active" | "canceled" | "none";
+  /** ISO end of free trial — server/webhook authoritative for paid status. */
+  trialEndsAt?: string;
   stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
   connectedStores: CommerceSource[];
   voiceEnabled: boolean;
   createdAt: string;

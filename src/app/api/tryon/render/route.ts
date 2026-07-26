@@ -4,6 +4,7 @@ import {
   hasOpenAIImageKey,
   openaiFinishEdit,
 } from "@/lib/openai-finish";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 export const maxDuration = 180;
 
@@ -355,6 +356,9 @@ function orderFinishPieces(
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const falKey = process.env.FAL_KEY?.trim();
   const body = await req.json();
   const personImage = body.personImage as string | undefined;

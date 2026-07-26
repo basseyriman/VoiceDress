@@ -3,6 +3,7 @@ import { generateText, Output } from "ai";
 import { z } from "zod";
 import { DEFAULT_CHAT_MODEL, getOpenAI, hasAIKey } from "@/lib/ai";
 import type { Garment, WeatherSnapshot } from "@/lib/types";
+import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 
 const chatSchema = z.object({
   reply: z
@@ -37,6 +38,9 @@ const chatSchema = z.object({
  * fabric vs weather, belt/socks, confidence, optional swaps.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireEntitled(req);
+  if (!isAuthedUser(auth)) return auth;
+
   const body = await req.json();
   const transcript = String(body.transcript || "").trim();
   if (!transcript) {
