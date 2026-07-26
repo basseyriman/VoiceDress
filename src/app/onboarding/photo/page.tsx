@@ -144,8 +144,8 @@ export default function PhotoOnboardingPage() {
             One clear look at you
           </h1>
           <p className="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-mist">
-            VoiceDress dresses outfits onto your photo. Take a moment to get this
-            right — then the wardrobe opens.
+            We dress looks onto this photo — take a clear full-body shot, then
+            your wardrobe opens.
           </p>
 
           {phase === "intro" && (

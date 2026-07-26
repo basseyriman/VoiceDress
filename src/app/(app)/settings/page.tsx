@@ -22,9 +22,11 @@ export default function SettingsPage() {
         <p className="text-xs uppercase tracking-[0.28em] text-champagne">
           Settings
         </p>
-        <h1 className="mt-2 font-display text-4xl text-ivory">Preferences</h1>
-        <p className="mt-2 text-sm text-mist">
-          Your profile stays in sync across every device.
+        <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
+          Preferences
+        </h1>
+        <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
+          Name, city, and style — synced on every device.
         </p>
       </div>
 
@@ -110,8 +112,7 @@ export default function SettingsPage() {
           Install as an app
         </p>
         <p className="text-sm leading-relaxed text-mist">
-          VoiceDress works on iPhone and Android from the same site — add it to
-          your home screen for a full-screen app feel.
+          Add VoiceDress to your home screen for a full-screen feel.
         </p>
         <ul className="space-y-2 text-sm text-ivory-muted">
           <li>
@@ -135,7 +136,7 @@ export default function SettingsPage() {
             className="rounded-2xl border border-line px-4 py-3.5 text-sm text-ivory transition hover:border-champagne/40 hover:bg-white/[0.02]"
           >
             Connect stores{" "}
-            <span className="text-mist">· Shopify & order photos</span>
+            <span className="text-mist">· Shopify & uploads</span>
           </Link>
           <Link
             href="/billing"

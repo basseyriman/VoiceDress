@@ -151,11 +151,10 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
           Change anything
         </p>
         <h3 className="mt-2 font-display text-2xl text-ivory sm:text-3xl">
-          Don&apos;t like a piece? Say so.
+          Don’t like a piece? Say so.
         </h3>
         <p className="mt-2 max-w-md text-sm text-mist">
-          Tap once and speak — “change the shoes”, “different glasses”, or a new
-          occasion. VoiceDress restyles the look on your photo.
+          Tap and speak — “change the shoes”, or a new occasion.
         </p>
 
         <motion.button

@@ -73,19 +73,19 @@ export default function TryOnPage() {
           <p className="text-xs uppercase tracking-[0.28em] text-champagne">
             Your photo
           </p>
-          <h1 className="mt-2 font-display text-4xl text-ivory">
+          <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
             See yourself dressed
           </h1>
-          <p className="mt-2 max-w-xl text-sm text-mist">
-            Add a clear full-body photo — head to shoes. Dressing runs on Today
-            after you say where you’re going — this page won’t lock the app.
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
+            Full-body photo — head to shoes. Looks dress on Today after you pick
+            an occasion.
           </p>
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
           {displayAvatar && !error && (
             <p className="mt-2 text-xs text-mist">
               {currentOutfit
-                ? "Photo ready. Your look from Today can dress onto this photo."
-                : "Photo ready. Open Today and tell us the occasion to get a look."}
+                ? "Photo ready — your Today look can dress onto it."
+                : "Photo ready — open Today and name the occasion."}
             </p>
           )}
         </div>

@@ -115,8 +115,7 @@ export default function WardrobePage() {
               Remove {pendingDelete.name}?
             </h2>
             <p className="mt-2 text-sm text-mist">
-              It will leave your wardrobe and stop appearing in suggestions. This
-              can’t be undone.
+              It leaves your wardrobe and stops showing in suggestions.
             </p>
             <div className="mt-6 flex gap-3">
               <button

@@ -796,7 +796,7 @@ export function OutfitStage({
               <div className="absolute inset-0 z-20 flex min-h-[22rem] flex-col items-center justify-center gap-3 p-8 text-center">
                 <p className="font-display text-xl text-ivory">Add your photo</p>
                 <p className="text-xs text-mist">
-                  Upload a clear full-body photo (head to shoes).
+                  Upload a clear full-body shot — head to shoes.
                 </p>
                 <ChangePhotoButton
                   className="mt-2"

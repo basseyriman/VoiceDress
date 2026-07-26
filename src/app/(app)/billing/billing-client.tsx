@@ -111,12 +111,11 @@ export default function BillingPage() {
         <p className="text-xs uppercase tracking-[0.28em] text-champagne">
           Membership
         </p>
-        <h1 className="mt-2 font-display text-4xl text-ivory">
-          VoiceDress membership
+        <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
+          Membership
         </h1>
-        <p className="mt-2 max-w-xl text-sm text-mist">
-          £19/month or £149/year — every plan includes a 7-day free trial.
-          Status:{" "}
+        <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
+          £19/month or £149/year — both include a 7-day trial. Status:{" "}
           <span className="capitalize text-champagne">{statusLabel}</span>
           {user?.trialEndsAt && user.subscriptionStatus === "trialing" ? (
             <span className="text-mist">

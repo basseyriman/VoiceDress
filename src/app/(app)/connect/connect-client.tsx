@@ -114,13 +114,12 @@ export default function ConnectPageClient() {
         <p className="text-xs uppercase tracking-[0.28em] text-champagne">
           Commerce
         </p>
-        <h1 className="mt-2 font-display text-4xl text-ivory">
+        <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
           Fill your wardrobe
         </h1>
-        <p className="mt-2 max-w-2xl text-sm text-mist">
-          Connect Shopify for automatic order sync, or upload a receipt / order
-          screenshot / product photo — AI extracts real pieces into your
-          wardrobe. No sample SKUs.
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-mist">
+          Sync Shopify orders, or upload a receipt / product photo — we add real
+          pieces to your wardrobe.
         </p>
       </div>
 
@@ -141,8 +140,7 @@ export default function ConnectPageClient() {
           <h2 className="font-display text-2xl text-ivory">Shopify</h2>
         </div>
         <p className="mt-2 text-sm text-mist">
-          Real OAuth — orders import as garments. Requires SHOPIFY_API_KEY and
-          SHOPIFY_API_SECRET in .env.local.
+          Connect your store — recent orders become wardrobe pieces.
         </p>
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
@@ -181,8 +179,7 @@ export default function ConnectPageClient() {
           <h2 className="font-display text-2xl text-ivory">Add from photo</h2>
         </div>
         <p className="mt-2 text-sm text-mist">
-          Receipt, order confirmation, or product photo. Works for Amazon, ASOS,
-          Zara, and any store without an API.
+          Receipt, order screenshot, or product shot — any store.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {stores
