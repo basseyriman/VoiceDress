@@ -14,7 +14,6 @@ export default function TryOnPage() {
   const setAvatar = useAetherStore((s) => s.setAvatar);
   const currentOutfit = useAetherStore((s) => s.currentOutfit);
   const generateOutfitAsync = useAetherStore((s) => s.generateOutfitAsync);
-  const weather = useAetherStore((s) => s.weather);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [localAvatar, setLocalAvatar] = useState<string | null>(null);
@@ -33,15 +32,6 @@ export default function TryOnPage() {
       cancelled = true;
     };
   }, [user?.avatarUrl, user?.photoURL]);
-
-  useEffect(() => {
-    if (weather && !currentOutfit) {
-      void generateOutfitAsync(
-        "work meeting",
-        user?.stylePrefs?.[0] || "quiet luxury"
-      );
-    }
-  }, [weather, currentOutfit, generateOutfitAsync, user?.stylePrefs]);
 
   const onUpload = async (file?: File) => {
     if (!file) return;
@@ -65,10 +55,6 @@ export default function TryOnPage() {
           name: user?.displayName,
         }),
       });
-
-      if (!currentOutfit) {
-        void generateOutfitAsync("work meeting", "quiet luxury");
-      }
     } catch {
       setError("Couldn’t use that photo. Try another JPG or PNG.");
     } finally {
@@ -90,13 +76,15 @@ export default function TryOnPage() {
             See yourself dressed
           </h1>
           <p className="mt-2 max-w-xl text-sm text-mist">
-            Add a clear full-body photo — head to shoes. Choose from your gallery
-            or take one live. Today’s look dresses onto this photo.
+            Add a clear full-body photo — head to shoes. Then go to Today and say
+            where you’re going before we dress you.
           </p>
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
           {displayAvatar && !error && (
             <p className="mt-2 text-xs text-mist">
-              Photo ready. Add FAL_KEY if prompted, then the look can dress in.
+              {currentOutfit
+                ? "Photo ready. Your look from Today can dress onto this photo."
+                : "Photo ready. Open Today and tell us the occasion to get a look."}
             </p>
           )}
         </div>
@@ -122,13 +110,15 @@ export default function TryOnPage() {
           >
             Take photo
           </Button>
-          <Button
-            onClick={() =>
-              void generateOutfitAsync("evening presence", "old money")
-            }
-          >
-            Restyle
-          </Button>
+          {currentOutfit ? (
+            <Button
+              onClick={() =>
+                void generateOutfitAsync("evening presence", "old money")
+              }
+            >
+              Restyle
+            </Button>
+          ) : null}
         </div>
       </div>
 

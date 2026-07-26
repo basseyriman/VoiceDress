@@ -242,10 +242,12 @@ export const useAetherStore = create<AetherState>()(
           if (!wardrobe.length) {
             wardrobe = await upsertGarments(uid, seedWardrobe(uid));
           }
+          // Never restore a saved look on login — wait until the user says
+          // where they're going (voice / occasion) before dressing them.
           get().applyCloudSession({
             profile,
             wardrobe,
-            outfit: data.outfit,
+            outfit: null,
             taste: data.profile.taste,
           });
           return true;

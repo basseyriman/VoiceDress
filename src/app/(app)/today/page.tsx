@@ -184,8 +184,8 @@ export default function TodayPage() {
           {weather
             ? `${Math.round(weather.tempC)}°C · ${weather.condition} in ${weather.location}. `
             : ""}
-          Tell VoiceDress the occasion. We’ll suggest one look from your wardrobe
-          and dress you in it — then change anything you don’t like by voice.
+          Nothing dresses onto your photo until you speak or pick an occasion.
+          Then we’ll suggest one look from your wardrobe — change anything by voice.
         </p>
       </motion.div>
 
