@@ -560,6 +560,8 @@ export const useAetherStore = create<AetherState>()(
             occasion: displayOccasion,
             transcript: opts?.transcript,
             steps: aiGuide.steps,
+            weather: effectiveWeather,
+            formality: profile.formality,
           });
           outfit = {
             ...outfit,
@@ -579,6 +581,8 @@ export const useAetherStore = create<AetherState>()(
               occasion: displayOccasion,
               transcript: opts.transcript,
               steps: outfit.stylingSteps,
+              weather: effectiveWeather,
+              formality: profile.formality,
             }),
           };
         }

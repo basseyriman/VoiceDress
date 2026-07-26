@@ -57,6 +57,8 @@ export async function POST(req: NextRequest) {
     occasion,
     transcript,
     steps: fallback.steps,
+    weather,
+    formality,
   });
 
   if (!garments.length) {
@@ -83,7 +85,7 @@ export async function POST(req: NextRequest) {
     const { output } = await generateText({
       model: openai(DEFAULT_CHAT_MODEL),
       output: Output.object({ schema: stylingSchema }),
-      prompt: `You are VoiceDress — a brilliant, quietly confident personal stylist speaking OUT LOUD after picking a look.
+      prompt: `You are VoiceDress — a brilliant personal stylist speaking OUT LOUD after locking a look (Strata-style).
 
 EXACT wardrobe pieces (use these names only — never invent or rename):
 ${pieceList}
@@ -95,12 +97,14 @@ Formality: ${formality}
 Weather: ${Math.round(weather.tempC)}°C, ${weather.condition} in ${weather.location}
 ${previousGuide ? `They heard this last time — do NOT repeat it verbatim:\n"${previousGuide}"\n` : ""}
 
-spoken MUST follow this arc (2–4 short sentences, speakable):
-1) Start with the plan: "For [use the user’s words if clear, else the occasion]…"
-2) Name the clothes: "wear your [exact names from the list, natural grouping]…"
-3) Then how to wear/layer them (tuck, open coat, hem break, sleeves) — specific to THESE pieces.
-Do NOT digress into random weather chat, generic vibes, or pieces that aren’t listed.
-Do NOT say filler like "I’ve got you" without naming the outfit.
+spoken MUST follow this speakable arc (about 4–6 short sentences):
+1) "For [user’s plan]…" + name a silhouette vibe (e.g. monochromatic night executive) + brief weather as context only
+2) "Up top: your [exact top/outerwear names]…"
+3) "Below: your [exact trousers]…"
+4) "On your feet: your [exact shoes]…"
+5) Optional: metal sync if accessories match (gold with gold / silver with silver) using exact accessory names
+6) One short how-to-wear cue (tuck / open blazer / hem break) for THESE pieces only
+Do NOT invent garments. Do NOT dump a weather forecast as the whole answer.
 
 Also return:
 - steps: 3–5 short UI lines for how to wear
@@ -117,6 +121,8 @@ Also return:
       occasion,
       transcript,
       steps: output.steps,
+      weather,
+      formality,
     });
 
     return NextResponse.json({

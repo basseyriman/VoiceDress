@@ -95,37 +95,145 @@ export function listWearPieces(garments: Garment[]): string {
 }
 
 /**
- * Speakable suggest script: occasion → name the wardrobe pieces → how to wear.
- * Never invent garments.
+ * Strata-style speakable suggest: context → upper → lower → footwear → metal sync.
+ * Never invent garments — only wardrobe pieces passed in.
  */
 export function buildSpokenSuggestReply(input: {
   garments: Garment[];
   occasion: string;
   transcript?: string;
   howToWear?: string;
+  weather?: WeatherSnapshot;
+  formality?: Formality;
 }): string {
   const occasionPhrase = phraseOccasionFromSpeech(
     input.occasion,
     input.transcript
   );
-  const wear = listWearPieces(input.garments);
+  const g = input.garments;
+  const top = g.find((x) => x.category === "top");
+  const bottom = g.find((x) => x.category === "bottom");
+  const outer = g.find((x) => x.category === "outerwear");
+  const shoes = g.find((x) => x.category === "shoes");
+  const dress = g.find((x) => x.category === "dress");
+  const accessories = g.filter((x) => x.category === "accessory");
+
+  const weatherBit = input.weather
+    ? ` About ${Math.round(input.weather.tempC)}°C and ${input.weather.condition}.`
+    : "";
+
+  const silhouette = nameSilhouette(g, input.formality);
+
+  const parts: string[] = [];
+  parts.push(
+    `For ${occasionPhrase}, I’m locking in a ${silhouette} look.${weatherBit}`
+  );
+
+  if (dress) {
+    parts.push(`Wear your ${dress.name}${shoes ? ` with your ${shoes.name}` : ""}.`);
+  } else {
+    if (top && outer) {
+      parts.push(
+        `Up top: your ${top.name}, layered under your ${outer.name}.`
+      );
+    } else if (top) {
+      parts.push(`Up top: your ${top.name}.`);
+    } else if (outer) {
+      parts.push(`Up top: your ${outer.name}.`);
+    }
+    if (bottom) {
+      parts.push(`Below: your ${bottom.name}.`);
+    }
+    if (shoes) {
+      parts.push(`On your feet: your ${shoes.name}.`);
+    }
+  }
+
+  const metalLine = metallicSyncLine(accessories);
+  if (metalLine) parts.push(metalLine);
+
   const how = (input.howToWear || "")
     .replace(/\s+/g, " ")
     .trim()
     .replace(/^(for [^.]+\.\s*)/i, "");
-  if (how) {
-    return `For ${occasionPhrase}, wear ${wear}. ${how}`;
+  // One short wear cue if it adds tuck/open guidance not already covered
+  if (how && /\b(tuck|open|button|hem|sleeve|collar)\b/i.test(how)) {
+    const cue = how.split(/(?<=\.)\s+/).slice(0, 2).join(" ");
+    if (cue.length < 180) parts.push(cue);
   }
-  return `For ${occasionPhrase}, wear ${wear}.`;
+
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
-/** If the model wandered, force the occasion + real piece names back in. */
+function nameSilhouette(
+  garments: Garment[],
+  formality?: Formality
+): string {
+  const top = garments.find((g) => g.category === "top");
+  const bottom = garments.find((g) => g.category === "bottom");
+  const dark =
+    top &&
+    bottom &&
+    luminanceHex(top.hexColors[0] || "#888") < 110 &&
+    luminanceHex(bottom.hexColors[0] || "#888") < 110;
+  const light =
+    top &&
+    bottom &&
+    luminanceHex(top.hexColors[0] || "#888") > 170 &&
+    luminanceHex(bottom.hexColors[0] || "#888") > 150;
+  if (dark && formality && ["business", "formal"].includes(formality)) {
+    return "monochromatic night executive";
+  }
+  if (dark) return "dark continuous evening";
+  if (light) return "high-contrast light luxury";
+  if (formality === "formal" || formality === "business") return "tailored evening";
+  return "quiet elevated";
+}
+
+function metallicSyncLine(accessories: Garment[]): string | null {
+  if (accessories.length < 2) {
+    if (accessories[0]) return `Finish with your ${accessories[0].name}.`;
+    return null;
+  }
+  const metals = accessories.map(inferMetal);
+  const named = accessories.map((a) => a.name);
+  const real = metals.filter((m) => m !== "none");
+  if (real.length >= 2 && real.every((m) => m === real[0])) {
+    return `Metal sync: your ${named.join(" and ")} stay in ${real[0]}.`;
+  }
+  return `Finish with your ${named.join(" and ")}.`;
+}
+
+function inferMetal(g: Garment): "gold" | "silver" | "rose" | "none" {
+  const blob =
+    `${g.name} ${g.colors.join(" ")} ${g.tags.join(" ")}`.toLowerCase();
+  if (/rose\s*gold|rosegold/.test(blob)) return "rose";
+  if (/gold|cognac|brass|champagne/.test(blob)) return "gold";
+  if (/silver|steel|chrome|platinum/.test(blob)) return "silver";
+  return "none";
+}
+
+function luminanceHex(hex: string): number {
+  try {
+    const n = parseInt(hex.replace("#", ""), 16);
+    const r = (n >> 16) & 255;
+    const g = (n >> 8) & 255;
+    const b = n & 255;
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  } catch {
+    return 128;
+  }
+}
+
+/** If the model wandered, force the Strata layout with real piece names. */
 export function groundSpokenSuggest(input: {
   spoken: string;
   garments: Garment[];
   occasion: string;
   transcript?: string;
   steps?: string[];
+  weather?: WeatherSnapshot;
+  formality?: Formality;
 }): string {
   const spoken = (input.spoken || "").trim();
   const keyNames = input.garments
@@ -138,9 +246,11 @@ export function groundSpokenSuggest(input: {
     keyNames.length > 0 &&
     keyNames.filter((n) => lower.includes(n.toLowerCase())).length >=
       Math.min(2, keyNames.length);
-  const hasArc = /\bfor\b/i.test(spoken) && /\bwear\b/i.test(spoken);
+  const hasArc =
+    /\b(up top|below:|on your feet|locking in)\b/i.test(spoken) &&
+    /\bfor\b/i.test(spoken);
 
-  if (mentionsPieces && hasArc && spoken.length <= 420) {
+  if (mentionsPieces && hasArc && spoken.length <= 520) {
     return spoken;
   }
 
@@ -152,6 +262,8 @@ export function groundSpokenSuggest(input: {
     occasion: input.occasion,
     transcript: input.transcript,
     howToWear: how,
+    weather: input.weather,
+    formality: input.formality,
   });
 }
 
@@ -319,6 +431,8 @@ export function buildStylingGuide(input: {
     garments,
     occasion,
     howToWear: steps.slice(0, 3).join(" "),
+    weather,
+    formality,
   });
 
   const tryOnBits: string[] = [];

@@ -98,6 +98,17 @@ export function inferOccasionProfile(
     preferCategories.push("top", "bottom", "shoes", "accessory");
     notes = "Celebratory but wearable — elevated, not costume.";
   } else if (
+    o.includes("proper dinner") ||
+    o.includes("dinner date") ||
+    (o.includes("dinner") &&
+      (o.includes("first") || o.includes("haven't") || o.includes("havent")))
+  ) {
+    formality = "business";
+    styleHints.push("quiet luxury", "old money");
+    preferCategories.push("top", "bottom", "outerwear", "shoes", "accessory");
+    avoid.push("sneakers", "denim", "jeans");
+    notes = "High-value evening dinner — elevated, monochromatic, intentional.";
+  } else if (
     o.includes("dinner") ||
     o.includes("date") ||
     o.includes("restaurant") ||
