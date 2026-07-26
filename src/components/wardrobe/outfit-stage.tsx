@@ -590,7 +590,7 @@ export function OutfitStage({
     styledExtras,
     outfit,
     confirmWear,
-    autoTryOn: runTryOn,
+    runTryOn,
   ]);
 
   const alternatives = swapFor
