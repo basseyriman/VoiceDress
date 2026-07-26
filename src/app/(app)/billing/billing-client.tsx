@@ -35,6 +35,12 @@ export default function BillingPage() {
     setLoading(planId);
     setMessage("");
     try {
+      if (typeof window !== "undefined") {
+        const { default: posthog } = await import("posthog-js");
+        if (posthog.__loaded) {
+          posthog.capture("billing_checkout_started", { plan_id: planId });
+        }
+      }
       const res = await authFetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
