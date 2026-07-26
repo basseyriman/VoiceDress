@@ -167,6 +167,66 @@ export async function lockFaceIdentity(
 }
 
 /**
+ * Keep the good upper body (head → knees) from the clean clothes photo,
+ * and only take the lower legs/feet from a shoe edit — so shoe AI can’t
+ * spoil the part that already looks right.
+ */
+export async function keepUpperBlendLower(
+  protectedSrc: string,
+  editedSrc: string,
+  opts?: { seam?: number; feather?: number }
+): Promise<string> {
+  const [protectedImg, edited] = await Promise.all([
+    loadHtmlImage(protectedSrc),
+    loadHtmlImage(editedSrc),
+  ]);
+
+  const w = protectedImg.width;
+  const h = protectedImg.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return protectedSrc;
+
+  // Draw shoe edit full-frame first
+  ctx.drawImage(edited, 0, 0, w, h);
+
+  // Soft mask: fully keep protected image above the seam (knees),
+  // feather into the shoe edit below.
+  const seam = opts?.seam ?? 0.68; // ~knees on a standing full-body shot
+  const feather = opts?.feather ?? 0.08;
+  const seamY = h * seam;
+  const featherPx = h * feather;
+
+  const upper = document.createElement("canvas");
+  upper.width = w;
+  upper.height = h;
+  const uctx = upper.getContext("2d");
+  if (!uctx) return protectedSrc;
+  uctx.drawImage(protectedImg, 0, 0, w, h);
+
+  const mask = document.createElement("canvas");
+  mask.width = w;
+  mask.height = h;
+  const mctx = mask.getContext("2d");
+  if (!mctx) return protectedSrc;
+
+  const grad = mctx.createLinearGradient(0, seamY - featherPx, 0, seamY + featherPx);
+  grad.addColorStop(0, "rgba(0,0,0,1)");
+  grad.addColorStop(0.45, "rgba(0,0,0,1)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  mctx.fillStyle = grad;
+  mctx.fillRect(0, 0, w, h);
+
+  uctx.globalCompositeOperation = "destination-in";
+  uctx.drawImage(mask, 0, 0);
+
+  ctx.drawImage(upper, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.93);
+}
+
+/**
  * Standardize a body photo for outfit try-on: 2:3 framing + soft studio grade.
  * Does not crop the person — pads and grades so garments land cleanly.
  */

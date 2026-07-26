@@ -1,11 +1,10 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * fal FASHN dresses tops/bottoms onto your photo and keeps you looking like you.
- *
- * Shoes / glasses / watch are NOT run through a second generative model on top.
- * That second pass (Kontext) rewrites legs/face and spoils the clean FASHN result
- * (black blocks, melted boots, etc.). Those pieces stay in the suggested look list.
+ * 1. Apparel → fal FASHN (head-to-knees looks right).
+ * 2. Shoes → one Kontext pass, then keepUpperBlendLower locks the clean
+ *    upper body so shoe AI can’t spoil face/torso/jeans again.
+ * 3. Glasses/watch stay in the look list (face-touching edits spoil identity).
  */
 
 export const TRYON_APPAREL_CATEGORIES = [

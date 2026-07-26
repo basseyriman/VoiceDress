@@ -8,7 +8,7 @@ import { AVATAR_IDB_REF } from "@/lib/avatar-storage";
 import { useAetherStore } from "@/store/aether-store";
 import { lookPiecesForTryOn, apparelForTryOn } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn } from "@/lib/image";
+import { letterboxForTryOn, keepUpperBlendLower } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import Link from "next/link";
@@ -155,16 +155,17 @@ export function OutfitStage({
         });
 
         const appliedNames = new Set<string>();
+        const shoePiece = styledExtras.find((p) => p.category === "shoes");
 
-        // Clothes only via FASHN. Shoe/glasses/watch AI rewrites the whole photo
-        // and spoils the clean result (black leg blocks, melted boots, etc.).
+        // 1) Clothes via FASHN — head-to-knees already looks right
+        let clothesLocked = current;
         if (apparelPieces.length) {
           setActivePieceId(apparelPieces[0]?.id ?? null);
           setStepLabel("Dressing you…");
           setProgress(12);
 
           const tick = window.setInterval(() => {
-            setProgress((p) => (p < 88 ? p + 2.5 : p));
+            setProgress((p) => (p < 55 ? p + 2.5 : p));
           }, 800);
 
           const apparelRes = await fetch("/api/tryon/render", {
@@ -198,12 +199,55 @@ export function OutfitStage({
           }
 
           current = apparelData.imageUrl;
+          clothesLocked = apparelData.imageUrl;
           setWornUrl(current);
           setKeyConfigured(true);
+          setProgress(58);
           for (const s of Array.isArray(apparelData.steps)
             ? apparelData.steps
             : []) {
             if (s?.name) appliedNames.add(s.name);
+          }
+        }
+
+        // 2) Shoes only — then lock head→knees from the clean clothes photo
+        //    so the shoe pass can’t spoil the upper body again.
+        if (shoePiece) {
+          setActivePieceId(shoePiece.id);
+          setStepLabel(`Adding ${shoePiece.name}…`);
+          setProgress(72);
+
+          const finishRes = await fetch("/api/tryon/render", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              personImage: current,
+              stage: "finish",
+              garments: [toPayload(shoePiece)],
+            }),
+          });
+          const finishData = await finishRes.json();
+          if (cancelled || myId !== requestId.current) return;
+          if (failOrBilling(finishData)) return;
+
+          if (
+            finishData.ok &&
+            finishData.imageUrl &&
+            Array.isArray(finishData.steps) &&
+            finishData.steps.length > 0
+          ) {
+            try {
+              current = await keepUpperBlendLower(
+                clothesLocked,
+                finishData.imageUrl,
+                { seam: 0.68, feather: 0.09 }
+              );
+            } catch {
+              current = clothesLocked;
+            }
+            setWornUrl(current);
+            appliedNames.add(shoePiece.name);
+            setKeyConfigured(true);
           }
         }
 
@@ -228,7 +272,7 @@ export function OutfitStage({
     return () => {
       cancelled = true;
     };
-  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces]);
+  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces, styledExtras]);
 
   const alternatives = swapFor
     ? wardrobe.filter(
@@ -275,7 +319,7 @@ export function OutfitStage({
                 Your look
               </p>
               <p className="text-xs text-mist">
-                Your photo — clothes on you, cleanly
+                Your photo — clothes on you, shoes finished below the knee
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -361,7 +405,8 @@ export function OutfitStage({
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {apparelPieces.map((g) => (
+                    {[...apparelPieces, ...styledExtras.filter((p) => p.category === "shoes")].map(
+                      (g) => (
                       <div
                         key={g.id}
                         className={cn(
@@ -468,7 +513,7 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "You’re dressed in the clothes from this look. Shoes, glasses, and watch stay listed below — adding them with a second AI pass was spoiling your photo."
+              ? "Clothes on your photo, shoes added carefully below the knee so your upper look stays clean. Tap any piece to change it."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
 
@@ -484,7 +529,9 @@ export function OutfitStage({
                   active={swapFor === g.category || activePieceId === g.id}
                   dressing={dressing && activePieceId === g.id}
                   badge={
-                    styledExtras.some((e) => e.id === g.id)
+                    styledExtras.some(
+                      (e) => e.id === g.id && e.category === "accessory"
+                    )
                       ? "Look piece"
                       : undefined
                   }

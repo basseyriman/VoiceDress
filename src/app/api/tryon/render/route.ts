@@ -129,9 +129,9 @@ function shoeGlassesPrompt(piece: Piece): string {
     return [
       KEEP_YOU,
       KEEP_FRAMING,
-      `Replace ALL footwear on BOTH feet with the shoes from image 2 (${look}).`,
-      "Match image 2 color exactly (tan/suede must not stay black). Natural on the real feet.",
-      "Do not alter face, skin, hair, or other clothes.",
+      `Change ONLY the footwear below the ankles — replace BOTH shoes with image 2 (${look}).`,
+      "Match tan/suede color from image 2 exactly. Keep jeans and everything from the knees up completely unchanged.",
+      "Do not alter face, torso, or pant legs above the shin.",
     ].join(" ");
   }
   return [
