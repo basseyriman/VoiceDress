@@ -143,9 +143,13 @@ function tastePenalty(g: Garment, taste?: TasteMemory): number {
 }
 
 /** Soft demotion so re-asks / weather what-ifs don't freeze on the same look. */
-function freshLookPenalty(g: Garment, demoteIds?: string[]): number {
+function freshLookPenalty(
+  g: Garment,
+  demoteIds?: string[],
+  demotePenalty = -6
+): number {
   if (!demoteIds?.length) return 0;
-  return demoteIds.includes(g.id) ? -6 : 0;
+  return demoteIds.includes(g.id) ? demotePenalty : 0;
 }
 
 function scoreGarment(
@@ -156,7 +160,8 @@ function scoreGarment(
   already: Garment[],
   profile?: OccasionProfile,
   taste?: TasteMemory,
-  demoteIds?: string[]
+  demoteIds?: string[],
+  demotePenalty = -6
 ) {
   return (
     weatherFit(g, weather) +
@@ -165,7 +170,7 @@ function scoreGarment(
     coherenceWithOutfit(g, already, formality, style) +
     (profile ? profileFit(g, profile) : 0) +
     tastePenalty(g, taste) +
-    freshLookPenalty(g, demoteIds)
+    freshLookPenalty(g, demoteIds, demotePenalty)
   );
 }
 
@@ -177,41 +182,28 @@ function pickBest(
   already: Garment[] = [],
   profile?: OccasionProfile,
   taste?: TasteMemory,
-  demoteIds?: string[]
+  demoteIds?: string[],
+  demotePenalty = -6
 ): Garment | null {
   if (!items.length) return null;
-  const ranked = [...items].sort(
-    (a, b) =>
-      scoreGarment(b, weather, style, formality, already, profile, taste, demoteIds) -
-      scoreGarment(a, weather, style, formality, already, profile, taste, demoteIds)
-  );
+  const score = (g: Garment) =>
+    scoreGarment(
+      g,
+      weather,
+      style,
+      formality,
+      already,
+      profile,
+      taste,
+      demoteIds,
+      demotePenalty
+    );
+  const ranked = [...items].sort((a, b) => score(b) - score(a));
   const best = ranked[0]!;
-  const topScore = scoreGarment(
-    best,
-    weather,
-    style,
-    formality,
-    already,
-    profile,
-    taste,
-    demoteIds
-  );
+  const topScore = score(best);
   // Among near-ties, rotate so the same dinner date isn’t always identical
   const contenders = ranked
-    .filter(
-      (g) =>
-        scoreGarment(
-          g,
-          weather,
-          style,
-          formality,
-          already,
-          profile,
-          taste,
-          demoteIds
-        ) >=
-        topScore - 1.75
-    )
+    .filter((g) => score(g) >= topScore - 1.75)
     .slice(0, 3);
   if (contenders.length <= 1) return best;
   return contenders[Math.floor(Math.random() * contenders.length)]!;
@@ -393,11 +385,45 @@ export interface SuggestInput {
   excludeIds?: string[];
   /** Soft-demote these ids so a re-ask can produce a different look. */
   demoteIds?: string[];
+  /** Penalty applied to demoteIds (default -6). Use a larger negative when the occasion changes. */
+  demotePenalty?: number;
   swapCategory?: Garment["category"];
   currentOutfit?: Garment[];
   forceGarmentId?: string;
   profile?: OccasionProfile;
   taste?: TasteMemory;
+}
+
+/** True when the new ask is a meaningfully different event than the last look. */
+export function occasionMeaningfullyChanged(
+  previous?: string | null,
+  next?: string | null
+): boolean {
+  if (!previous || !next) return false;
+  const a = previous.toLowerCase().trim();
+  const b = next.toLowerCase().trim();
+  if (a === b) return false;
+  const pa = inferOccasionProfile(a);
+  const pb = inferOccasionProfile(b);
+  if (pa.formality !== pb.formality) return true;
+  const markers = [
+    "wedding",
+    "dinner",
+    "date",
+    "interview",
+    "office",
+    "work",
+    "gym",
+    "travel",
+    "party",
+    "funeral",
+    "brunch",
+    "birthday",
+  ];
+  for (const m of markers) {
+    if (a.includes(m) !== b.includes(m)) return true;
+  }
+  return a.slice(0, 24) !== b.slice(0, 24);
 }
 
 /** Pick best look from the user's wardrobe only — never invents pieces. */
@@ -411,10 +437,28 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     "quiet luxury";
   const formality = profile.formality;
   const exclude = new Set([...(input.excludeIds || [])]);
+  const demotePenalty = input.demotePenalty ?? -6;
+  const demote = input.demoteIds;
 
   const pool = input.wardrobe.filter((g) => !exclude.has(g.id));
   const byCat = (cat: Garment["category"]) =>
     pool.filter((g) => g.category === cat);
+
+  const pick = (
+    items: Garment[],
+    already: Garment[] = []
+  ): Garment | null =>
+    pickBest(
+      items,
+      input.weather,
+      style,
+      formality,
+      already,
+      profile,
+      input.taste,
+      demote,
+      demotePenalty
+    );
 
   let selected: Garment[] = [];
 
@@ -432,17 +476,11 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     selected = input.currentOutfit.filter(
       (g) => g.category !== input.swapCategory
     );
-    const replacement = pickBest(
+    const replacement = pick(
       byCat(input.swapCategory).filter(
         (g) => !input.currentOutfit?.some((c) => c.id === g.id)
       ),
-      input.weather,
-      style,
-      formality,
-      selected,
-      profile,
-      input.taste,
-      input.demoteIds
+      selected
     );
     if (replacement) selected.push(replacement);
     else selected = input.currentOutfit;
@@ -450,102 +488,61 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     const wantDress =
       profile.preferCategories.includes("dress") ||
       formalityRank(formality) >= 4;
-    const dress = pickBest(
-      byCat("dress"),
-      input.weather,
-      style,
-      formality,
-      [],
-      profile,
-      input.taste,
-      input.demoteIds
-    );
+    const dress = pick(byCat("dress"), []);
     if (dress && wantDress && formalityRank(formality) >= 3) {
       selected = [dress];
     } else {
-      const top = pickBest(
-        byCat("top"),
-        input.weather,
-        style,
-        formality,
-        [],
-        profile,
-        input.taste,
-        input.demoteIds
-      );
+      const top = pick(byCat("top"), []);
       if (top) selected.push(top);
-      const bottom = pickBest(
-        byCat("bottom"),
-        input.weather,
-        style,
-        formality,
-        selected,
-        profile,
-        input.taste,
-        input.demoteIds
-      );
+      const bottom = pick(byCat("bottom"), selected);
       if (bottom) selected.push(bottom);
     }
-    const outer = pickBest(
-      byCat("outerwear"),
-      input.weather,
-      style,
-      formality,
-      selected,
-      profile,
-      input.taste,
-      input.demoteIds
+    const outerPool = byCat("outerwear");
+    // Mild formal events: prefer a blazer/jacket over a heavy coat
+    const mildFormal =
+      input.weather.tempC > 18 && formalityRank(formality) >= 3;
+    const lightOuter = mildFormal
+      ? outerPool.filter(
+          (g) =>
+            /blazer|jacket|overshirt|cardigan/i.test(g.name) ||
+            !/overcoat|parka|puffer|wool coat/i.test(g.name)
+        )
+      : outerPool;
+    const outer = pick(
+      lightOuter.length ? lightOuter : outerPool,
+      selected
     );
-    // Cool enough for a layer — coats/jackets until mild evenings
-    if (outer && input.weather.tempC < 19) selected.push(outer);
-    const shoes = pickBest(
-      byCat("shoes"),
-      input.weather,
-      style,
-      formality,
-      selected,
-      profile,
-      input.taste,
-      input.demoteIds
-    );
+    // Weather layers when cool; formal events keep a blazer/coat even when mild
+    const wantOuterForOccasion =
+      formalityRank(formality) >= 3 ||
+      profile.preferCategories.includes("outerwear");
+    if (
+      outer &&
+      (input.weather.tempC < 19 || wantOuterForOccasion)
+    ) {
+      selected.push(outer);
+    }
+    const shoes = pick(byCat("shoes"), selected);
     if (shoes) selected.push(shoes);
 
     const accessories = byCat("accessory");
-    const eyewear = pickBest(
+    const eyewear = pick(
       accessories.filter((g) =>
         /glass|frame|optic|sunglass|spec/i.test(`${g.name} ${g.tags.join(" ")}`)
       ),
-      input.weather,
-      style,
-      formality,
-      selected,
-      profile,
-      input.taste,
-      input.demoteIds
+      selected
     );
-    const watch = pickBest(
+    const watch = pick(
       accessories.filter((g) =>
         /watch|wrist|chrono|time/i.test(`${g.name} ${g.tags.join(" ")}`)
       ),
-      input.weather,
-      style,
-      formality,
-      selected,
-      profile,
-      input.taste,
-      input.demoteIds
+      selected
     );
-    const belt = pickBest(
+    const belt = pick(
       accessories.filter((g) =>
         /belt|strap/i.test(`${g.name} ${g.tags.join(" ")}`)
       ),
-      input.weather,
-      style,
-      formality,
-      selected,
-      profile,
-      input.taste,
-      input.demoteIds
+      selected
     );
     if (eyewear) selected.push(eyewear);
     if (watch && watch.id !== eyewear?.id) selected.push(watch);
@@ -558,16 +555,7 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       selected.push(belt);
     }
     if (!eyewear && !watch && !belt) {
-      const acc = pickBest(
-        accessories,
-        input.weather,
-        style,
-        formality,
-        selected,
-        profile,
-        input.taste,
-        input.demoteIds
-      );
+      const acc = pick(accessories, selected);
       if (acc) selected.push(acc);
     }
   }

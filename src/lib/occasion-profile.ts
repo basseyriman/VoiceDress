@@ -40,17 +40,19 @@ export function inferOccasionProfile(
   const preferCategories: GarmentCategory[] = [];
   let notes = "";
 
-  if (
-    o.includes("wedding") ||
-    o.includes("gala") ||
-    o.includes("black tie") ||
-    o.includes("black-tie")
-  ) {
+  if (o.includes("black tie") || o.includes("black-tie") || o.includes("gala")) {
     formality = "black_tie";
     styleHints.push("quiet luxury", "old money");
-    preferCategories.push("dress", "shoes", "accessory");
-    avoid.push("sneakers", "denim", "hoodies");
-    notes = "Formal celebration — polished and restrained.";
+    preferCategories.push("dress", "outerwear", "shoes", "accessory");
+    avoid.push("sneakers", "denim", "hoodies", "jeans");
+    notes = "Black-tie / gala — polished and restrained.";
+  } else if (o.includes("wedding") || o.includes("reception")) {
+    // Guest look: formal, not tuxedo-only — prefer blazer + tailored pieces
+    formality = "formal";
+    styleHints.push("quiet luxury", "old money");
+    preferCategories.push("outerwear", "top", "bottom", "shoes", "accessory");
+    avoid.push("sneakers", "denim", "jeans", "hoodies", "knit", "quarter-zip");
+    notes = "Wedding guest — tailored, elevated, no casual denim.";
   } else if (
     o.includes("funeral") ||
     o.includes("memorial") ||

@@ -15,6 +15,7 @@ import { seedWardrobe, WARDROBE_SEED_VERSION } from "@/lib/seed-data";
 import { defaultConnections } from "@/lib/commerce";
 import {
   applySpokenWeather,
+  occasionMeaningfullyChanged,
   parseSpokenWeather,
   suggestOutfit,
 } from "@/lib/outfit-engine";
@@ -443,6 +444,10 @@ export const useAetherStore = create<AetherState>()(
           resolvedOccasion,
           style || user?.stylePrefs[0]
         );
+        const occasionChanged = occasionMeaningfullyChanged(
+          currentOutfit?.occasion,
+          profile.label
+        );
         const outfit = suggestOutfit({
           wardrobe,
           weather: effectiveWeather,
@@ -450,8 +455,10 @@ export const useAetherStore = create<AetherState>()(
           style: style || user?.stylePrefs[0] || "quiet luxury",
           profile,
           taste,
-          // Always soften the last look so repeating "dinner date" can vary
-          demoteIds: currentOutfit?.garmentIds,
+          // New event → score fresh for that formality (don’t soft-lock on dinner pieces).
+          // Same event re-ask → soft rotate away from the last look.
+          demoteIds: occasionChanged ? undefined : currentOutfit?.garmentIds,
+          demotePenalty: -6,
         });
         const nextTaste: TasteMemory = {
           ...taste,
@@ -488,6 +495,10 @@ export const useAetherStore = create<AetherState>()(
           resolvedOccasion,
           style || user?.stylePrefs[0]
         );
+        const occasionChanged = occasionMeaningfullyChanged(
+          currentOutfit?.occasion,
+          profile.label
+        );
         let outfit = suggestOutfit({
           wardrobe,
           weather: effectiveWeather,
@@ -495,7 +506,9 @@ export const useAetherStore = create<AetherState>()(
           style: style || profile.styleHints[0] || user?.stylePrefs[0],
           profile,
           taste,
-          demoteIds: currentOutfit?.garmentIds,
+          // New event → pure occasion/weather score. Same event → soft rotate.
+          demoteIds: occasionChanged ? undefined : currentOutfit?.garmentIds,
+          demotePenalty: -8,
         });
 
         const aiGuide = await fetchStylingGuide({
