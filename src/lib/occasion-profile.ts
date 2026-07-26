@@ -132,7 +132,10 @@ export function inferOccasionProfile(
     o.includes("party") ||
     o.includes("night out") ||
     o.includes("club") ||
-    o.includes("cocktail")
+    o.includes("cocktail") ||
+    o.includes("drinks") ||
+    o.includes("drink with") ||
+    o.includes("pub")
   ) {
     formality = "smart_casual";
     styleHints.push("romantic", "quiet luxury");

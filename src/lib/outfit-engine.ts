@@ -733,6 +733,13 @@ function inferOccasionFromSpeech(t: string): string {
     return "travel day";
   if (t.includes("party") || t.includes("night out") || t.includes("club"))
     return "night out";
+  if (
+    /\b(drinks?|pub|cocktail|wine bar|bar crawl)\b/.test(t) ||
+    (/\bfriends\b/.test(t) &&
+      /\b(drink|drinks|pub|bar|out|going|meet)\b/.test(t))
+  ) {
+    return "drinks with friends";
+  }
   if (t.includes("funeral") || t.includes("memorial")) return "funeral";
   if (t.includes("church") || t.includes("ceremony")) return "formal ceremony";
 
@@ -741,7 +748,7 @@ function inferOccasionFromSpeech(t: string): string {
     /\b(what if|degrees|°|feeling cold|feeling hot|suggest|what would you wear)\b/.test(
       t
     ) &&
-    !/\b(birthday|wedding|dinner|date|meeting|interview|gym|travel|party)\b/.test(
+    !/\b(birthday|wedding|dinner|date|meeting|interview|gym|travel|party|drinks?|pub)\b/.test(
       t
     )
   ) {
@@ -754,7 +761,7 @@ function inferOccasionFromSpeech(t: string): string {
       ""
     )
     .replace(
-      /\b(if it (was|were|is)|what if|suggest|what would you( suggest| wear)?|feeling cold|feeling hot|\d+\s*degrees?)\b/gi,
+      /\b(if it (was|were|is)|what if|suggest|what would you( suggest| wear)?|can you help me( pick| choose)?|pick (an |a )?outfit|from my (wardrobe|closet)|feeling cold|feeling hot|\d+\s*degrees?)\b/gi,
       " "
     )
     .replace(/\s+/g, " ")
@@ -769,23 +776,61 @@ export function isHighConfidenceVoiceIntent(transcript: string): boolean {
     /\b(swap|change|replace|different|another|instead|don't like|dont like)\b/.test(
       t
     );
+  const wantsOutfit = wantsOutfitSuggestion(t);
   const clearSuggest =
-    /\b(dress me|outfit for|what should i wear|suggest|what would you)\b/.test(
+    wantsOutfit ||
+    /\b(birthday|interview|wedding|dinner|meeting|gym|travel|drinks?|pub)\b/.test(
       t
     ) ||
-    /\b(birthday|interview|wedding|dinner|meeting|gym|travel)\b/.test(t) ||
     /\b(feeling cold|feeling hot|degrees|°)\b/.test(t);
   const weatherOnly =
     /\bweather\b/.test(t) &&
-    !/\b(suggest|wear|outfit|dress|what if|degrees|°)\b/.test(t);
+    !/\b(suggest|wear|outfit|dress|what if|degrees|°|pick|choose)\b/.test(t);
+  // "open my wardrobe" = nav. "outfit from my wardrobe" = suggest — never treat as nav.
   const clearNav =
-    weatherOnly || /\b(wardrobe|closet|why this|explain)\b/.test(t);
-  if (/\b(open|go to|show|connect|photo|settings|billing|add|upload)\b/.test(t))
+    weatherOnly ||
+    (/\b(why this|explain)\b/.test(t) && !wantsOutfit) ||
+    (wantsOpenWardrobe(t) && !wantsOutfit);
+  if (
+    /\b(go to|connect|photo|settings|billing|add|upload)\b/.test(t) &&
+    !wantsOutfit
+  )
     return false;
   if (clearNav && !swapAsk) return true;
   if (swapAsk) return true;
-  if (clearSuggest && t.length < 120) return true;
+  if (clearSuggest && t.length < 200) return true;
   return false;
+}
+
+/** True when the user is asking for a look, not just browsing pieces. */
+function wantsOutfitSuggestion(t: string): boolean {
+  return (
+    /\b(dress me|outfit for|what should i wear|suggest|what would you|pick (an |a |my )?outfit|help me (pick|choose|find)|choose (an |a )?outfit|recommend (an |a )?outfit|put (me )?together|style me)\b/.test(
+      t
+    ) ||
+    (/\b(outfit|look|wear|dress)\b/.test(t) &&
+      /\b(help|pick|choose|suggest|recommend|from (my )?(wardrobe|closet)|for (a |the |my )?)\b/.test(
+        t
+      )) ||
+    (/\b(going|heading|off to|i('?m| am) going)\b/.test(t) &&
+      /\b(wear|outfit|dress|look|clothes|wardrobe|closet)\b/.test(t))
+  );
+}
+
+/** Navigate to wardrobe only when they clearly want the page, not a suggestion. */
+function wantsOpenWardrobe(t: string): boolean {
+  if (wantsOutfitSuggestion(t)) return false;
+  if (/\b(open|show|go to|take me to|see)\b/.test(t) &&
+    /\b(wardrobe|closet)\b/.test(t)
+  ) {
+    return true;
+  }
+  // Bare "wardrobe" / "my closet"
+  return (
+    /^(open |show )?(my )?(wardrobe|closet)\.?$/.test(t.trim()) ||
+    t.trim() === "wardrobe" ||
+    t.trim() === "closet"
+  );
 }
 
 export function parseVoiceIntent(transcript: string) {
@@ -871,7 +916,7 @@ export function parseVoiceIntent(transcript: string) {
     };
   }
 
-  if (t.includes("wardrobe") || t.includes("closet")) {
+  if (wantsOpenWardrobe(t)) {
     return {
       transcript,
       intent: "open_wardrobe" as const,
@@ -911,7 +956,7 @@ export function parseVoiceIntent(transcript: string) {
           /\b(what if|another|different|instead|again)\b/.test(t)
       ),
     },
-    reply: `Choosing a look for ${occasion}${tempNote} from your wardrobe.`,
+    reply: `Of course — let's get you right for ${occasion}${tempNote}.`,
     confidence: "high" as const,
   };
 }

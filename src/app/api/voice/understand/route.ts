@@ -121,11 +121,14 @@ Rules:
 - Never invent clothing.
 - Prefer swap_piece / pick_garment when user dislikes a piece.
 - Use suggest_look for new occasions OR weather what-ifs ("if it was 16 degrees").
+- CRITICAL: If they ask to pick/choose/suggest/help with an outfit AND mention wardrobe/closet ("from my wardrobe"), that is suggest_look — NOT open_page. Only open /wardrobe when they clearly want to browse the wardrobe page ("open my wardrobe", "show closet").
+- Social plans count as occasions: drinks, pub, friends, dinner, wedding, etc. Set occasion from what they said.
+- reply should sound like a sharp stylist who is happy to help (warm, short, 1–2 sentences) — never a cold system message like "Opening your wardrobe" when they asked for a look.
 - When user mentions a temperature or feeling cold/hot, set tempC (Celsius) and freshLook=true on suggest_look. Keep the current occasion if they don't name a new one.
 - Use open_page for navigation (wardrobe, connect, try-on, settings, billing, today).
 - Use add_from_photo to add purchases from a receipt/screenshot.
 - Use explain_look / check_weather when asked only about actual weather (not outfit suggestions).
-- reply should be short, premium, speakable (1–2 sentences). Mention the temperature if they asked a what-if.
+- Mention the temperature if they asked a what-if.
 - Return 1–2 actions max.`,
     });
 
