@@ -94,7 +94,10 @@ export async function letterboxForTryOn(src: string): Promise<string> {
  * Paste the real face/head from the original photo onto the dressed result
  * so AI try-on can’t replace you with a lookalike.
  *
- * - strong: after apparel/shoes — restore full face identity
+ * Tight oval on the face only — a larger mask was re-pasting the original
+ * shirt/shoulders and undoing white/light tops.
+ *
+ * - strong: after apparel/shoes — restore face identity
  * - soft: after glasses — restore eyes/nose/mouth only so frames can stay
  */
 export async function lockFaceIdentity(
@@ -117,11 +120,11 @@ export async function lockFaceIdentity(
 
   ctx.drawImage(dressed, 0, 0, w, h);
 
-  // Full-body shots: face sits in the upper center.
+  // Face-only: keep above the collar so garment colors survive.
   const cx = w * 0.5;
-  const cy = strength === "strong" ? h * 0.175 : h * 0.17;
-  const rx = strength === "strong" ? w * 0.24 : w * 0.14;
-  const ry = strength === "strong" ? h * 0.155 : h * 0.09;
+  const cy = strength === "strong" ? h * 0.14 : h * 0.145;
+  const rx = strength === "strong" ? w * 0.16 : w * 0.12;
+  const ry = strength === "strong" ? h * 0.1 : h * 0.075;
 
   const faceLayer = document.createElement("canvas");
   faceLayer.width = w;
@@ -140,14 +143,14 @@ export async function lockFaceIdentity(
   const grad = mctx.createRadialGradient(
     cx,
     cy,
-    ry * (strength === "strong" ? 0.28 : 0.4),
+    ry * (strength === "strong" ? 0.35 : 0.45),
     cx,
     cy,
     ry
   );
   if (strength === "strong") {
     grad.addColorStop(0, "rgba(0,0,0,1)");
-    grad.addColorStop(0.65, "rgba(0,0,0,0.92)");
+    grad.addColorStop(0.7, "rgba(0,0,0,0.88)");
     grad.addColorStop(1, "rgba(0,0,0,0)");
   } else {
     grad.addColorStop(0, "rgba(0,0,0,0.95)");
@@ -164,6 +167,255 @@ export async function lockFaceIdentity(
 
   ctx.drawImage(faceLayer, 0, 0);
   return canvas.toDataURL("image/jpeg", 0.93);
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const h = hex.replace("#", "").trim();
+  if (h.length === 3) {
+    return {
+      r: parseInt(h[0] + h[0], 16),
+      g: parseInt(h[1] + h[1], 16),
+      b: parseInt(h[2] + h[2], 16),
+    };
+  }
+  if (h.length !== 6) return null;
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+function colorDistance(
+  a: { r: number; g: number; b: number },
+  b: { r: number; g: number; b: number }
+) {
+  const dr = a.r - b.r;
+  const dg = a.g - b.g;
+  const db = a.b - b.b;
+  return Math.sqrt(dr * dr + dg * dg + db * db);
+}
+
+function namedColorHints(
+  colors: string[] = []
+): { r: number; g: number; b: number }[] {
+  const out: { r: number; g: number; b: number }[] = [];
+  for (const c of colors) {
+    const n = c.toLowerCase();
+    if (/white|ivory|cream|bone|off[- ]?white/.test(n))
+      out.push({ r: 245, g: 242, b: 235 });
+    if (/stone|khaki|beige|sand|camel|tan|taupe/.test(n))
+      out.push({ r: 190, g: 165, b: 130 });
+    if (/navy|midnight|ink/.test(n)) out.push({ r: 30, g: 42, b: 65 });
+    if (/black|charcoal|graphite/.test(n)) out.push({ r: 40, g: 40, b: 42 });
+    if (/indigo|denim/.test(n)) out.push({ r: 50, g: 60, b: 90 });
+  }
+  return out;
+}
+
+/**
+ * After Kontext adds a coat, keep FASHN shirt/trousers from `baseSrc` and only
+ * take coat-colored pixels from `outerwearSrc`. Stops coat edits from rewriting
+ * the whole outfit (and wasting finish credits on a wrong body).
+ */
+export async function layerOuterwearPreserveBase(
+  baseSrc: string,
+  outerwearSrc: string,
+  opts?: { hexColors?: string[]; colors?: string[] }
+): Promise<string> {
+  const [base, outer] = await Promise.all([
+    loadHtmlImage(baseSrc),
+    loadHtmlImage(outerwearSrc),
+  ]);
+  const w = base.width;
+  const h = base.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return baseSrc;
+
+  const outerCanvas = document.createElement("canvas");
+  outerCanvas.width = w;
+  outerCanvas.height = h;
+  const octx = outerCanvas.getContext("2d");
+  if (!octx) return baseSrc;
+  octx.drawImage(outer, 0, 0, w, h);
+  const outerData = octx.getImageData(0, 0, w, h);
+
+  ctx.drawImage(base, 0, 0, w, h);
+  const baseData = ctx.getImageData(0, 0, w, h);
+
+  const targets = [
+    ...(opts?.hexColors || []).map(hexToRgb).filter(Boolean),
+    ...namedColorHints(opts?.colors),
+  ] as { r: number; g: number; b: number }[];
+
+  if (!targets.length) {
+    targets.push(
+      { r: 180, g: 145, b: 100 },
+      { r: 120, g: 90, b: 60 },
+      { r: 40, g: 50, b: 75 }
+    );
+  }
+
+  const y0 = Math.floor(h * 0.12);
+  const y1 = Math.floor(h * 0.72);
+  const x0 = Math.floor(w * 0.08);
+  const x1 = Math.floor(w * 0.92);
+  const faceY = h * 0.22;
+
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      if (y < faceY) {
+        const dx = (x - w * 0.5) / (w * 0.18);
+        const dy = (y - h * 0.14) / (h * 0.1);
+        if (dx * dx + dy * dy < 1) continue;
+      }
+      const i = (y * w + x) * 4;
+      const pr = outerData.data[i];
+      const pg = outerData.data[i + 1];
+      const pb = outerData.data[i + 2];
+      const pixel = { r: pr, g: pg, b: pb };
+
+      let nearCoat = false;
+      for (const t of targets) {
+        if (colorDistance(pixel, t) < 78) {
+          nearCoat = true;
+          break;
+        }
+      }
+      if (!nearCoat) continue;
+
+      const br = baseData.data[i];
+      const bg = baseData.data[i + 1];
+      const bb = baseData.data[i + 2];
+      if (colorDistance(pixel, { r: br, g: bg, b: bb }) < 28) continue;
+
+      baseData.data[i] = pr;
+      baseData.data[i + 1] = pg;
+      baseData.data[i + 2] = pb;
+    }
+  }
+
+  ctx.putImageData(baseData, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.93);
+}
+
+function sampleRegionAvg(
+  data: ImageData,
+  w: number,
+  h: number,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number
+) {
+  const left = Math.floor(w * x0);
+  const right = Math.floor(w * x1);
+  const top = Math.floor(h * y0);
+  const bottom = Math.floor(h * y1);
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  let n = 0;
+  for (let y = top; y < bottom; y += 2) {
+    for (let x = left; x < right; x += 2) {
+      const i = (y * w + x) * 4;
+      r += data.data[i];
+      g += data.data[i + 1];
+      b += data.data[i + 2];
+      n++;
+    }
+  }
+  if (!n) return { r: 0, g: 0, b: 0, lum: 0 };
+  r /= n;
+  g /= n;
+  b /= n;
+  return { r, g, b, lum: 0.2126 * r + 0.7152 * g + 0.0722 * b };
+}
+
+/**
+ * Cheap trust check — if shirt/trousers colors clearly don't match, don't
+ * claim success or burn more fal credits on shoes/glasses.
+ */
+export async function verifyApparelLook(
+  wornSrc: string,
+  pieces: {
+    id: string;
+    category: string;
+    name?: string;
+    colors?: string[];
+    hexColors?: string[];
+  }[]
+): Promise<{ ok: boolean; failedIds: string[]; reason: string }> {
+  const img = await loadHtmlImage(wornSrc);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = img.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { ok: true, failedIds: [], reason: "" };
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, img.width, img.height);
+
+  const failedIds: string[] = [];
+  const reasons: string[] = [];
+
+  for (const piece of pieces) {
+    if (piece.category === "outerwear") continue;
+    const targets = [
+      ...(piece.hexColors || []).map(hexToRgb).filter(Boolean),
+      ...namedColorHints(piece.colors),
+    ] as { r: number; g: number; b: number }[];
+    if (!targets.length) continue;
+
+    const region =
+      piece.category === "bottom"
+        ? sampleRegionAvg(data, img.width, img.height, 0.35, 0.65, 0.48, 0.68)
+        : sampleRegionAvg(data, img.width, img.height, 0.35, 0.65, 0.28, 0.42);
+
+    const expectedLight = targets.some(
+      (t) => 0.2126 * t.r + 0.7152 * t.g + 0.0722 * t.b > 180
+    );
+    const expectedDark = targets.some(
+      (t) => 0.2126 * t.r + 0.7152 * t.g + 0.0722 * t.b < 70
+    );
+
+    let nearest = Infinity;
+    for (const t of targets) {
+      nearest = Math.min(nearest, colorDistance(region, t));
+    }
+
+    if (expectedLight && region.lum < 120) {
+      failedIds.push(piece.id);
+      reasons.push(`${piece.name || piece.category} stayed dark`);
+      continue;
+    }
+    if (expectedDark && region.lum > 160) {
+      failedIds.push(piece.id);
+      reasons.push(`${piece.name || piece.category} stayed light`);
+      continue;
+    }
+    if (
+      piece.category === "bottom" &&
+      (piece.colors || []).some((c) => /stone|khaki|beige|sand|tan/.test(c)) &&
+      region.lum < 85
+    ) {
+      failedIds.push(piece.id);
+      reasons.push(`${piece.name || "trousers"} stayed too dark`);
+      continue;
+    }
+    if (nearest > 110 && !(expectedLight && region.lum > 170)) {
+      failedIds.push(piece.id);
+      reasons.push(`${piece.name || piece.category} color didn’t land`);
+    }
+  }
+
+  return {
+    ok: failedIds.length === 0,
+    failedIds,
+    reason: reasons.join(" · "),
+  };
 }
 
 /**

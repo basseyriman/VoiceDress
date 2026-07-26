@@ -13,7 +13,7 @@ import {
   TRYON_APPAREL_MAX_PIECES,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import Link from "next/link";
@@ -268,24 +268,75 @@ export function OutfitStage({
             return;
           }
 
+          for (const s of Array.isArray(apparelData.steps)
+            ? apparelData.steps
+            : []) {
+            markApplied(s);
+          }
+
+          // Keep FASHN shirt/trousers; only take the coat from Kontext.
+          const outerPiece = apparelPieces.find((p) => p.category === "outerwear");
+          let dressedUrl = apparelData.imageUrl as string;
+          if (
+            outerPiece &&
+            typeof apparelData.apparelBaseUrl === "string" &&
+            apparelData.apparelBaseUrl
+          ) {
+            setStepLabel("Keeping your shirt & trousers…");
+            try {
+              dressedUrl = await layerOuterwearPreserveBase(
+                apparelData.apparelBaseUrl,
+                apparelData.imageUrl,
+                {
+                  hexColors: outerPiece.hexColors,
+                  colors: outerPiece.colors,
+                }
+              );
+            } catch {
+              dressedUrl = apparelData.apparelBaseUrl;
+              appliedIds.delete(outerPiece.id);
+              appliedNames.delete(outerPiece.name);
+            }
+          }
+
           setStepLabel("Keeping your face…");
           try {
             current = await lockFaceIdentity(
               identityPhoto,
-              apparelData.imageUrl,
+              dressedUrl,
               "strong"
             );
           } catch {
-            current = apparelData.imageUrl;
+            current = dressedUrl;
           }
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           setWornUrl(current);
           setKeyConfigured(true);
           setProgress(50);
-          for (const s of Array.isArray(apparelData.steps)
-            ? apparelData.steps
-            : []) {
-            markApplied(s);
+
+          // Trust gate — don't burn shoes/glasses credits on a wrong body.
+          const basePieces = apparelPieces.filter(
+            (p) => p.category !== "outerwear"
+          );
+          const trust = await verifyApparelLook(current, basePieces);
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+          if (!trust.ok) {
+            for (const id of trust.failedIds) {
+              appliedIds.delete(id);
+              const failed = basePieces.find((p) => p.id === id);
+              if (failed?.name) appliedNames.delete(failed.name);
+            }
+            setMissingIds(trust.failedIds);
+            setNotice(
+              trust.reason
+                ? `${trust.reason}. Tap a piece to change — we stopped before using more credits.`
+                : "Clothes didn’t match the look — we stopped before using more credits."
+            );
+            setActivePieceId(null);
+            setStepLabel("Needs a better match");
+            setProgress(100);
+            setDressing(false);
+            return;
           }
 
           const expectedOuter = lookPieces.find((p) => p.category === "outerwear");
@@ -294,9 +345,13 @@ export function OutfitStage({
             appliedIds.has(expectedOuter.id) ||
             appliedNames.has(expectedOuter.name);
 
-          // Layering polish only when outerwear landed (or none expected) —
-          // otherwise Kontext invents cream coats over a missing navy blazer.
-          if (outfit?.stylingTryOnPrompt && outerLanded) {
+          // Skip style polish by default — it burns a fal call and often rewrites colors.
+          // Only run when outerwear landed and we have a prompt, and still soft-fail.
+          if (
+            outfit?.stylingTryOnPrompt &&
+            outerLanded &&
+            process.env.NEXT_PUBLIC_TRYON_STYLE_POLISH === "1"
+          ) {
             setStepLabel("Layering the look…");
             setProgress(55);
             try {
@@ -332,7 +387,6 @@ export function OutfitStage({
               }
             } catch (err) {
               if (ac.signal.aborted) return;
-              // Keep FASHN result if polish fails
             }
             setProgress(58);
           }
@@ -767,7 +821,8 @@ export function OutfitStage({
           )}
           {!generating && !dressing && wornUrl && outfit && missingIds.length > 0 && (
             <p className="mt-4 text-xs text-mist">
-              Clothes on you — some extras didn’t land. Tap a piece to change it.
+              Some pieces didn’t match — tap to swap. We won’t spend more credits
+              on a wrong body.
             </p>
           )}
         </div>

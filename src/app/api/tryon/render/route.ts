@@ -93,8 +93,8 @@ async function fashnTryOn(opts: {
   garmentImage: string;
   category: "tops" | "bottoms" | "one-pieces";
 }): Promise<TryResult> {
-  // Prefer balanced — quality mode can drift the face more on multi-garment runs.
-  const call = async (mode: "balanced" | "performance") => {
+  // Quality first — wrong clothes cost more than a slower call (user trust + retries).
+  const call = async (mode: "quality" | "balanced") => {
     const res = await fetch("https://fal.run/fal-ai/fashn/tryon/v1.6", {
       method: "POST",
       headers: {
@@ -106,7 +106,7 @@ async function fashnTryOn(opts: {
         garment_image: opts.garmentImage,
         category: opts.category,
         mode,
-        garment_photo_type: "flat-lay",
+        garment_photo_type: "auto",
         moderation_level: "permissive",
         num_samples: 1,
         segmentation_free: true,
@@ -115,9 +115,9 @@ async function fashnTryOn(opts: {
     });
     return parseFalImages(res);
   };
-  const primary = await call("balanced");
+  const primary = await call("quality");
   if (primary.ok) return primary;
-  return call("performance");
+  return call("balanced");
 }
 
 const KEEP_YOU =
@@ -522,6 +522,7 @@ export async function POST(req: NextRequest) {
   );
 
   let current = personImage;
+  let apparelBaseUrl = personImage;
   const steps: {
     id?: string;
     category: string;
@@ -535,7 +536,13 @@ export async function POST(req: NextRequest) {
   const runFinish = stage === "auto" || stage === "finish";
 
   if (runApparel) {
-    for (const g of apparel.slice(0, maxPieces)) {
+    // FASHN base first, outerwear last — order already top/dress/bottom/outerwear
+    const ordered = [
+      ...apparel.filter((g) => g.category !== "outerwear"),
+      ...apparel.filter((g) => g.category === "outerwear"),
+    ].slice(0, maxPieces);
+
+    for (const g of ordered) {
       let garmentImage: string;
       try {
         garmentImage = await resolveGarmentImageForFal(g.imageUrl);
@@ -553,6 +560,7 @@ export async function POST(req: NextRequest) {
       // Outerwear: Kontext product layer (color + silhouette). FASHN has no jacket
       // category and often morphs navy blazers into long cream coats.
       if (g.category === "outerwear") {
+        apparelBaseUrl = current;
         let result = await kontextOuterwearLayer({
           falKey: falKey as string,
           personImage: current,
@@ -581,6 +589,7 @@ export async function POST(req: NextRequest) {
               error: "fal.ai balance exhausted",
               detail: result.detail,
               imageUrl: steps.length ? current : undefined,
+              apparelBaseUrl,
               steps,
               message:
                 "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
@@ -646,6 +655,7 @@ export async function POST(req: NextRequest) {
       }
 
       current = result.url;
+      apparelBaseUrl = current;
       steps.push({
         id: g.id,
         category: g.category,
@@ -746,6 +756,9 @@ export async function POST(req: NextRequest) {
     applied: true,
     provider: "fal-fashn+full-look",
     imageUrl: current,
+    /** Pre-outerwear FASHN result — client composites coat without rewriting shirt/pants. */
+    apparelBaseUrl:
+      runApparel && apparelBaseUrl !== current ? apparelBaseUrl : undefined,
     steps,
     ...(warnings.length ? { warning: warnings.join(" · ") } : {}),
   });

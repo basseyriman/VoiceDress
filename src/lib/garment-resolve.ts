@@ -81,8 +81,26 @@ export async function resolveGarmentImageForFal(
     throw new Error(`Garment file too small or corrupt: public/${chosen}`);
   }
 
+  // Side-by-side front/back product sheets confuse FASHN — keep the left panel only.
+  let outBuf: Buffer = buf;
+  try {
+    const sharp = (await import("sharp")).default;
+    const meta = await sharp(buf).metadata();
+    const w = meta.width || 0;
+    const h = meta.height || 0;
+    if (w > 0 && h > 0 && w / h > 1.25) {
+      outBuf = await sharp(buf)
+        .extract({ left: 0, top: 0, width: Math.floor(w / 2), height: h })
+        .jpeg({ quality: 92 })
+        .toBuffer();
+      return `data:image/jpeg;base64,${outBuf.toString("base64")}`;
+    }
+  } catch {
+    // sharp unavailable — send original
+  }
+
   const ext = chosen.split(".").pop()?.toLowerCase() || "jpeg";
-  return `data:${mimeForExt(ext)};base64,${buf.toString("base64")}`;
+  return `data:${mimeForExt(ext)};base64,${outBuf.toString("base64")}`;
 }
 
 export { normalizeGarmentPublicUrl } from "@/lib/garment-url";

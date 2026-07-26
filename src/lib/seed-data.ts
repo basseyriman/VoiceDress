@@ -1,7 +1,7 @@
 import type { Garment } from "./types";
 
 /** Bump to force-refresh local seed wardrobe images/labels. */
-export const WARDROBE_SEED_VERSION = 12;
+export const WARDROBE_SEED_VERSION = 13;
 
 /**
  * Controlled local garment images — names, colors, and files must match.
