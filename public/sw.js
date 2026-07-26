@@ -1,5 +1,5 @@
 /* VoiceDress — minimal service worker for installability (cache app shell lightly). */
-const CACHE = "voicedress-shell-v1";
+const CACHE = "voicedress-shell-v2";
 const PRECACHE = ["/", "/today", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
