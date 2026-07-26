@@ -13,8 +13,15 @@ import type {
 } from "@/lib/types";
 import { seedWardrobe, WARDROBE_SEED_VERSION } from "@/lib/seed-data";
 import { defaultConnections } from "@/lib/commerce";
-import { suggestOutfit, type OccasionProfile } from "@/lib/outfit-engine";
-import { inferOccasionProfile } from "@/lib/occasion-profile";
+import {
+  applySpokenWeather,
+  parseSpokenWeather,
+  suggestOutfit,
+} from "@/lib/outfit-engine";
+import {
+  inferOccasionProfile,
+  type OccasionProfile,
+} from "@/lib/occasion-profile";
 import { matchGarmentFromSpeech } from "@/lib/garment-match";
 import {
   AVATAR_IDB_REF,
@@ -73,10 +80,15 @@ interface AetherState {
   signOutLocal: () => Promise<void>;
   setWeather: (w: WeatherSnapshot) => void;
   setAvatar: (url: string, status: UserProfile["avatarStatus"]) => Promise<void>;
-  generateOutfit: (occasion?: string, style?: string) => Outfit | null;
+  generateOutfit: (
+    occasion?: string,
+    style?: string,
+    opts?: { tempC?: number; freshLook?: boolean; transcript?: string }
+  ) => Outfit | null;
   generateOutfitAsync: (
     occasion?: string,
-    style?: string
+    style?: string,
+    opts?: { tempC?: number; freshLook?: boolean; transcript?: string }
   ) => Promise<Outfit | null>;
   swapFromVoice: (
     category: Garment["category"],
@@ -378,20 +390,43 @@ export const useAetherStore = create<AetherState>()(
           }).catch(() => undefined);
         }
       },
-      generateOutfit: (occasion = "today", style = "quiet luxury") => {
-        const { wardrobe, weather, user, taste } = get();
+      generateOutfit: (
+        occasion = "today",
+        style = "quiet luxury",
+        opts
+      ) => {
+        const { wardrobe, weather, user, taste, currentOutfit } = get();
         if (!weather) return null;
+        const spoken =
+          opts?.tempC != null
+            ? {
+                tempC: opts.tempC,
+                label: `${Math.round(opts.tempC)}°C`,
+                hypothetical: true,
+              }
+            : opts?.transcript
+              ? parseSpokenWeather(opts.transcript)
+              : null;
+        const effectiveWeather = applySpokenWeather(weather, spoken);
+        const resolvedOccasion =
+          (!occasion || occasion === "today") && currentOutfit?.occasion
+            ? currentOutfit.occasion
+            : occasion;
         const profile = inferOccasionProfile(
-          occasion,
+          resolvedOccasion,
           style || user?.stylePrefs[0]
         );
         const outfit = suggestOutfit({
           wardrobe,
-          weather,
-          occasion,
+          weather: effectiveWeather,
+          occasion: resolvedOccasion,
           style: style || user?.stylePrefs[0] || "quiet luxury",
           profile,
           taste,
+          demoteIds:
+            opts?.freshLook || spoken
+              ? currentOutfit?.garmentIds
+              : undefined,
         });
         const nextTaste: TasteMemory = {
           ...taste,
@@ -404,21 +439,41 @@ export const useAetherStore = create<AetherState>()(
       },
       generateOutfitAsync: async (
         occasion = "today",
-        style = "quiet luxury"
+        style = "quiet luxury",
+        opts
       ) => {
-        const { wardrobe, weather, user, taste } = get();
+        const { wardrobe, weather, user, taste, currentOutfit } = get();
         if (!weather) return null;
+        const spoken =
+          opts?.tempC != null
+            ? {
+                tempC: opts.tempC,
+                label: `${Math.round(opts.tempC)}°C`,
+                hypothetical: true,
+              }
+            : opts?.transcript
+              ? parseSpokenWeather(opts.transcript)
+              : null;
+        const effectiveWeather = applySpokenWeather(weather, spoken);
+        const resolvedOccasion =
+          (!occasion || occasion === "today") && currentOutfit?.occasion
+            ? currentOutfit.occasion
+            : occasion;
         const profile = await fetchOccasionProfile(
-          occasion,
+          resolvedOccasion,
           style || user?.stylePrefs[0]
         );
         const outfit = suggestOutfit({
           wardrobe,
-          weather,
+          weather: effectiveWeather,
           occasion: profile.label,
           style: style || profile.styleHints[0] || user?.stylePrefs[0],
           profile,
           taste,
+          demoteIds:
+            opts?.freshLook || spoken
+              ? currentOutfit?.garmentIds
+              : undefined,
         });
         const nextTaste: TasteMemory = {
           ...taste,

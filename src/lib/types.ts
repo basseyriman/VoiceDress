@@ -113,6 +113,9 @@ export interface VoiceCommandResult {
     garmentQuery?: string;
     path?: string;
     garmentId?: string;
+    tempC?: number;
+    weatherLabel?: string;
+    freshLook?: boolean;
   };
   reply: string;
   confidence?: "high" | "medium" | "low";

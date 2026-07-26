@@ -23,6 +23,8 @@ const voicePlanSchema = z.object({
       ]),
       occasion: z.string().nullable(),
       style: z.string().nullable(),
+      tempC: z.number().nullable(),
+      freshLook: z.boolean().nullable(),
       category: z
         .enum([
           "top",
@@ -118,11 +120,12 @@ Rules:
 - Only pick garments that exist in the wardrobe list (use their ids).
 - Never invent clothing.
 - Prefer swap_piece / pick_garment when user dislikes a piece.
-- Use suggest_look for new occasions.
+- Use suggest_look for new occasions OR weather what-ifs ("if it was 16 degrees").
+- When user mentions a temperature or feeling cold/hot, set tempC (Celsius) and freshLook=true on suggest_look. Keep the current occasion if they don't name a new one.
 - Use open_page for navigation (wardrobe, connect, try-on, settings, billing, today).
 - Use add_from_photo to add purchases from a receipt/screenshot.
-- Use explain_look / check_weather when asked.
-- reply should be short, premium, speakable (1–2 sentences).
+- Use explain_look / check_weather when asked only about actual weather (not outfit suggestions).
+- reply should be short, premium, speakable (1–2 sentences). Mention the temperature if they asked a what-if.
 - Return 1–2 actions max.`,
     });
 
@@ -166,6 +169,8 @@ function keywordToActions(parsed: ReturnType<typeof parseVoiceIntent>) {
           garmentQuery: parsed.entities.garmentQuery || null,
           occasion: parsed.entities.occasion || null,
           style: parsed.entities.style || null,
+          tempC: parsed.entities.tempC ?? null,
+          freshLook: null,
           garmentId: null,
           path: null,
         },
@@ -176,6 +181,8 @@ function keywordToActions(parsed: ReturnType<typeof parseVoiceIntent>) {
           tool: "suggest_look" as const,
           occasion: "today",
           style: parsed.entities.style || null,
+          tempC: parsed.entities.tempC ?? null,
+          freshLook: true,
           category: null,
           garmentId: null,
           garmentQuery: null,
@@ -188,6 +195,8 @@ function keywordToActions(parsed: ReturnType<typeof parseVoiceIntent>) {
           tool: "check_weather" as const,
           occasion: null,
           style: null,
+          tempC: null,
+          freshLook: null,
           category: null,
           garmentId: null,
           garmentQuery: null,
@@ -200,6 +209,8 @@ function keywordToActions(parsed: ReturnType<typeof parseVoiceIntent>) {
           tool: "explain_look" as const,
           occasion: null,
           style: null,
+          tempC: null,
+          freshLook: null,
           category: null,
           garmentId: null,
           garmentQuery: null,
@@ -213,6 +224,8 @@ function keywordToActions(parsed: ReturnType<typeof parseVoiceIntent>) {
           path: "/wardrobe" as const,
           occasion: null,
           style: null,
+          tempC: null,
+          freshLook: null,
           category: null,
           garmentId: null,
           garmentQuery: null,
@@ -225,6 +238,8 @@ function keywordToActions(parsed: ReturnType<typeof parseVoiceIntent>) {
           tool: "suggest_look" as const,
           occasion: parsed.entities.occasion || "today",
           style: parsed.entities.style || null,
+          tempC: parsed.entities.tempC ?? null,
+          freshLook: parsed.entities.freshLook ?? null,
           category: null,
           garmentId: null,
           garmentQuery: null,

@@ -44,10 +44,15 @@ export async function transcribeWithAssemblyAI(
 }
 
 export type VoiceActionHandlers = {
-  generateOutfit: (occasion?: string, style?: string) => unknown;
+  generateOutfit: (
+    occasion?: string,
+    style?: string,
+    opts?: { tempC?: number; freshLook?: boolean; transcript?: string }
+  ) => unknown;
   generateOutfitAsync?: (
     occasion?: string,
-    style?: string
+    style?: string,
+    opts?: { tempC?: number; freshLook?: boolean; transcript?: string }
   ) => Promise<unknown>;
   swapFromVoice: (
     category: Garment["category"],
@@ -71,6 +76,9 @@ type VoiceAction = {
   garmentId?: string | null;
   garmentQuery?: string | null;
   path?: string | null;
+  tempC?: number | null;
+  freshLook?: boolean | null;
+  transcript?: string | null;
 };
 
 /** Hybrid: keyword fast-path, else LLM understand API. */
@@ -153,7 +161,12 @@ function applyLocalIntent(
     case "change_style":
       void (actions.generateOutfitAsync || actions.generateOutfit)(
         "today",
-        parsed.entities.style
+        parsed.entities.style,
+        {
+          tempC: parsed.entities.tempC,
+          freshLook: true,
+          transcript: parsed.transcript,
+        }
       );
       break;
     case "open_wardrobe":
@@ -174,7 +187,12 @@ function applyLocalIntent(
     default:
       void (actions.generateOutfitAsync || actions.generateOutfit)(
         parsed.entities.occasion,
-        parsed.entities.style
+        parsed.entities.style,
+        {
+          tempC: parsed.entities.tempC,
+          freshLook: parsed.entities.freshLook,
+          transcript: parsed.transcript,
+        }
       );
       break;
   }
@@ -192,7 +210,12 @@ async function applyActions(
       case "suggest_look":
         await (actions.generateOutfitAsync || actions.generateOutfit)(
           a.occasion || "today",
-          a.style || undefined
+          a.style || undefined,
+          {
+            tempC: a.tempC ?? undefined,
+            freshLook: Boolean(a.freshLook ?? a.tempC != null),
+            transcript: a.transcript ?? undefined,
+          }
         );
         break;
       case "swap_piece":
