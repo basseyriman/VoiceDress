@@ -682,7 +682,7 @@ export function OutfitStage({
                 }}
               />
               {dressing && (
-                <span className="rounded-full border border-champagne/30 bg-champagne/10 px-3 py-1 text-[10px] uppercase tracking-wider text-champagne">
+                <span className="rounded-full border border-champagne/40 bg-champagne/15 px-3 py-1 text-[11px] font-medium tabular-nums tracking-wide text-champagne">
                   {progressPct}%
                 </span>
               )}
@@ -749,8 +749,9 @@ export function OutfitStage({
                 >
                   <div className="flex items-end justify-between gap-3">
                     <p className="font-display text-xl text-ivory">{stepLabel}</p>
-                    <p className="shrink-0 font-display text-2xl tabular-nums text-champagne">
-                      {progressPct}%
+                    <p className="shrink-0 font-display text-4xl tabular-nums leading-none text-champagne">
+                      {progressPct}
+                      <span className="text-xl">%</span>
                     </p>
                   </div>
                   <div className="mt-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-mist">
@@ -763,10 +764,10 @@ export function OutfitStage({
                       left
                     </span>
                   </div>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/15 ring-1 ring-white/10">
                     <motion.div
-                      className="h-full bg-champagne"
-                      animate={{ width: `${progressPct}%` }}
+                      className="h-full rounded-full bg-champagne shadow-[0_0_12px_rgba(201,168,124,0.45)]"
+                      animate={{ width: `${Math.max(progressPct, 4)}%` }}
                       transition={{ duration: 0.4 }}
                     />
                   </div>
@@ -885,9 +886,28 @@ export function OutfitStage({
           </p>
 
           <div className="mt-6">
-            <p className="mb-2 text-[10px] uppercase tracking-[0.22em] text-champagne">
-              Your look
-            </p>
+            <div className="mb-2 flex items-end justify-between gap-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-champagne">
+                Your look
+              </p>
+              {dressing && (
+                <p className="font-display text-lg tabular-nums text-champagne">
+                  {progressPct}%
+                  <span className="ml-2 text-[10px] uppercase tracking-wider text-mist">
+                    {piecesDone}/{piecesTotal}
+                  </span>
+                </p>
+              )}
+            </div>
+            {dressing && (
+              <div className="mb-4 h-2.5 overflow-hidden rounded-full bg-white/10">
+                <motion.div
+                  className="h-full rounded-full bg-champagne"
+                  animate={{ width: `${Math.max(progressPct, 4)}%` }}
+                  transition={{ duration: 0.4 }}
+                />
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               {lookPieces.map((g) => (
                 <GarmentTile
@@ -897,6 +917,9 @@ export function OutfitStage({
                   dressing={dressing && activePieceId === g.id}
                   done={donePieceIds.includes(g.id)}
                   missing={missingIds.includes(g.id)}
+                  progressPct={
+                    dressing && activePieceId === g.id ? progressPct : undefined
+                  }
                   onClick={() =>
                     setSwapFor((c) => (c === g.category ? null : g.category))
                   }
@@ -1003,6 +1026,7 @@ export function GarmentTile({
   done,
   badge,
   missing,
+  progressPct,
   onClick,
   large,
 }: {
@@ -1013,6 +1037,8 @@ export function GarmentTile({
   done?: boolean;
   badge?: string;
   missing?: boolean;
+  /** Overall try-on % while this piece is applying */
+  progressPct?: number;
   onClick?: () => void;
   /** Bigger thumb — wardrobe grid on phones */
   large?: boolean;
@@ -1104,7 +1130,15 @@ export function GarmentTile({
                       : "border-line text-mist"
               )}
             >
-              {dressing ? "Dressing" : missing ? "Pending" : done ? "On you" : badge}
+              {dressing
+                ? progressPct != null
+                  ? `${progressPct}%`
+                  : "Dressing"
+                : missing
+                  ? "Pending"
+                  : done
+                    ? "On you"
+                    : badge}
             </span>
           )}
         </div>
@@ -1113,8 +1147,20 @@ export function GarmentTile({
         </p>
         {!large && (
           <p className="mt-2 text-[10px] uppercase tracking-wider text-mist">
-            {dressing ? "Applying now…" : "Tap to change"}
+            {dressing
+              ? progressPct != null
+                ? `Applying · ${progressPct}%`
+                : "Applying now…"
+              : "Tap to change"}
           </p>
+        )}
+        {dressing && progressPct != null && (
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-champagne transition-[width] duration-400"
+              style={{ width: `${Math.max(progressPct, 4)}%` }}
+            />
+          </div>
         )}
       </div>
     </button>
