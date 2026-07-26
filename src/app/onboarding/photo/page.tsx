@@ -128,8 +128,12 @@ export default function PhotoOnboardingPage() {
       </div>
 
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col">
-        <div className="mb-10 flex justify-center">
+        <div className="mb-8 flex items-center justify-between gap-4">
           <Logo />
+          <div className="flex items-center gap-1.5" aria-label="Step 2 of 2">
+            <span className="h-0.5 w-8 rounded-full bg-champagne" />
+            <span className="h-0.5 w-8 rounded-full bg-champagne" />
+          </div>
         </div>
 
         <div className="flex flex-1 flex-col justify-center pb-16">
@@ -301,6 +305,13 @@ export default function PhotoOnboardingPage() {
                 className="mx-auto block text-center text-xs text-mist transition hover:text-ivory-muted"
               >
                 Replay instructions
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push("/onboarding/style")}
+                className="mx-auto mt-2 block text-center text-xs text-mist transition hover:text-ivory-muted"
+              >
+                Back to style
               </button>
             </motion.div>
           )}

@@ -4,9 +4,10 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { FieldLabel, fieldInputClass } from "@/components/ui/field";
 import { useAetherStore } from "@/store/aether-store";
+import { STYLE_OPTION_IDS } from "@/lib/style-options";
 import { cn } from "@/lib/utils";
 
-const STYLE_OPTIONS = ["quiet luxury", "old money", "minimal", "streetwear"];
+const STYLE_OPTIONS = STYLE_OPTION_IDS;
 
 export default function SettingsPage() {
   const user = useAetherStore((s) => s.user);

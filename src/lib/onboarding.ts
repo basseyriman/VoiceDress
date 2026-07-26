@@ -30,8 +30,9 @@ export function needsPhotoOnboarding(
 
 export function postAuthPath(
   user: AvatarFields | null | undefined
-): "/onboarding/photo" | "/today" {
-  return needsPhotoOnboarding(user) ? "/onboarding/photo" : "/today";
+): "/onboarding/style" | "/onboarding/photo" | "/today" {
+  // New users: style DNA first (Wispr-like setup), then photo ritual
+  return needsPhotoOnboarding(user) ? "/onboarding/style" : "/today";
 }
 
 /** If IndexedDB has a body photo, treat onboarding as done. */
