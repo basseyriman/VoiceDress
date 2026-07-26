@@ -64,7 +64,7 @@ export async function letterboxForTryOn(src: string): Promise<string> {
     canvasW = paddedH * targetRatio;
   }
 
-  const maxEdge = 1296;
+  const maxEdge = 2048;
   const scale = Math.min(1, maxEdge / Math.max(canvasW, canvasH));
   canvasW = Math.max(1, Math.round(canvasW * scale));
   canvasH = Math.max(1, Math.round(canvasH * scale));
@@ -77,6 +77,8 @@ export async function letterboxForTryOn(src: string): Promise<string> {
   const ctx = canvas.getContext("2d");
   if (!ctx) return src;
 
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = "#0e0e0d";
   ctx.fillRect(0, 0, canvasW, canvasH);
   ctx.drawImage(
@@ -87,7 +89,7 @@ export async function letterboxForTryOn(src: string): Promise<string> {
     drawH
   );
 
-  return canvas.toDataURL("image/jpeg", 0.92);
+  return canvas.toDataURL("image/jpeg", 0.96);
 }
 
 /**
@@ -166,7 +168,7 @@ export async function lockFaceIdentity(
   fctx.drawImage(mask, 0, 0);
 
   ctx.drawImage(faceLayer, 0, 0);
-  return canvas.toDataURL("image/jpeg", 0.93);
+  return canvas.toDataURL("image/jpeg", 0.97);
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
@@ -299,7 +301,7 @@ export async function layerOuterwearPreserveBase(
   }
 
   ctx.putImageData(baseData, 0, 0);
-  return canvas.toDataURL("image/jpeg", 0.93);
+  return canvas.toDataURL("image/jpeg", 0.97);
 }
 
 function sampleRegionAvg(

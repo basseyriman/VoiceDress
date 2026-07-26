@@ -36,15 +36,15 @@ function sleep(ms: number) {
 }
 
 function generationMode(): "fast" | "balanced" | "quality" {
-  const m = (process.env.FASHN_GENERATION_MODE || "balanced").toLowerCase();
+  const m = (process.env.FASHN_GENERATION_MODE || "quality").toLowerCase();
   if (m === "fast" || m === "quality" || m === "balanced") return m;
-  return "balanced";
+  return "quality";
 }
 
 function resolution(): "1k" | "2k" | "4k" {
-  const r = (process.env.FASHN_RESOLUTION || "1k").toLowerCase();
+  const r = (process.env.FASHN_RESOLUTION || "2k").toLowerCase();
   if (r === "2k" || r === "4k" || r === "1k") return r;
-  return "1k";
+  return "2k";
 }
 
 /** Prompt hints so Max keeps color/silhouette for known hard cases. */

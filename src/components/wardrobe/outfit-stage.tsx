@@ -638,21 +638,15 @@ export function OutfitStage({
                       <div
                         key={g.id}
                         className={cn(
-                          "relative overflow-visible rounded-full border px-2.5 py-1 text-[10px] transition",
+                          "rounded-full border px-2.5 py-1 text-[10px] transition",
                           activePieceId === g.id
-                            ? "border-transparent bg-champagne/15 text-champagne"
+                            ? "border-champagne bg-champagne/20 text-champagne shadow-[0_0_14px_rgba(201,168,124,0.35)] animate-dressing-glow"
                             : donePieceIds.includes(g.id)
-                              ? "border-champagne/40 bg-champagne/10 text-champagne"
+                              ? "border-champagne/45 bg-champagne/10 text-champagne"
                               : "border-white/10 text-mist"
                         )}
                       >
-                        {activePieceId === g.id && (
-                          <span
-                            className="dressing-ring rounded-full"
-                            aria-hidden
-                          />
-                        )}
-                        <span className="relative z-[1] truncate">{g.name}</span>
+                        <span className="truncate">{g.name}</span>
                       </div>
                     ))}
                   </div>
@@ -911,7 +905,7 @@ export function GarmentTile({
         missing
           ? "border-champagne/35 bg-champagne/[0.04]"
           : dressing
-            ? "border-transparent bg-champagne/[0.08]"
+            ? "border-champagne/50 bg-champagne/[0.08]"
             : done
               ? "border-champagne/45 bg-champagne/[0.07]"
               : active
@@ -919,13 +913,17 @@ export function GarmentTile({
                 : "border-line bg-white/[0.02] hover:border-champagne/40"
       )}
     >
-      {dressing && <span className="dressing-ring rounded-[inherit]" aria-hidden />}
       <div
         className={cn(
-          "relative overflow-hidden rounded-xl bg-stone",
+          "relative shrink-0 overflow-hidden rounded-xl bg-stone transition duration-300",
           large
             ? "aspect-[3/4] w-full rounded-[1rem]"
-            : "h-16 w-16 shrink-0"
+            : "h-16 w-16",
+          dressing &&
+            "ring-[2.5px] ring-champagne shadow-[0_0_0_3px_rgba(201,168,124,0.22),0_0_22px_rgba(201,168,124,0.45)] animate-dressing-glow",
+          done &&
+            !dressing &&
+            "ring-1 ring-champagne/55"
         )}
       >
         {broken ? (
@@ -948,7 +946,7 @@ export function GarmentTile({
               className={cn(
                 "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
                 dressing
-                  ? "border-champagne/55 text-champagne"
+                  ? "border-champagne text-champagne"
                   : missing
                     ? "border-champagne/40 text-champagne"
                     : done
