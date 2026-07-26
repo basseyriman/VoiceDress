@@ -7,6 +7,7 @@ import {
   shouldPreferOutfitChat,
 } from "@/lib/outfit-engine";
 import type { Garment } from "@/lib/types";
+import { useAetherStore } from "@/store/aether-store";
 
 export type SpeakFn = (text: string) => void;
 
@@ -28,6 +29,8 @@ export function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   const gen = speakGeneration;
   window.speechSynthesis.cancel();
+  const line = text.trim();
+  if (line) useAetherStore.getState().setLastSpoken(line);
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = 0.96;
   utter.pitch = 1;

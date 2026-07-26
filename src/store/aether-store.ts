@@ -61,6 +61,8 @@ interface AetherState {
   taste: TasteMemory;
   voiceListening: boolean;
   lastTranscript: string;
+  /** Latest line VoiceDress spoke — UI caption only, not persisted. */
+  lastSpoken: string;
   hydrated: boolean;
   cloudReady: boolean;
   setHydrated: (v: boolean) => void;
@@ -113,6 +115,7 @@ interface AetherState {
   addGarments: (items: Garment[]) => void;
   setVoiceListening: (v: boolean) => void;
   setTranscript: (t: string) => void;
+  setLastSpoken: (t: string) => void;
   setSubscription: (status: UserProfile["subscriptionStatus"]) => void;
 }
 
@@ -194,6 +197,7 @@ export const useAetherStore = create<AetherState>()(
       taste: { rejectedIds: [], recentOutfitIds: [] },
       voiceListening: false,
       lastTranscript: "",
+      lastSpoken: "",
       hydrated: false,
       cloudReady: false,
       setHydrated: (v) => set({ hydrated: v }),
@@ -748,6 +752,7 @@ export const useAetherStore = create<AetherState>()(
       },
       setVoiceListening: (v) => set({ voiceListening: v }),
       setTranscript: (t) => set({ lastTranscript: t }),
+      setLastSpoken: (t) => set({ lastSpoken: t }),
       setSubscription: (status) => {
         const user = get().user;
         if (!user) return;

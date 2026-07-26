@@ -232,19 +232,6 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
             ))}
           </div>
         )}
-
-        <AnimatePresence>
-          {currentOutfit?.stylingGuide && phase !== "listening" && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mt-6 max-w-lg text-left text-xs leading-relaxed text-mist"
-            >
-              <p>{currentOutfit.stylingGuide}</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </motion.div>
   );

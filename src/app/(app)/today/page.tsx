@@ -52,6 +52,7 @@ export default function TodayPage() {
   const setVoiceListening = useAetherStore((s) => s.setVoiceListening);
   const voiceListening = useAetherStore((s) => s.voiceListening);
   const wardrobe = useAetherStore((s) => s.wardrobe);
+  const lastSpoken = useAetherStore((s) => s.lastSpoken);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [composing, setComposing] = useState(false);
   const [interim, setInterim] = useState("");
@@ -247,6 +248,21 @@ export default function TodayPage() {
             </div>
             <Waveform active={voiceListening} />
           </button>
+
+          <AnimatePresence mode="wait">
+            {lastSpoken && !voiceListening ? (
+              <motion.p
+                key={lastSpoken.slice(0, 48)}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.35 }}
+                className="mt-4 max-w-xl text-sm leading-relaxed text-mist"
+              >
+                {lastSpoken}
+              </motion.p>
+            ) : null}
+          </AnimatePresence>
 
           <div className="mt-5 flex flex-wrap gap-2">
             {QUICK_EVENTS.map((event) => (
