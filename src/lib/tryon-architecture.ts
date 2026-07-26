@@ -1,10 +1,15 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Apparel → fal FASHN (keeps you; clothes look right).
- * 2. Shoes → glasses → watch → OpenAI Images Edit first
- *    (OPENAI_API_KEY). If that fails, fal Kontext fallback.
- * 3. Force Kontext-only with TRYON_FINISH_PROVIDER=kontext in .env.local.
+ * Apparel only via fal FASHN — best at keeping YOUR face/body.
+ *
+ * OpenAI image edit and fal Kontext CAN add shoes/glasses/watch, but both
+ * rewrite identity (you start looking like you, end looking like someone else).
+ * Those pieces stay in the suggested look list until we have a likeness-safe path.
+ *
+ * Server still has OpenAI + Kontext finish code for experiments:
+ *   TRYON_FINISH_PROVIDER=openai|kontext
+ * but the client does not call stage:"finish" by default.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [
@@ -68,7 +73,5 @@ export function finishingPieces<T extends { category: string }>(garments: T[]) {
 }
 
 export function isBodyTryOnCategory(category: string) {
-  return (
-    isApparelTryOnCategory(category) || isFinishTryOnCategory(category)
-  );
+  return isApparelTryOnCategory(category);
 }

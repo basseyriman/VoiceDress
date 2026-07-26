@@ -156,39 +156,15 @@ export function OutfitStage({
 
         const appliedNames = new Set<string>();
 
-        const isWatchPiece = (p: (typeof lookPieces)[number]) =>
-          /watch|wrist|chrono|time/i.test(
-            `${p.name || ""} ${(p.tags || []).join(" ")}`
-          );
-        const isEyewearPiece = (p: (typeof lookPieces)[number]) =>
-          /glass|frame|optic|sunglass|spec/i.test(
-            `${p.name || ""} ${(p.tags || []).join(" ")}`
-          );
-
-        const finishQueue = [
-          ...styledExtras.filter((p) => p.category === "shoes"),
-          ...styledExtras.filter(
-            (p) => p.category === "accessory" && isEyewearPiece(p)
-          ),
-          ...styledExtras.filter(
-            (p) => p.category === "accessory" && isWatchPiece(p)
-          ),
-          ...styledExtras.filter(
-            (p) =>
-              p.category === "accessory" &&
-              !isEyewearPiece(p) &&
-              !isWatchPiece(p)
-          ),
-        ];
-
-        // 1) Clothes via fal FASHN (the part that already looks right)
+        // Clothes only via fal FASHN — OpenAI/Kontext extras rewrite the face
+        // ("started like me, ended up not me"). Keep the likeness that works.
         if (apparelPieces.length) {
           setActivePieceId(apparelPieces[0]?.id ?? null);
           setStepLabel("Dressing you…");
-          setProgress(10);
+          setProgress(12);
 
           const tick = window.setInterval(() => {
-            setProgress((p) => (p < 48 ? p + 2.5 : p));
+            setProgress((p) => (p < 88 ? p + 2.5 : p));
           }, 800);
 
           const apparelRes = await fetch("/api/tryon/render", {
@@ -224,8 +200,6 @@ export function OutfitStage({
           current = apparelData.imageUrl;
           setWornUrl(current);
           setKeyConfigured(true);
-          setProgress(50);
-          setStepLabel("Clothes on — adding shoes & extras…");
           for (const s of Array.isArray(apparelData.steps)
             ? apparelData.steps
             : []) {
@@ -233,53 +207,12 @@ export function OutfitStage({
           }
         }
 
-        // 2) Shoes / glasses / watch via OpenAI image edit (Kontext fallback on server)
-        for (let i = 0; i < finishQueue.length; i++) {
-          const piece = finishQueue[i];
-          setActivePieceId(piece.id);
-          setStepLabel(`Adding ${piece.name}…`);
-          setProgress(
-            50 + Math.round(((i + 1) / (finishQueue.length + 1)) * 45)
-          );
-
-          const finishRes = await fetch("/api/tryon/render", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              personImage: current,
-              stage: "finish",
-              includeFaceAccessories: true,
-              garments: [toPayload(piece)],
-            }),
-          });
-          const finishData = await finishRes.json();
-          if (cancelled || myId !== requestId.current) return;
-          if (failOrBilling(finishData)) return;
-
-          if (
-            finishData.ok &&
-            finishData.imageUrl &&
-            Array.isArray(finishData.steps) &&
-            finishData.steps.length > 0
-          ) {
-            current = finishData.imageUrl;
-            setWornUrl(current);
-            appliedNames.add(piece.name);
-            setKeyConfigured(true);
-          }
-        }
-
-        const missed = lookPieces.filter((p) => !appliedNames.has(p.name));
-        setMissingIds(missed.map((p) => p.id));
-        setNotice(
-          missed.length
-            ? `${missed.map((p) => p.name).join(" · ")} didn’t land — tap to change.`
-            : ""
-        );
+        setMissingIds([]);
+        setNotice("");
 
         if (myId === requestId.current) {
           setActivePieceId(null);
-          setStepLabel(missed.length ? "Almost ready" : "Full look on you");
+          setStepLabel(appliedNames.size ? "You’re dressed" : "Ready");
           setProgress(100);
           setDressing(false);
         }
@@ -295,7 +228,7 @@ export function OutfitStage({
     return () => {
       cancelled = true;
     };
-  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces, styledExtras]);
+  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces]);
 
   const alternatives = swapFor
     ? wardrobe.filter(
@@ -342,7 +275,7 @@ export function OutfitStage({
                 Your look
               </p>
               <p className="text-xs text-mist">
-                Your photo — full look via fal clothes + OpenAI extras
+                Your photo — clothes on you, still you
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -428,7 +361,7 @@ export function OutfitStage({
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {lookPieces.map((g) => (
+                    {apparelPieces.map((g) => (
                       <div
                         key={g.id}
                         className={cn(
@@ -535,7 +468,7 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "Clothes with fal, then shoes, glasses, and watch with OpenAI. Tap any piece to change it."
+              ? "You’re dressed in the clothes from this look — we keep your face. Shoes, glasses, and watch stay listed below for now."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
 
@@ -550,7 +483,11 @@ export function OutfitStage({
                   garment={g}
                   active={swapFor === g.category || activePieceId === g.id}
                   dressing={dressing && activePieceId === g.id}
-                  missing={missingIds.includes(g.id)}
+                  badge={
+                    styledExtras.some((e) => e.id === g.id)
+                      ? "Look piece"
+                      : undefined
+                  }
                   onClick={() =>
                     setSwapFor((c) => (c === g.category ? null : g.category))
                   }
@@ -613,17 +550,12 @@ export function OutfitStage({
 
           {(generating || dressing) && (
             <p className="mt-4 text-xs text-mist">
-              Dressing the full look — clothes first, then extras…
+              Dressing the clothes onto your photo…
             </p>
           )}
-          {!generating && !dressing && wornUrl && outfit && missingIds.length === 0 && (
+          {!generating && !dressing && wornUrl && outfit && (
             <p className="mt-4 text-xs text-champagne/80">
-              Full look on you. You’re ready to go.
-            </p>
-          )}
-          {!generating && !dressing && wornUrl && outfit && missingIds.length > 0 && (
-            <p className="mt-4 text-xs text-mist">
-              Clothes on you — some extras didn’t land. Tap a piece to change it.
+              Clothes on you. You’re ready to go.
             </p>
           )}
         </div>
