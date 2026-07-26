@@ -83,8 +83,7 @@ export default function StyleOnboardingPage() {
             Which of these looks do you resonate with?
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-mist">
-            Pick one or more. We’ll dress you in that direction — you can refine
-            this anytime in Settings.
+            Pick one or more — refine anytime in Settings.
           </p>
 
           <ul className="mt-10 flex flex-col gap-2.5">
