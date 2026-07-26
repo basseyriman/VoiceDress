@@ -148,6 +148,27 @@ function freshLookPenalty(g: Garment, demoteIds?: string[]): number {
   return demoteIds.includes(g.id) ? -6 : 0;
 }
 
+function scoreGarment(
+  g: Garment,
+  weather: WeatherSnapshot,
+  style: string,
+  formality: Formality,
+  already: Garment[],
+  profile?: OccasionProfile,
+  taste?: TasteMemory,
+  demoteIds?: string[]
+) {
+  return (
+    weatherFit(g, weather) +
+    formalityFit(g, formality) +
+    scoreColorHarmony(g.hexColors, style) +
+    coherenceWithOutfit(g, already, formality, style) +
+    (profile ? profileFit(g, profile) : 0) +
+    tastePenalty(g, taste) +
+    freshLookPenalty(g, demoteIds)
+  );
+}
+
 function pickBest(
   items: Garment[],
   weather: WeatherSnapshot,
@@ -159,26 +180,41 @@ function pickBest(
   demoteIds?: string[]
 ): Garment | null {
   if (!items.length) return null;
-  const ranked = [...items].sort((a, b) => {
-    const sa =
-      weatherFit(a, weather) +
-      formalityFit(a, formality) +
-      scoreColorHarmony(a.hexColors, style) +
-      coherenceWithOutfit(a, already, formality, style) +
-      (profile ? profileFit(a, profile) : 0) +
-      tastePenalty(a, taste) +
-      freshLookPenalty(a, demoteIds);
-    const sb =
-      weatherFit(b, weather) +
-      formalityFit(b, formality) +
-      scoreColorHarmony(b.hexColors, style) +
-      coherenceWithOutfit(b, already, formality, style) +
-      (profile ? profileFit(b, profile) : 0) +
-      tastePenalty(b, taste) +
-      freshLookPenalty(b, demoteIds);
-    return sb - sa;
-  });
-  return ranked[0] || null;
+  const ranked = [...items].sort(
+    (a, b) =>
+      scoreGarment(b, weather, style, formality, already, profile, taste, demoteIds) -
+      scoreGarment(a, weather, style, formality, already, profile, taste, demoteIds)
+  );
+  const best = ranked[0]!;
+  const topScore = scoreGarment(
+    best,
+    weather,
+    style,
+    formality,
+    already,
+    profile,
+    taste,
+    demoteIds
+  );
+  // Among near-ties, rotate so the same dinner date isn’t always identical
+  const contenders = ranked
+    .filter(
+      (g) =>
+        scoreGarment(
+          g,
+          weather,
+          style,
+          formality,
+          already,
+          profile,
+          taste,
+          demoteIds
+        ) >=
+        topScore - 1.75
+    )
+    .slice(0, 3);
+  if (contenders.length <= 1) return best;
+  return contenders[Math.floor(Math.random() * contenders.length)]!;
 }
 
 const SPOKEN_TEMP_WORDS: Record<string, number> = {
@@ -544,6 +580,7 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     formality,
     style,
     occasion: profile.label,
+    varietySeed: Date.now() % 11,
   });
   const rationale = buildRationale(
     selected,

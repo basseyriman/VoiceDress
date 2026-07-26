@@ -147,6 +147,33 @@ async function fetchOccasionProfile(
   }
 }
 
+async function fetchStylingGuide(input: {
+  garments: NonNullable<Outfit["garments"]>;
+  weather: WeatherSnapshot;
+  formality: string;
+  style: string;
+  occasion: string;
+  previousGuide?: string;
+  transcript?: string;
+}) {
+  try {
+    const res = await fetch("/api/outfit/styling", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.guide as {
+      steps: string[];
+      spoken: string;
+      tryOnPrompt: string;
+    } | null;
+  } catch {
+    return null;
+  }
+}
+
 export const useAetherStore = create<AetherState>()(
   persist(
     (set, get) => ({
@@ -423,10 +450,8 @@ export const useAetherStore = create<AetherState>()(
           style: style || user?.stylePrefs[0] || "quiet luxury",
           profile,
           taste,
-          demoteIds:
-            opts?.freshLook || spoken
-              ? currentOutfit?.garmentIds
-              : undefined,
+          // Always soften the last look so repeating "dinner date" can vary
+          demoteIds: currentOutfit?.garmentIds,
         });
         const nextTaste: TasteMemory = {
           ...taste,
@@ -463,18 +488,35 @@ export const useAetherStore = create<AetherState>()(
           resolvedOccasion,
           style || user?.stylePrefs[0]
         );
-        const outfit = suggestOutfit({
+        let outfit = suggestOutfit({
           wardrobe,
           weather: effectiveWeather,
           occasion: profile.label,
           style: style || profile.styleHints[0] || user?.stylePrefs[0],
           profile,
           taste,
-          demoteIds:
-            opts?.freshLook || spoken
-              ? currentOutfit?.garmentIds
-              : undefined,
+          demoteIds: currentOutfit?.garmentIds,
         });
+
+        const aiGuide = await fetchStylingGuide({
+          garments: outfit.garments || [],
+          weather: effectiveWeather,
+          formality: profile.formality,
+          style: outfit.style,
+          occasion: outfit.occasion,
+          previousGuide: currentOutfit?.stylingGuide,
+          transcript: opts?.transcript,
+        });
+        if (aiGuide?.steps?.length && aiGuide.spoken) {
+          outfit = {
+            ...outfit,
+            stylingSteps: aiGuide.steps,
+            stylingGuide: aiGuide.spoken,
+            stylingTryOnPrompt: aiGuide.tryOnPrompt || outfit.stylingTryOnPrompt,
+            rationale: `${(outfit.garments || []).map((g) => g.name).join(" + ")} — ${profile.formality.replace("_", " ")} for ${outfit.occasion}. ${aiGuide.spoken}`,
+          };
+        }
+
         const nextTaste: TasteMemory = {
           ...taste,
           recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
