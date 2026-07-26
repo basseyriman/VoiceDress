@@ -606,7 +606,7 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "We’ll dress you, then finish the layering — tuck, open coat, clean break — so it matches how you should wear it. Tap any piece to change it."
+              ? "Tap any piece to swap it from your wardrobe. Ask by voice how to wear it — tuck, layers, belt — and we’ll talk it through."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
 
@@ -629,25 +629,6 @@ export function OutfitStage({
               ))}
             </div>
           </div>
-
-          {outfit?.stylingSteps && outfit.stylingSteps.length > 0 && (
-            <div className="mt-5 rounded-[1.25rem] border border-line bg-white/[0.02] p-4">
-              <p className="text-[10px] uppercase tracking-[0.22em] text-champagne">
-                How to wear it
-              </p>
-              <ul className="mt-3 space-y-2.5">
-                {outfit.stylingSteps.map((step) => (
-                  <li
-                    key={step}
-                    className="flex gap-2.5 text-sm leading-relaxed text-ivory-muted"
-                  >
-                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-champagne" />
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
           <AnimatePresence>
             {swapFor && (
