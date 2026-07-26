@@ -15,7 +15,18 @@ export function PwaRegister() {
 
     void navigator.serviceWorker
       .register("/sw.js")
-      .then((reg) => {
+      .then(async (reg) => {
+        // Drop old shell caches that pinned stale JS and blocked nav updates
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter(
+              (k) =>
+                k.startsWith("voicedress-shell-") && k !== "voicedress-shell-v5"
+            )
+            .map((k) => caches.delete(k))
+        );
+        await reg.update();
         reg.addEventListener("updatefound", () => {
           const worker = reg.installing;
           if (!worker) return;

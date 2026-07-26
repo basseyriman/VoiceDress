@@ -1,6 +1,6 @@
-/* VoiceDress — minimal service worker for installability (cache app shell lightly). */
-const CACHE = "voicedress-shell-v3";
-const PRECACHE = ["/", "/today", "/manifest.webmanifest", "/icons/icon-192.png"];
+/* VoiceDress — installability + light offline shell. Never pin stale JS. */
+const CACHE = "voicedress-shell-v5";
+const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -29,25 +29,33 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Network-first for navigations; cache fallback for offline shell
-  if (request.mode === "navigate") {
+  // Always prefer network for app navigations and Next bundles
+  if (
+    request.mode === "navigate" ||
+    url.pathname.startsWith("/_next/")
+  ) {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          const copy = res.clone();
-          void caches.open(CACHE).then((c) => c.put(request, copy));
+          if (request.mode === "navigate" && res.ok) {
+            const copy = res.clone();
+            void caches.open(CACHE).then((c) => c.put(request, copy));
+          }
           return res;
         })
-        .catch(() => caches.match(request).then((r) => r || caches.match("/")))
+        .catch(() =>
+          request.mode === "navigate"
+            ? caches.match(request).then((r) => r || caches.match("/"))
+            : Promise.reject(new Error("offline"))
+        )
     );
     return;
   }
 
-  // Cache-first for static icons / garments / next static
+  // Cache-first only for static media
   if (
     url.pathname.startsWith("/icons/") ||
-    url.pathname.startsWith("/garments/") ||
-    url.pathname.startsWith("/_next/static/")
+    url.pathname.startsWith("/garments/")
   ) {
     event.respondWith(
       caches.match(request).then(

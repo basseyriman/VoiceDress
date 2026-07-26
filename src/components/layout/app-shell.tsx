@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   CloudSun,
@@ -23,6 +22,11 @@ const nav = [
   { href: "/settings", label: "More", icon: Ellipsis },
 ];
 
+function go(href: string) {
+  // Hard navigation — client soft-routing can freeze while try-on/voice work runs.
+  window.location.assign(href);
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -41,12 +45,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 const Icon = item.icon;
                 const active = pathname.startsWith(item.href);
                 return (
-                  <Link
+                  <a
                     key={item.href}
                     href={item.href}
-                    prefetch
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (active) return;
+                      go(item.href);
+                    }}
                     className={cn(
-                      "relative z-[101] inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs tracking-wide transition-colors",
+                      "relative z-[101] inline-flex cursor-pointer items-center gap-2 rounded-full px-3.5 py-2 text-xs tracking-wide transition-colors",
                       active
                         ? "bg-white/[0.07] text-champagne"
                         : "text-mist hover:bg-white/[0.04] hover:text-ivory"
@@ -54,7 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   >
                     <Icon className="h-3.5 w-3.5" />
                     <span>{item.label}</span>
-                  </Link>
+                  </a>
                 );
               })}
             </nav>
@@ -92,12 +100,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
             return (
-              <Link
+              <a
                 key={item.href}
                 href={item.href}
-                prefetch
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (active) return;
+                  go(item.href);
+                }}
                 className={cn(
-                  "relative z-[101] flex min-h-[3.25rem] min-w-[4.5rem] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] tracking-wide transition",
+                  "relative z-[101] flex min-h-[3.25rem] min-w-[4.5rem] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] tracking-wide transition",
                   active
                     ? "bg-champagne/10 text-champagne"
                     : "text-mist hover:text-ivory"
@@ -105,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
                 {item.label}
-              </Link>
+              </a>
             );
           })}
         </div>

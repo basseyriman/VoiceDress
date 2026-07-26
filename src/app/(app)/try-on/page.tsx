@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { OutfitStage } from "@/components/wardrobe/outfit-stage";
-import { VoiceOrb } from "@/components/voice/voice-orb";
 import { useAetherStore } from "@/store/aether-store";
 import { prepareProfilePhoto } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
@@ -135,7 +134,7 @@ export default function TryOnPage() {
         generating={busy}
         autoTryOn={false}
       />
-      <VoiceOrb compact />
+      {/* Voice lives on Today — keep Photo light so nav never freezes */}
     </div>
   );
 }
