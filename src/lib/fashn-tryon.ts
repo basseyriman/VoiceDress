@@ -63,12 +63,23 @@ export function apparelPromptForPiece(piece: {
         "Keep blazer length — not a long overcoat or trench.",
         colors ? `Match exact color: ${colors}.` : "Keep the exact product color.",
         "Do not replace the shirt underneath.",
+        "Clean photoreal fabric — no black patches, holes, or glitches.",
+      ].join(" ");
+    }
+    if (/overcoat|trench|coat|parka|duster/.test(name)) {
+      return [
+        "Layer this full camel/tan overcoat over the existing outfit naturally.",
+        "Smooth continuous coat fabric on both sleeves and body — no black holes, tears, or digital artifacts.",
+        colors ? `Exact coat color: ${colors}.` : "Match the product coat color exactly.",
+        "Keep the person's face, trousers, and shoes unchanged.",
+        "Photoreal wool coat drape, clean edges.",
       ].join(" ");
     }
     return [
       "Layer this outerwear over the existing outfit.",
       colors ? `Match exact color: ${colors}.` : "Keep the exact product color.",
       "Preserve the person's face, pose, and pants.",
+      "Clean photoreal fabric — no black patches or glitches.",
     ].join(" ");
   }
   if (colors && /white|ivory|cream|stone|khaki|beige/.test(colors.toLowerCase())) {

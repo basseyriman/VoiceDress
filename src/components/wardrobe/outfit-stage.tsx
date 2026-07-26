@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook, hasTryOnArtifacts } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import Link from "next/link";
@@ -279,19 +279,45 @@ export function OutfitStage({
             }
 
             let dressedUrl = apparelData.imageUrl as string;
+            const stepProvider =
+              Array.isArray(apparelData.steps) && apparelData.steps[0]
+                ? String(apparelData.steps[0].provider || "")
+                : "";
+            const usedFashnMax = stepProvider.includes("fashn");
+
             if (piece.category === "outerwear") {
-              setStepLabel("Keeping your shirt & trousers…");
-              try {
-                dressedUrl = await layerOuterwearPreserveBase(
-                  apparelBaseBeforeOuter,
-                  apparelData.imageUrl,
-                  {
-                    hexColors: piece.hexColors,
-                    colors: piece.colors,
-                  }
+              // Pixel composite was for Kontext and can punch black holes into coats.
+              // FASHN Max already layers — use it directly.
+              if (!usedFashnMax) {
+                setStepLabel("Keeping your shirt & trousers…");
+                try {
+                  dressedUrl = await layerOuterwearPreserveBase(
+                    apparelBaseBeforeOuter,
+                    apparelData.imageUrl,
+                    {
+                      hexColors: piece.hexColors,
+                      colors: piece.colors,
+                    }
+                  );
+                } catch {
+                  dressedUrl = apparelData.imageUrl;
+                }
+              }
+
+              if (await hasTryOnArtifacts(dressedUrl)) {
+                // Reject glitched coat — keep the clean shirt/trousers body
+                setNotice(
+                  `${piece.name || "Coat"} came out glitched — left it off. Tap to retry.`
                 );
-              } catch {
-                dressedUrl = apparelData.imageUrl;
+                setMissingIds((ids) =>
+                  ids.includes(piece.id) ? ids : [...ids, piece.id]
+                );
+                setWornUrl(apparelBaseBeforeOuter);
+                current = apparelBaseBeforeOuter;
+                setProgress(
+                  8 + Math.round(((i + 1) / apparelPieces.length) * 42)
+                );
+                continue;
               }
             }
 
@@ -319,6 +345,7 @@ export function OutfitStage({
           }
 
           setActivePieceId(null);
+          setSwapFor(null);
 
           // Trust gate — skip top checks when a blazer covers the torso.
           const hasOuterwear = apparelPieces.some(
@@ -908,7 +935,7 @@ export function GarmentTile({
           : missing
             ? "border border-champagne/35 bg-champagne/[0.04]"
             : done
-              ? "border border-champagne/40 bg-champagne/[0.06]"
+              ? "border border-line bg-champagne/[0.04]"
               : active
                 ? "border border-champagne/55 bg-champagne/10"
                 : "border border-line bg-white/[0.02] hover:border-champagne/40"

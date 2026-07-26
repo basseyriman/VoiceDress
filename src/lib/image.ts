@@ -426,6 +426,44 @@ export async function verifyApparelLook(
 }
 
 /**
+ * Detect black blotches / glitch patches common in failed outerwear composites.
+ */
+export async function hasTryOnArtifacts(src: string): Promise<boolean> {
+  try {
+    const img = await loadHtmlImage(src);
+    const canvas = document.createElement("canvas");
+    const w = Math.min(img.width, 360);
+    const h = Math.min(img.height, 540);
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return false;
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const y0 = Math.floor(h * 0.2);
+    const y1 = Math.floor(h * 0.75);
+    const x0 = Math.floor(w * 0.12);
+    const x1 = Math.floor(w * 0.88);
+    let dark = 0;
+    let total = 0;
+    for (let y = y0; y < y1; y += 2) {
+      for (let x = x0; x < x1; x += 2) {
+        const i = (y * w + x) * 4;
+        const lum =
+          0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+        total++;
+        if (lum < 18) dark++;
+      }
+    }
+    if (!total) return false;
+    // >7% near-black in the clothed torso/arms is usually a glitch, not fashion
+    return dark / total > 0.07;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Keep the good upper body (head → knees) from the clean clothes photo,
  * and only take the lower legs/feet from a shoe edit — so shoe AI can’t
  * spoil the part that already looks right.
