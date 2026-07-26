@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveGarmentImageForFal } from "@/lib/garment-resolve";
+import {
+  hasOpenAIImageKey,
+  openaiFinishEdit,
+} from "@/lib/openai-finish";
 
 export const maxDuration = 180;
 
@@ -217,38 +221,99 @@ async function applyFinishPiece(opts: {
   piece: Piece;
 }): Promise<TryResult & { provider?: string }> {
   const { falKey, personImage, productImage, piece } = opts;
+  const prefer =
+    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() || "openai";
 
-  // One careful attempt each — stacking retries was slow and morphed the face.
-  if (isWatch(piece)) {
-    const edited = await kontextWatchTextEdit({
-      falKey,
+  const tryOpenAI = async (): Promise<
+    (TryResult & { provider?: string }) | null
+  > => {
+    if (!hasOpenAIImageKey()) return null;
+    const edited = await openaiFinishEdit({
       personImage,
+      productImage: productImage || undefined,
       piece,
-      guidanceScale: 3.2,
     });
     if (edited.ok && edited.url !== personImage) {
-      return { ...edited, provider: "kontext-watch-text" };
+      return { ...edited, provider: "openai-image" };
     }
-    return edited.ok
-      ? { ok: false, status: 502, detail: "watch unchanged" }
-      : edited;
+    if (edited.ok) {
+      return {
+        ok: false,
+        status: 502,
+        detail: "OpenAI returned unchanged person image",
+      };
+    }
+    return edited;
+  };
+
+  const tryKontext = async (): Promise<TryResult & { provider?: string }> => {
+    if (isWatch(piece)) {
+      const edited = await kontextWatchTextEdit({
+        falKey,
+        personImage,
+        piece,
+        guidanceScale: 3.2,
+      });
+      if (edited.ok && edited.url !== personImage) {
+        return { ...edited, provider: "kontext-watch-text" };
+      }
+      return edited.ok
+        ? { ok: false, status: 502, detail: "watch unchanged" }
+        : edited;
+    }
+
+    if (!productImage) {
+      return { ok: false, status: 400, detail: "product image required" };
+    }
+
+    const guidance = piece.category === "shoes" ? 5.5 : 4.2;
+    const edited = await kontextProductEdit({
+      falKey,
+      personImage,
+      productImage,
+      piece,
+      guidanceScale: guidance,
+    });
+    if (edited.ok && edited.url !== personImage) {
+      return { ...edited, provider: "kontext-product" };
+    }
+    if (edited.ok) {
+      return {
+        ok: false,
+        status: 502,
+        detail: "kontext returned unchanged person image",
+      };
+    }
+    return edited;
+  };
+
+  // Default: OpenAI image edit first; fall back to fal Kontext if it fails.
+  if (prefer !== "kontext") {
+    const openaiResult = await tryOpenAI();
+    if (openaiResult?.ok) return openaiResult;
+    if (openaiResult && !openaiResult.ok) {
+      console.warn(
+        `[tryon] OpenAI finish failed for ${piece.name || piece.category}, trying Kontext:`,
+        openaiResult.detail?.slice(0, 200)
+      );
+    }
+    if (!falKey) {
+      return (
+        openaiResult || {
+          ok: false,
+          status: 503,
+          detail: "OpenAI failed and FAL_KEY missing for Kontext fallback",
+        }
+      );
+    }
+    return tryKontext();
   }
 
-  const guidance = piece.category === "shoes" ? 5.5 : 4.2;
-  const edited = await kontextProductEdit({
-    falKey,
-    personImage,
-    productImage,
-    piece,
-    guidanceScale: guidance,
-  });
-  if (edited.ok && edited.url !== personImage) {
-    return { ...edited, provider: "kontext-product" };
-  }
-  if (edited.ok) {
-    return { ok: false, status: 502, detail: "kontext returned unchanged person image" };
-  }
-  return edited;
+  const kontextResult = await tryKontext();
+  if (kontextResult.ok) return kontextResult;
+  const openaiFallback = await tryOpenAI();
+  if (openaiFallback?.ok) return openaiFallback;
+  return kontextResult;
 }
 
 function apparelCategory(
@@ -291,12 +356,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "personImage required" }, { status: 400 });
   }
 
-  if (!falKey) {
+  if (!falKey && !hasOpenAIImageKey()) {
     return NextResponse.json({
       ok: false,
       needsKey: true,
       message:
-        "Add FAL_KEY to .env.local. Get a key at https://fal.ai/dashboard/keys",
+        "Add FAL_KEY (clothes) and/or OPENAI_API_KEY (shoes/glasses/watch) to .env.local",
+    });
+  }
+
+  if ((stage === "auto" || stage === "apparel") && !falKey) {
+    return NextResponse.json({
+      ok: false,
+      needsKey: true,
+      message:
+        "Add FAL_KEY to .env.local for clothes try-on. Get a key at https://fal.ai/dashboard/keys",
     });
   }
 
@@ -337,7 +411,7 @@ export async function POST(req: NextRequest) {
       }
 
       const result = await fashnTryOn({
-        falKey,
+        falKey: falKey as string,
         modelImage: current,
         garmentImage,
         category: fashnCat,
@@ -381,10 +455,11 @@ export async function POST(req: NextRequest) {
   if (runFinish && finish.length) {
     for (const g of finish) {
       let productImage = "";
-      if (!isWatch(g)) {
-        try {
-          productImage = await resolveGarmentImageForFal(g.imageUrl);
-        } catch (err) {
+      try {
+        productImage = await resolveGarmentImageForFal(g.imageUrl);
+      } catch (err) {
+        // Watch text-only Kontext can proceed without product; OpenAI prefers it.
+        if (!isWatch(g)) {
           warnings.push(
             `Skipped ${g.name}: ${err instanceof Error ? err.message : "load failed"}`
           );
@@ -393,7 +468,7 @@ export async function POST(req: NextRequest) {
       }
 
       const edited = await applyFinishPiece({
-        falKey,
+        falKey: falKey || "",
         personImage: current,
         productImage,
         piece: g,
@@ -474,6 +549,8 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     configured: Boolean(process.env.FAL_KEY?.trim()),
-    provider: "fashn apparel + kontext finish (watch text-only)",
+    openaiImage: hasOpenAIImageKey(),
+    finishProvider: process.env.TRYON_FINISH_PROVIDER?.trim() || "openai",
+    provider: "fashn apparel + openai image finish (kontext fallback)",
   });
 }

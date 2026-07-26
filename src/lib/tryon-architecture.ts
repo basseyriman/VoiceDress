@@ -1,10 +1,10 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * Apparel only via fal FASHN (top + bottom).
- * Do not stack shoe/glasses/watch generative edits on that result —
- * they spoil the clean clothes photo (waist seams, melted legs, etc.).
- * Shoes / glasses / watch remain in the suggested look list.
+ * 1. Apparel → fal FASHN (keeps you; clothes look right).
+ * 2. Shoes → glasses → watch → OpenAI Images Edit first
+ *    (OPENAI_API_KEY). If that fails, fal Kontext fallback.
+ * 3. Force Kontext-only with TRYON_FINISH_PROVIDER=kontext in .env.local.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [
@@ -68,5 +68,7 @@ export function finishingPieces<T extends { category: string }>(garments: T[]) {
 }
 
 export function isBodyTryOnCategory(category: string) {
-  return isApparelTryOnCategory(category);
+  return (
+    isApparelTryOnCategory(category) || isFinishTryOnCategory(category)
+  );
 }
