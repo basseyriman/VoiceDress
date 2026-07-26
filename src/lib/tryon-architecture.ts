@@ -1,10 +1,10 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Apparel → fal FASHN (head-to-knees looks right).
- * 2. Shoes → one Kontext pass, then keepUpperBlendLower locks the clean
- *    upper body so shoe AI can’t spoil face/torso/jeans again.
- * 3. Glasses/watch stay in the look list (face-touching edits spoil identity).
+ * Apparel only via fal FASHN (top + bottom).
+ * Do not stack shoe/glasses/watch generative edits on that result —
+ * they spoil the clean clothes photo (waist seams, melted legs, etc.).
+ * Shoes / glasses / watch remain in the suggested look list.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [
