@@ -158,7 +158,6 @@ export default function TodayPage() {
 
   const pickEvent = (event: (typeof QUICK_EVENTS)[number]) => {
     setComposing(true);
-    speak(`Dressing you for ${event.occasion}.`);
     void generateOutfitAsync(event.occasion)
       .then((outfit) => {
         if (outfit?.stylingGuide) speak(outfit.stylingGuide);

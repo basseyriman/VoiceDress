@@ -45,6 +45,116 @@ function pick<T>(options: T[], seed: number): T {
   return options[Math.abs(seed) % options.length]!;
 }
 
+/** Keep the user’s plan in the spoken line (“drinks with friends at London Bridge”). */
+export function phraseOccasionFromSpeech(
+  occasion: string,
+  transcript?: string
+): string {
+  if (!transcript?.trim()) return occasion || "today";
+  let core = transcript
+    .trim()
+    .replace(/\b(can you|could you|would you|please).*$/i, " ")
+    .replace(
+      /\b(help me|suggest|pick|choose|recommend|what should i wear).*$/i,
+      " "
+    )
+    .replace(/\bfrom my (wardrobe|closet).*$/i, " ")
+    .replace(/^(i('?m| am)|i have|today i('?m| am))\s+/i, "")
+    .replace(/^(going|heading)\s+(for\s+|to\s+)?/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.,!?]+$/, "");
+  if (core.length >= 8 && core.length <= 90) return core;
+  return occasion || "today";
+}
+
+/** “your White Oxford Shirt, Charcoal Trousers, and Chelsea Boots” */
+export function listWearPieces(garments: Garment[]): string {
+  const order: Garment["category"][] = [
+    "dress",
+    "top",
+    "bottom",
+    "outerwear",
+    "shoes",
+  ];
+  const names: string[] = [];
+  for (const cat of order) {
+    const g = garments.find((x) => x.category === cat);
+    if (g) names.push(g.name);
+  }
+  const eyewear = garments.find(
+    (g) =>
+      g.category === "accessory" &&
+      /glass|frame|optic|sunglass|spec/i.test(`${g.name} ${g.tags.join(" ")}`)
+  );
+  if (eyewear) names.push(eyewear.name);
+  if (!names.length) return "pieces from your wardrobe";
+  if (names.length === 1) return `your ${names[0]}`;
+  if (names.length === 2) return `your ${names[0]} and ${names[1]}`;
+  return `your ${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+/**
+ * Speakable suggest script: occasion → name the wardrobe pieces → how to wear.
+ * Never invent garments.
+ */
+export function buildSpokenSuggestReply(input: {
+  garments: Garment[];
+  occasion: string;
+  transcript?: string;
+  howToWear?: string;
+}): string {
+  const occasionPhrase = phraseOccasionFromSpeech(
+    input.occasion,
+    input.transcript
+  );
+  const wear = listWearPieces(input.garments);
+  const how = (input.howToWear || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(for [^.]+\.\s*)/i, "");
+  if (how) {
+    return `For ${occasionPhrase}, wear ${wear}. ${how}`;
+  }
+  return `For ${occasionPhrase}, wear ${wear}.`;
+}
+
+/** If the model wandered, force the occasion + real piece names back in. */
+export function groundSpokenSuggest(input: {
+  spoken: string;
+  garments: Garment[];
+  occasion: string;
+  transcript?: string;
+  steps?: string[];
+}): string {
+  const spoken = (input.spoken || "").trim();
+  const keyNames = input.garments
+    .filter((g) =>
+      ["dress", "top", "bottom", "outerwear", "shoes"].includes(g.category)
+    )
+    .map((g) => g.name);
+  const lower = spoken.toLowerCase();
+  const mentionsPieces =
+    keyNames.length > 0 &&
+    keyNames.filter((n) => lower.includes(n.toLowerCase())).length >=
+      Math.min(2, keyNames.length);
+  const hasArc = /\bfor\b/i.test(spoken) && /\bwear\b/i.test(spoken);
+
+  if (mentionsPieces && hasArc && spoken.length <= 420) {
+    return spoken;
+  }
+
+  const how =
+    input.steps?.slice(0, 3).join(" ") ||
+    (mentionsPieces ? spoken : spoken.slice(0, 220));
+  return buildSpokenSuggestReply({
+    garments: input.garments,
+    occasion: input.occasion,
+    transcript: input.transcript,
+    howToWear: how,
+  });
+}
+
 /**
  * Local fallback stylist notes — varied phrasing so repeats don’t feel scripted.
  * Prefer `/api/outfit/styling` (LLM) when a key is available.
@@ -205,14 +315,11 @@ export function buildStylingGuide(input: {
     steps.push(`Keep it ${style} for ${occasion} — edit once, then stop.`);
   }
 
-  const spoken = pick(
-    [
-      `For ${occasion}: ${steps.slice(0, 3).join(" ")}`,
-      `Here’s the move. ${steps.slice(0, 3).join(" ")}`,
-      `I’d wear it like this. ${steps.slice(0, 3).join(" ")}`,
-    ],
-    seed + 6
-  );
+  const spoken = buildSpokenSuggestReply({
+    garments,
+    occasion,
+    howToWear: steps.slice(0, 3).join(" "),
+  });
 
   const tryOnBits: string[] = [];
   if (top && bottom && isShirt(top) && formality !== "casual") {

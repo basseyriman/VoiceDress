@@ -27,6 +27,10 @@ import {
   blendStyleHints,
   resolvePrimaryStyle,
 } from "@/lib/style-options";
+import {
+  groundSpokenSuggest,
+  phraseOccasionFromSpeech,
+} from "@/lib/styling-guide";
 import { matchGarmentFromSpeech } from "@/lib/garment-match";
 import {
   AVATAR_IDB_REF,
@@ -530,13 +534,37 @@ export const useAetherStore = create<AetherState>()(
           previousGuide: currentOutfit?.stylingGuide,
           transcript: opts?.transcript,
         });
+        const displayOccasion = phraseOccasionFromSpeech(
+          profile.label,
+          opts?.transcript
+        );
         if (aiGuide?.steps?.length && aiGuide.spoken) {
+          const spoken = groundSpokenSuggest({
+            spoken: aiGuide.spoken,
+            garments: outfit.garments || [],
+            occasion: displayOccasion,
+            transcript: opts?.transcript,
+            steps: aiGuide.steps,
+          });
           outfit = {
             ...outfit,
+            occasion: displayOccasion,
             stylingSteps: aiGuide.steps,
-            stylingGuide: aiGuide.spoken,
+            stylingGuide: spoken,
             stylingTryOnPrompt: aiGuide.tryOnPrompt || outfit.stylingTryOnPrompt,
-            rationale: `${(outfit.garments || []).map((g) => g.name).join(" + ")} — ${profile.formality.replace("_", " ")} for ${outfit.occasion}. ${aiGuide.spoken}`,
+            rationale: `${(outfit.garments || []).map((g) => g.name).join(" + ")} — ${profile.formality.replace("_", " ")} for ${displayOccasion}. ${spoken}`,
+          };
+        } else if (opts?.transcript) {
+          outfit = {
+            ...outfit,
+            occasion: displayOccasion,
+            stylingGuide: groundSpokenSuggest({
+              spoken: outfit.stylingGuide || "",
+              garments: outfit.garments || [],
+              occasion: displayOccasion,
+              transcript: opts.transcript,
+              steps: outfit.stylingSteps,
+            }),
           };
         }
 
