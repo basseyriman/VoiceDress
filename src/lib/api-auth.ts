@@ -7,6 +7,25 @@ export type AuthedUser = {
   email?: string;
 };
 
+function splitList(value: string | undefined): string[] {
+  return (value || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** Founder / comps — server-only allowlist (never NEXT_PUBLIC_). */
+export function isCompedAccount(user: {
+  uid: string;
+  email?: string | null;
+}): boolean {
+  const uids = splitList(process.env.ENTITLEMENT_BYPASS_UIDS);
+  const emails = splitList(process.env.ENTITLEMENT_BYPASS_EMAILS);
+  if (uids.includes(user.uid.toLowerCase())) return true;
+  if (user.email && emails.includes(user.email.toLowerCase())) return true;
+  return false;
+}
+
 /** Verify Firebase ID token from Authorization: Bearer <token>. */
 export async function requireAuth(
   req: NextRequest
@@ -54,8 +73,12 @@ export function isAuthedUser(
   return !(value instanceof NextResponse) && "uid" in value;
 }
 
-/** Paid, active trial, or active subscription. */
-export function isEntitled(profile: Partial<UserProfile> | null | undefined): boolean {
+/** Paid, active trial, or active subscription (or founder comp). */
+export function isEntitled(
+  profile: Partial<UserProfile> | null | undefined,
+  user?: { uid: string; email?: string | null }
+): boolean {
+  if (user && isCompedAccount(user)) return true;
   if (!profile) return false;
   const status = profile.subscriptionStatus || "none";
   if (status === "active") return true;
@@ -102,8 +125,10 @@ export async function requireEntitled(
     );
   }
 
+  if (isCompedAccount(auth)) return auth;
+
   const profile = await loadUserProfileAdmin(auth.uid);
-  if (!isEntitled(profile)) {
+  if (!isEntitled(profile, auth)) {
     return NextResponse.json(
       {
         error:

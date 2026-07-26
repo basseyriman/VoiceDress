@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   const snap = await ref.get();
   const data = (snap.data() || {}) as Partial<UserProfile>;
 
-  if (isEntitled(data)) {
+  if (isEntitled(data, auth)) {
     return NextResponse.json({
       ok: true,
       subscriptionStatus: data.subscriptionStatus || "trialing",

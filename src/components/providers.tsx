@@ -9,10 +9,12 @@ import {
   onAuthStateChanged,
 } from "@/lib/firebase";
 import { PostHogProvider } from "@/components/posthog-provider";
+import { authFetch } from "@/lib/auth-fetch";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const hydrateAvatar = useAetherStore((s) => s.hydrateAvatar);
   const hydrateFromCloud = useAetherStore((s) => s.hydrateFromCloud);
+  const updateUser = useAetherStore((s) => s.updateUser);
   const hydrated = useAetherStore((s) => s.hydrated);
   const cloudReady = useAetherStore((s) => s.cloudReady);
   const user = useAetherStore((s) => s.user);
@@ -62,6 +64,26 @@ export function Providers({ children }: { children: React.ReactNode }) {
     user?.displayName,
     user?.subscriptionStatus,
   ]);
+
+  // Founder/comp allowlist → sync Firestore so Billing UI matches free access
+  useEffect(() => {
+    if (!user?.uid || !cloudReady) return;
+    let cancelled = false;
+    void authFetch("/api/billing/comped-sync", { method: "POST" })
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const data = await res.json().catch(() => null);
+        if (!data?.comped || !data.subscriptionStatus) return;
+        updateUser({
+          subscriptionStatus: data.subscriptionStatus,
+          trialEndsAt: data.trialEndsAt || undefined,
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, cloudReady, updateUser]);
 
   return <PostHogProvider>{children}</PostHogProvider>;
 }
