@@ -1,9 +1,11 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Apparel → fal FASHN, then lock real face from original photo.
- * 2. Shoes → glasses → watch → fal Kontext (default).
- * 3. Optional OpenAI finish: TRYON_FINISH_PROVIDER=openai in .env.local.
+ * 1. Base apparel (top/dress + bottom) → fal FASHN, then lock real face.
+ * 2. Outerwear → fal Kontext multi (product + color lock) so blazers/coats
+ *    layer correctly — FASHN has no jacket category and drops them at max 2.
+ * 3. Shoes → glasses → watch → fal Kontext (default).
+ * 4. Optional OpenAI finish: TRYON_FINISH_PROVIDER=openai in .env.local.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [
@@ -14,6 +16,9 @@ export const TRYON_APPAREL_CATEGORIES = [
 ] as const;
 
 export const TRYON_FINISH_CATEGORIES = ["shoes", "accessory"] as const;
+
+/** Max pieces sent in the apparel stage (base + outerwear). */
+export const TRYON_APPAREL_MAX_PIECES = 3;
 
 export function isApparelTryOnCategory(category: string) {
   return (TRYON_APPAREL_CATEGORIES as readonly string[]).includes(category);
@@ -51,13 +56,23 @@ export function lookPiecesForTryOn<
   ];
 }
 
-/** Only pieces fal FASHN can dress onto your body. */
+/**
+ * Pieces for the apparel stage. Always keeps outerwear when present —
+ * previously `.slice(0, 2)` dropped blazers/coats and left them "pending".
+ */
 export function apparelForTryOn<T extends { category: string }>(garments: T[]) {
   const order = ["top", "dress", "bottom", "outerwear"] as const;
-  return order
+  const all = order
     .map((cat) => garments.find((g) => g.category === cat))
-    .filter(Boolean)
-    .slice(0, 2) as T[];
+    .filter(Boolean) as T[];
+
+  if (all.length <= TRYON_APPAREL_MAX_PIECES) return all;
+
+  const outer = all.find((g) => g.category === "outerwear");
+  const base = all
+    .filter((g) => g.category !== "outerwear")
+    .slice(0, TRYON_APPAREL_MAX_PIECES - (outer ? 1 : 0));
+  return outer ? [...base, outer] : base;
 }
 
 export function finishingPieces<T extends { category: string }>(garments: T[]) {

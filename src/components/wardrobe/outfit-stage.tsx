@@ -7,7 +7,11 @@ import { authFetch } from "@/lib/auth-fetch";
 import { cn } from "@/lib/utils";
 import { AVATAR_IDB_REF } from "@/lib/avatar-storage";
 import { useAetherStore } from "@/store/aether-store";
-import { lookPiecesForTryOn, apparelForTryOn } from "@/lib/tryon-architecture";
+import {
+  lookPiecesForTryOn,
+  apparelForTryOn,
+  TRYON_APPAREL_MAX_PIECES,
+} from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
 import { letterboxForTryOn, lockFaceIdentity } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
@@ -175,6 +179,7 @@ export function OutfitStage({
 
       try {
         const toPayload = (piece: (typeof lookPieces)[number]) => ({
+          id: piece.id,
           imageUrl: piece.imageUrl,
           category: piece.category,
           name: piece.name,
@@ -185,6 +190,7 @@ export function OutfitStage({
           tags: piece.tags,
         });
 
+        const appliedIds = new Set<string>();
         const appliedNames = new Set<string>();
 
         const isWatchPiece = (p: (typeof lookPieces)[number]) =>
@@ -212,7 +218,12 @@ export function OutfitStage({
           ),
         ];
 
-        // 1) Clothes via fal FASHN + lock your real face
+        const markApplied = (step: { id?: string; name?: string }) => {
+          if (step.id) appliedIds.add(step.id);
+          if (step.name) appliedNames.add(step.name);
+        };
+
+        // 1) Clothes via fal FASHN (+ Kontext outerwear) + lock your real face
         if (apparelPieces.length) {
           setActivePieceId(apparelPieces[0]?.id ?? null);
           setStepLabel("Dressing you…");
@@ -231,7 +242,7 @@ export function OutfitStage({
               body: JSON.stringify({
                 personImage: current,
                 stage: "apparel",
-                maxPieces: 2,
+                maxPieces: TRYON_APPAREL_MAX_PIECES,
                 garments: apparelPieces.map(toPayload),
               }),
             });
@@ -274,11 +285,18 @@ export function OutfitStage({
           for (const s of Array.isArray(apparelData.steps)
             ? apparelData.steps
             : []) {
-            if (s?.name) appliedNames.add(s.name);
+            markApplied(s);
           }
 
-          // Layering polish (tuck / open coat / etc.) — face-lock again after
-          if (outfit?.stylingTryOnPrompt) {
+          const expectedOuter = lookPieces.find((p) => p.category === "outerwear");
+          const outerLanded =
+            !expectedOuter ||
+            appliedIds.has(expectedOuter.id) ||
+            appliedNames.has(expectedOuter.name);
+
+          // Layering polish only when outerwear landed (or none expected) —
+          // otherwise Kontext invents cream coats over a missing navy blazer.
+          if (outfit?.stylingTryOnPrompt && outerLanded) {
             setStepLabel("Layering the look…");
             setProgress(55);
             try {
@@ -373,12 +391,15 @@ export function OutfitStage({
             }
             if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
             setWornUrl(current);
+            appliedIds.add(piece.id);
             appliedNames.add(piece.name);
             setKeyConfigured(true);
           }
         }
 
-        const missed = lookPieces.filter((p) => !appliedNames.has(p.name));
+        const missed = lookPieces.filter(
+          (p) => !appliedIds.has(p.id) && !appliedNames.has(p.name)
+        );
         setMissingIds(missed.map((p) => p.id));
         setNotice(
           missed.length
@@ -391,7 +412,7 @@ export function OutfitStage({
           setStepLabel(missed.length ? "Almost ready" : "Full look on you");
           setProgress(100);
           setDressing(false);
-          if (appliedNames.size > 0) {
+          if (appliedIds.size > 0 || appliedNames.size > 0) {
             confirmWear(outfit);
           }
         }

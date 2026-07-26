@@ -460,6 +460,8 @@ export function buildStylingGuide(input: {
     "Edit ONLY how the existing clothes sit on this exact same person.",
     "Keep the EXACT same face, identity, body, pose, lighting, background, and framing.",
     "Do not change garment colors, fabrics, or swap items.",
+    "Do not invent a new coat. Do not turn a navy/dark blazer into a cream, ivory, camel, or beige overcoat or duster.",
+    "Do not lengthen a hip-length blazer into a long coat.",
     tryOnBits.length
       ? `Styling: ${tryOnBits.join("; ")}.`
       : `Keep a clean ${style} wear for ${occasion}.`,

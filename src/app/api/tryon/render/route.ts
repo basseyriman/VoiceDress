@@ -9,6 +9,7 @@ import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 export const maxDuration = 180;
 
 type Piece = {
+  id?: string;
   imageUrl: string;
   category: string;
   name?: string;
@@ -125,6 +126,18 @@ const KEEP_YOU =
 const KEEP_FRAMING =
   "CRITICAL FRAMING: Keep the EXACT same full-body camera distance and crop as image 1. Head and both feet must stay fully visible. Do not zoom in, do not crop to waist-up, do not change aspect ratio.";
 
+function isBlazerPiece(piece: Piece) {
+  return /blazer|sport coat|suit jacket/i.test(
+    `${piece.name || ""} ${(piece.tags || []).join(" ")}`
+  );
+}
+
+function isCoatPiece(piece: Piece) {
+  return /overcoat|trench|parka|puffer|duster|coat/i.test(
+    `${piece.name || ""} ${(piece.tags || []).join(" ")}`
+  );
+}
+
 function shoeGlassesPrompt(piece: Piece): string {
   const look = pieceLook(piece);
   if (piece.category === "shoes") {
@@ -142,6 +155,57 @@ function shoeGlassesPrompt(piece: Piece): string {
     `Place ONLY the glasses from image 2 (${look}) on the person's existing face.`,
     "Do not redesign or regenerate the face. Same eyes, nose, mouth, skin. Only add thin frames.",
   ].join(" ");
+}
+
+/**
+ * Outerwear via Kontext multi — FASHN has no jacket category and often
+ * drops or morphs blazers into long cream coats when forced into "tops".
+ */
+function outerwearLayerPrompt(piece: Piece): string {
+  const look = pieceLook(piece);
+  const blazer = isBlazerPiece(piece);
+  const coat = isCoatPiece(piece) && !blazer;
+  const silhouette = blazer
+    ? "structured hip-length blazer with notch lapels — NOT a long overcoat, trench, duster, or cape"
+    : coat
+      ? "full-length coat matching image 2 — same length and color, not a short blazer"
+      : "outer jacket matching image 2 exactly — same length, cut, and color";
+
+  return [
+    KEEP_YOU,
+    KEEP_FRAMING,
+    `Layer ONLY the outerwear from image 2 (${look}) over the person's existing top.`,
+    `It must be a ${silhouette}.`,
+    "Match the exact color from image 2 (if navy/midnight blue, keep it deep navy — never cream, ivory, camel, beige, or washed-out grey).",
+    "Keep the top underneath visible at the neckline/hem where natural. Do not replace the top with the jacket alone.",
+    "Keep pants, shoes, hands, face, and background completely unchanged.",
+    "Photoreal fabric, natural drape, correct proportions for this body.",
+  ].join(" ");
+}
+
+async function kontextOuterwearLayer(opts: {
+  falKey: string;
+  personImage: string;
+  productImage: string;
+  piece: Piece;
+}): Promise<TryResult> {
+  const res = await fetch("https://fal.run/fal-ai/flux-pro/kontext/multi", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${opts.falKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: outerwearLayerPrompt(opts.piece),
+      image_urls: [opts.personImage, opts.productImage],
+      guidance_scale: 5.2,
+      num_images: 1,
+      output_format: "jpeg",
+      enhance_prompt: false,
+      safety_tolerance: "5",
+    }),
+  });
+  return parseFalImages(res);
 }
 
 function watchTextPrompt(piece: Piece): string {
@@ -458,8 +522,13 @@ export async function POST(req: NextRequest) {
   );
 
   let current = personImage;
-  const steps: { category: string; name?: string; url: string; provider?: string }[] =
-    [];
+  const steps: {
+    id?: string;
+    category: string;
+    name?: string;
+    url: string;
+    provider?: string;
+  }[] = [];
   const warnings: string[] = [];
 
   const runApparel = stage === "auto" || stage === "apparel";
@@ -467,9 +536,6 @@ export async function POST(req: NextRequest) {
 
   if (runApparel) {
     for (const g of apparel.slice(0, maxPieces)) {
-      const fashnCat = apparelCategory(g.category);
-      if (!fashnCat) continue;
-
       let garmentImage: string;
       try {
         garmentImage = await resolveGarmentImageForFal(g.imageUrl);
@@ -483,6 +549,69 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+
+      // Outerwear: Kontext product layer (color + silhouette). FASHN has no jacket
+      // category and often morphs navy blazers into long cream coats.
+      if (g.category === "outerwear") {
+        let result = await kontextOuterwearLayer({
+          falKey: falKey as string,
+          personImage: current,
+          productImage: garmentImage,
+          piece: g,
+        });
+
+        if (!result.ok || result.url === current) {
+          // Fallback: FASHN tops — better than skipping the piece entirely
+          const fashnFallback = await fashnTryOn({
+            falKey: falKey as string,
+            modelImage: current,
+            garmentImage,
+            category: "tops",
+          });
+          if (fashnFallback.ok) {
+            result = fashnFallback;
+          }
+        }
+
+        if (!result.ok) {
+          if (isFalBillingError(result.detail)) {
+            return NextResponse.json({
+              ok: false,
+              needsBilling: true,
+              error: "fal.ai balance exhausted",
+              detail: result.detail,
+              imageUrl: steps.length ? current : undefined,
+              steps,
+              message:
+                "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
+            });
+          }
+          warnings.push(
+            `Couldn’t layer ${g.name || "outerwear"}${
+              result.detail ? `: ${result.detail.slice(0, 120)}` : ""
+            }`
+          );
+          continue;
+        }
+
+        if (result.url === current) {
+          warnings.push(`Outerwear unchanged for ${g.name || "outerwear"}`);
+          continue;
+        }
+
+        current = result.url;
+        steps.push({
+          id: g.id,
+          category: g.category,
+          name: g.name,
+          url: result.url,
+          provider: "kontext-outerwear",
+        });
+        continue;
+      }
+
+      const fashnCat = apparelCategory(g.category);
+      if (!fashnCat) continue;
 
       const result = await fashnTryOn({
         falKey: falKey as string,
@@ -518,6 +647,7 @@ export async function POST(req: NextRequest) {
 
       current = result.url;
       steps.push({
+        id: g.id,
         category: g.category,
         name: g.name,
         url: result.url,
@@ -576,6 +706,7 @@ export async function POST(req: NextRequest) {
 
       current = edited.url;
       steps.push({
+        id: g.id,
         category: g.category,
         name: g.name,
         url: edited.url,
