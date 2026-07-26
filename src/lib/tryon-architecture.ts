@@ -1,12 +1,13 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * Full suggested look on the body — nothing left as a “wishlist”.
+ * Promise: your real photo, your real face — only the clothes change.
  *
- * 1. Apparel (top / bottom / dress / outerwear) → fal FASHN (keeps you).
- * 2. Shoes → glasses → watch via Kontext (watch is text-only).
- * 3. Client locks the original face after clothes/shoes (strong), and softly
- *    after glasses so frames can stay. Never snap back to the undressed photo.
+ * 1. Apparel (top / bottom / dress / outerwear) → fal FASHN on your photo.
+ * 2. Shoes → one Kontext pass (feet). No face-restore paste afterward.
+ * 3. Glasses + watch → canvas overlays on the dressed photo so generative
+ *    AI never rewrites your face for accessories.
+ * 4. If a step fails, keep the already-dressed result and continue.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [
