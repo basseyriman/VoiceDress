@@ -640,9 +640,9 @@ export function OutfitStage({
                         className={cn(
                           "rounded-full border px-2.5 py-1 text-[10px] transition",
                           activePieceId === g.id
-                            ? "border-champagne bg-champagne/20 text-champagne shadow-[0_0_14px_rgba(201,168,124,0.35)] animate-dressing-glow"
+                            ? "border-champagne bg-champagne/15 text-champagne"
                             : donePieceIds.includes(g.id)
-                              ? "border-champagne/45 bg-champagne/10 text-champagne"
+                              ? "border-champagne/40 text-champagne"
                               : "border-white/10 text-mist"
                         )}
                       >
@@ -902,28 +902,24 @@ export function GarmentTile({
         large
           ? "flex-col gap-2.5 rounded-[1.25rem] border p-2.5"
           : "gap-3 rounded-2xl border p-3",
-        missing
-          ? "border-champagne/35 bg-champagne/[0.04]"
-          : dressing
-            ? "border-champagne/50 bg-champagne/[0.08]"
+        // Only the piece being applied gets a strong gold border; others stay dim.
+        dressing
+          ? "border-2 border-champagne bg-champagne/10"
+          : missing
+            ? "border border-champagne/35 bg-champagne/[0.04]"
             : done
-              ? "border-champagne/45 bg-champagne/[0.07]"
+              ? "border border-champagne/40 bg-champagne/[0.06]"
               : active
-                ? "border-champagne/60 bg-champagne/10"
-                : "border-line bg-white/[0.02] hover:border-champagne/40"
+                ? "border border-champagne/55 bg-champagne/10"
+                : "border border-line bg-white/[0.02] hover:border-champagne/40"
       )}
     >
       <div
         className={cn(
-          "relative shrink-0 overflow-hidden rounded-xl bg-stone transition duration-300",
+          "relative shrink-0 overflow-hidden rounded-xl bg-stone",
           large
             ? "aspect-[3/4] w-full rounded-[1rem]"
-            : "h-16 w-16",
-          dressing &&
-            "ring-[2.5px] ring-champagne shadow-[0_0_0_3px_rgba(201,168,124,0.22),0_0_22px_rgba(201,168,124,0.45)] animate-dressing-glow",
-          done &&
-            !dressing &&
-            "ring-1 ring-champagne/55"
+            : "h-16 w-16"
         )}
       >
         {broken ? (
@@ -938,7 +934,7 @@ export function GarmentTile({
           />
         )}
       </div>
-      <div className={cn("relative z-[1] min-w-0 flex-1", large && "px-1 pb-1")}>
+      <div className={cn("min-w-0 flex-1", large && "px-1 pb-1")}>
         <div className="flex items-start justify-between gap-2">
           <p className="truncate text-sm text-ivory">{garment.name}</p>
           {(badge || missing || dressing || done) && (

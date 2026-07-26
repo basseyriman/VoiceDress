@@ -151,28 +151,3 @@ body {
       box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
-
-/* Gold highlight on the piece currently being applied */
-@keyframes dressing-glow {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 3px rgba(201, 168, 124, 0.2),
-      0 0 16px rgba(201, 168, 124, 0.35);
-  }
-  50% {
-    box-shadow:
-      0 0 0 3px rgba(201, 168, 124, 0.4),
-      0 0 26px rgba(201, 168, 124, 0.55);
-  }
-}
-
-.animate-dressing-glow {
-  animation: dressing-glow 1.35s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-dressing-glow {
-    animation: none;
-  }
-}
