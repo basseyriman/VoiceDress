@@ -14,12 +14,14 @@ export async function POST(req: NextRequest) {
   const profile = (body.profile as OccasionProfile | undefined) ||
     inferOccasionProfile(body.occasion || "today", body.style);
   const taste = body.taste as TasteMemory | undefined;
+  const stylePrefs = body.stylePrefs as string[] | undefined;
 
   const outfit = suggestOutfit({
     wardrobe,
     weather,
     occasion: body.occasion || profile.label || "today",
-    style: body.style || profile.styleHints[0] || "quiet luxury",
+    style: body.style,
+    stylePrefs,
     swapCategory: body.swapCategory,
     currentOutfit: body.currentOutfit,
     excludeIds: body.excludeIds,

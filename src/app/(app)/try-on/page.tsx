@@ -113,7 +113,7 @@ export default function TryOnPage() {
           {currentOutfit ? (
             <Button
               onClick={() =>
-                void generateOutfitAsync("evening presence", "old money")
+                void generateOutfitAsync("evening presence")
               }
             >
               Restyle

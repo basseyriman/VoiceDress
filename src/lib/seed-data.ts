@@ -1,7 +1,7 @@
 import type { Garment } from "./types";
 
 /** Bump to force-refresh local seed wardrobe images/labels. */
-export const WARDROBE_SEED_VERSION = 11;
+export const WARDROBE_SEED_VERSION = 12;
 
 /**
  * Controlled local garment images — names, colors, and files must match.
@@ -22,7 +22,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["all"],
       imageUrl: "/garments/white-oxford.jpg",
       source: "manual",
-      tags: ["classic", "white"],
+      tags: ["classic", "white", "old money", "quiet luxury"],
     },
     {
       name: "Tailored Charcoal Trousers",
@@ -36,7 +36,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["all"],
       imageUrl: "/garments/charcoal-trousers.jpg",
       source: "manual",
-      tags: ["old money", "tailored", "charcoal"],
+      tags: ["old money", "quiet luxury", "tailored", "charcoal"],
     },
     {
       name: "Ivory Ribbed Quarter-Zip",
@@ -50,7 +50,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["autumn", "winter", "all"],
       imageUrl: "/garments/ivory-quarterzip.jpg",
       source: "manual",
-      tags: ["quiet luxury", "knit"],
+      tags: ["quiet luxury", "minimal", "knit"],
     },
     {
       name: "Stone Wide Pleat Trousers",
@@ -64,7 +64,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["spring", "summer", "autumn"],
       imageUrl: "/garments/stone-trousers.jpg",
       source: "manual",
-      tags: ["relaxed", "stone"],
+      tags: ["minimal", "relaxed", "stone"],
     },
     {
       name: "Midnight Navy Blazer",
@@ -78,7 +78,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["all"],
       imageUrl: "/garments/navy-blazer.jpg",
       source: "manual",
-      tags: ["boardroom", "formal"],
+      tags: ["boardroom", "formal", "old money", "quiet luxury"],
     },
     {
       name: "Ribbed Indigo Jeans",
@@ -92,7 +92,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["all"],
       imageUrl: "/garments/indigo-jeans.jpg",
       source: "manual",
-      tags: ["casual", "denim"],
+      tags: ["casual", "denim", "streetwear"],
     },
     {
       name: "Cognac Leather Loafers",
@@ -106,7 +106,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["all"],
       imageUrl: "/garments/cognac-loafers.jpg",
       source: "manual",
-      tags: ["footwear", "old money"],
+      tags: ["footwear", "old money", "quiet luxury"],
     },
     {
       name: "Suede Chelsea Boots",
@@ -120,7 +120,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["autumn", "winter"],
       imageUrl: "/garments/chelsea-boots.jpg",
       source: "manual",
-      tags: ["boots", "taupe", "chelsea"],
+      tags: ["boots", "taupe", "chelsea", "quiet luxury"],
     },
     {
       name: "Gold Rimless Frames",
@@ -134,7 +134,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["all"],
       imageUrl: "/garments/gold-frames.jpg",
       source: "manual",
-      tags: ["frames", "eyeglasses"],
+      tags: ["frames", "eyeglasses", "old money", "quiet luxury"],
     },
     {
       name: "Rose Gold Leather Watch",
@@ -148,7 +148,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["all"],
       imageUrl: "/garments/silver-watch.jpg",
       source: "manual",
-      tags: ["watch", "wristwatch"],
+      tags: ["watch", "wristwatch", "quiet luxury"],
     },
     {
       name: "Camel Overcoat",
@@ -162,7 +162,7 @@ export function seedWardrobe(userId: string): Garment[] {
       season: ["autumn", "winter"],
       imageUrl: "/garments/camel-overcoat.jpg",
       source: "manual",
-      tags: ["coat", "old money"],
+      tags: ["coat", "old money", "quiet luxury"],
     },
   ];
 

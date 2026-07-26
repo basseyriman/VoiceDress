@@ -23,6 +23,10 @@ import {
   inferOccasionProfile,
   type OccasionProfile,
 } from "@/lib/occasion-profile";
+import {
+  blendStyleHints,
+  resolvePrimaryStyle,
+} from "@/lib/style-options";
 import { matchGarmentFromSpeech } from "@/lib/garment-match";
 import {
   AVATAR_IDB_REF,
@@ -418,13 +422,11 @@ export const useAetherStore = create<AetherState>()(
           }).catch(() => undefined);
         }
       },
-      generateOutfit: (
-        occasion = "today",
-        style = "quiet luxury",
-        opts
-      ) => {
+      generateOutfit: (occasion = "today", style, opts) => {
         const { wardrobe, weather, user, taste, currentOutfit } = get();
         if (!weather) return null;
+        const stylePrefs = user?.stylePrefs;
+        const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
         const spoken =
           opts?.tempC != null
             ? {
@@ -440,10 +442,14 @@ export const useAetherStore = create<AetherState>()(
           (!occasion || occasion === "today") && currentOutfit?.occasion
             ? currentOutfit.occasion
             : occasion;
-        const profile = inferOccasionProfile(
+        const profileBase = inferOccasionProfile(
           resolvedOccasion,
-          style || user?.stylePrefs[0]
+          primaryStyle
         );
+        const profile = {
+          ...profileBase,
+          styleHints: blendStyleHints(stylePrefs, profileBase.styleHints),
+        };
         const occasionChanged = occasionMeaningfullyChanged(
           currentOutfit?.occasion,
           profile.label
@@ -452,7 +458,8 @@ export const useAetherStore = create<AetherState>()(
           wardrobe,
           weather: effectiveWeather,
           occasion: resolvedOccasion,
-          style: style || user?.stylePrefs[0] || "quiet luxury",
+          style: primaryStyle,
+          stylePrefs,
           profile,
           taste,
           // New event → score fresh for that formality (don’t soft-lock on dinner pieces).
@@ -463,19 +470,17 @@ export const useAetherStore = create<AetherState>()(
         const nextTaste: TasteMemory = {
           ...taste,
           recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
-          preferredStyle: outfit.style,
+          preferredStyle: stylePrefs?.[0] || outfit.style,
         };
         set({ currentOutfit: outfit, taste: nextTaste });
         persistOutfitAndTaste(user?.uid, outfit, nextTaste);
         return outfit;
       },
-      generateOutfitAsync: async (
-        occasion = "today",
-        style = "quiet luxury",
-        opts
-      ) => {
+      generateOutfitAsync: async (occasion = "today", style, opts) => {
         const { wardrobe, weather, user, taste, currentOutfit } = get();
         if (!weather) return null;
+        const stylePrefs = user?.stylePrefs;
+        const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
         const spoken =
           opts?.tempC != null
             ? {
@@ -491,10 +496,14 @@ export const useAetherStore = create<AetherState>()(
           (!occasion || occasion === "today") && currentOutfit?.occasion
             ? currentOutfit.occasion
             : occasion;
-        const profile = await fetchOccasionProfile(
+        const profileBase = await fetchOccasionProfile(
           resolvedOccasion,
-          style || user?.stylePrefs[0]
+          primaryStyle
         );
+        const profile = {
+          ...profileBase,
+          styleHints: blendStyleHints(stylePrefs, profileBase.styleHints),
+        };
         const occasionChanged = occasionMeaningfullyChanged(
           currentOutfit?.occasion,
           profile.label
@@ -503,7 +512,8 @@ export const useAetherStore = create<AetherState>()(
           wardrobe,
           weather: effectiveWeather,
           occasion: profile.label,
-          style: style || profile.styleHints[0] || user?.stylePrefs[0],
+          style: primaryStyle,
+          stylePrefs,
           profile,
           taste,
           // New event → pure occasion/weather score. Same event → soft rotate.
@@ -533,7 +543,7 @@ export const useAetherStore = create<AetherState>()(
         const nextTaste: TasteMemory = {
           ...taste,
           recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
-          preferredStyle: outfit.style,
+          preferredStyle: stylePrefs?.[0] || outfit.style,
         };
         set({ currentOutfit: outfit, taste: nextTaste });
         persistOutfitAndTaste(user?.uid, outfit, nextTaste);
@@ -542,6 +552,8 @@ export const useAetherStore = create<AetherState>()(
       swapFromVoice: (category, style, occasion, garmentQuery) => {
         const { wardrobe, weather, currentOutfit, user, taste } = get();
         if (!weather) return null;
+        const stylePrefs = user?.stylePrefs;
+        const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
 
         const rejectedFromCurrent =
           currentOutfit?.garments?.find((g) => g.category === category)?.id;
@@ -569,11 +581,8 @@ export const useAetherStore = create<AetherState>()(
           wardrobe,
           weather,
           occasion: occasion || currentOutfit?.occasion || "today",
-          style:
-            style ||
-            currentOutfit?.style ||
-            user?.stylePrefs[0] ||
-            "quiet luxury",
+          style: primaryStyle,
+          stylePrefs,
           swapCategory: forceGarmentId ? undefined : category,
           forceGarmentId,
           currentOutfit: currentOutfit?.garments,
@@ -601,7 +610,8 @@ export const useAetherStore = create<AetherState>()(
           wardrobe,
           weather,
           occasion: currentOutfit.occasion,
-          style: currentOutfit.style,
+          style: resolvePrimaryStyle(user?.stylePrefs, currentOutfit.style),
+          stylePrefs: user?.stylePrefs,
           forceGarmentId: garmentId,
           currentOutfit: currentOutfit.garments,
           taste: nextTaste,

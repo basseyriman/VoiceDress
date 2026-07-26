@@ -22,25 +22,21 @@ const QUICK_EVENTS = [
     id: "work",
     label: "Work meeting",
     occasion: "work meeting",
-    style: "quiet luxury",
   },
   {
     id: "in-laws",
     label: "Meeting the in-laws",
     occasion: "meeting the in-laws",
-    style: "old money",
   },
   {
     id: "dinner",
     label: "Dinner date",
     occasion: "dinner date",
-    style: "quiet luxury",
   },
   {
     id: "wedding",
     label: "Wedding",
     occasion: "wedding",
-    style: "quiet luxury",
   },
 ] as const;
 
@@ -159,7 +155,7 @@ export default function TodayPage() {
   const pickEvent = (event: (typeof QUICK_EVENTS)[number]) => {
     setComposing(true);
     speak(`Dressing you for ${event.occasion}.`);
-    void generateOutfitAsync(event.occasion, event.style)
+    void generateOutfitAsync(event.occasion)
       .then((outfit) => {
         if (outfit?.stylingGuide) speak(outfit.stylingGuide);
       })

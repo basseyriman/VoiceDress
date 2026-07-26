@@ -25,3 +25,24 @@ export const STYLE_LOOKS = [
 export type StyleLookId = (typeof STYLE_LOOKS)[number]["id"];
 
 export const STYLE_OPTION_IDS = STYLE_LOOKS.map((s) => s.id);
+
+/** Primary style for scoring / labels — explicit voice override, else DNA. */
+export function resolvePrimaryStyle(
+  stylePrefs?: string[] | null,
+  explicit?: string | null
+): string {
+  const said = explicit?.trim().toLowerCase();
+  if (said) return said;
+  if (stylePrefs?.length) return stylePrefs[0]!;
+  return "quiet luxury";
+}
+
+/** Put the user’s style DNA ahead of occasion defaults. */
+export function blendStyleHints(
+  stylePrefs: string[] | undefined,
+  occasionHints: string[]
+): string[] {
+  return Array.from(
+    new Set([...(stylePrefs || []), ...occasionHints].filter(Boolean))
+  ).slice(0, 5);
+}

@@ -12,6 +12,10 @@ import {
   matchGarmentFromSpeech,
 } from "./garment-match";
 import { buildStylingGuide } from "./styling-guide";
+import {
+  blendStyleHints,
+  resolvePrimaryStyle,
+} from "./style-options";
 
 export type { OccasionProfile, TasteMemory };
 
@@ -23,7 +27,10 @@ const STYLE_PALETTES: Record<string, string[]> = {
   romantic: ["#f8e8e8", "#7c3a4a", "#d4a5a5", "#2d2a26"],
 };
 
-function scoreColorHarmony(outfitColors: string[], style: string): number {
+function scoreColorHarmonyForStyle(
+  outfitColors: string[],
+  style: string
+): number {
   const palette =
     STYLE_PALETTES[style.toLowerCase()] || STYLE_PALETTES["quiet luxury"];
   let score = 0;
@@ -34,6 +41,81 @@ function scoreColorHarmony(outfitColors: string[], style: string): number {
     if (match) score += 2;
     else score += 0.5;
   }
+  return score;
+}
+
+/** Best palette match across the user’s style DNA (not just one label). */
+function scoreColorHarmony(
+  outfitColors: string[],
+  style: string,
+  stylePrefs?: string[]
+): number {
+  const styles = Array.from(
+    new Set([style, ...(stylePrefs || [])].filter(Boolean))
+  );
+  let best = 0;
+  for (const s of styles) {
+    best = Math.max(best, scoreColorHarmonyForStyle(outfitColors, s));
+  }
+  return best;
+}
+
+/**
+ * Bias garment picks toward the looks the user said they resonate with.
+ * Occasion still drives formality; DNA steers which pieces feel “them.”
+ */
+function styleDnaFit(g: Garment, stylePrefs?: string[]): number {
+  if (!stylePrefs?.length) return 0;
+  const blob =
+    `${g.name} ${g.brand} ${g.tags.join(" ")} ${g.fabric || ""} ${g.colors.join(" ")}`.toLowerCase();
+  let score = 0;
+
+  for (const pref of stylePrefs) {
+    const p = pref.toLowerCase();
+    if (
+      blob.includes(p) ||
+      g.tags.some((t) => t.toLowerCase().includes(p))
+    ) {
+      score += 3.5;
+    }
+  }
+
+  const wantsStreet = stylePrefs.some((s) => /street/.test(s));
+  const wantsHeritage = stylePrefs.some((s) =>
+    /old money|quiet luxury/.test(s)
+  );
+  const wantsMinimal = stylePrefs.some((s) => /minimal/.test(s));
+
+  if (wantsHeritage && !wantsStreet) {
+    if (/street|hoodie|sneaker|distressed|graphic|neon/.test(blob)) score -= 3.5;
+    if (/jean|denim/.test(blob) && g.formality === "casual") score -= 2.5;
+    if (
+      /tailored|oxford|blazer|loafer|wool|cashmere|classic|boardroom|old money|quiet luxury/.test(
+        blob
+      )
+    ) {
+      score += 2.5;
+    }
+  }
+
+  if (wantsStreet && !wantsHeritage) {
+    if (/jean|denim|sneaker|hoodie|street|casual/.test(blob)) score += 3;
+    if (
+      (/blazer|loafer|oxford|overcoat|formal/.test(blob) ||
+        g.formality === "formal" ||
+        g.formality === "business") &&
+      g.category !== "shoes"
+    ) {
+      score -= 1.5;
+    }
+  }
+
+  if (wantsMinimal) {
+    if (/minimal|clean|simple|plain|white|black|grey|gray|ivory|stone/.test(blob))
+      score += 1.5;
+    if (/loud|graphic|neon|logo/.test(blob)) score -= 2;
+  }
+
   return score;
 }
 
@@ -161,14 +243,16 @@ function scoreGarment(
   profile?: OccasionProfile,
   taste?: TasteMemory,
   demoteIds?: string[],
-  demotePenalty = -6
+  demotePenalty = -6,
+  stylePrefs?: string[]
 ) {
   return (
     weatherFit(g, weather) +
     formalityFit(g, formality) +
-    scoreColorHarmony(g.hexColors, style) +
+    scoreColorHarmony(g.hexColors, style, stylePrefs) +
     coherenceWithOutfit(g, already, formality, style) +
     (profile ? profileFit(g, profile) : 0) +
+    styleDnaFit(g, stylePrefs) +
     tastePenalty(g, taste) +
     freshLookPenalty(g, demoteIds, demotePenalty)
   );
@@ -183,7 +267,8 @@ function pickBest(
   profile?: OccasionProfile,
   taste?: TasteMemory,
   demoteIds?: string[],
-  demotePenalty = -6
+  demotePenalty = -6,
+  stylePrefs?: string[]
 ): Garment | null {
   if (!items.length) return null;
   const score = (g: Garment) =>
@@ -196,7 +281,8 @@ function pickBest(
       profile,
       taste,
       demoteIds,
-      demotePenalty
+      demotePenalty,
+      stylePrefs
     );
   const ranked = [...items].sort((a, b) => score(b) - score(a));
   const best = ranked[0]!;
@@ -382,6 +468,8 @@ export interface SuggestInput {
   weather: WeatherSnapshot;
   occasion: string;
   style?: string;
+  /** Looks the user resonates with — drives DNA-aware scoring. */
+  stylePrefs?: string[];
   excludeIds?: string[];
   /** Soft-demote these ids so a re-ask can produce a different look. */
   demoteIds?: string[];
@@ -428,13 +516,21 @@ export function occasionMeaningfullyChanged(
 
 /** Pick best look from the user's wardrobe only — never invents pieces. */
 export function suggestOutfit(input: SuggestInput): Outfit {
-  const profile =
-    input.profile || inferOccasionProfile(input.occasion, input.style);
-  const style =
-    input.style ||
-    input.taste?.preferredStyle ||
-    profile.styleHints[0] ||
-    "quiet luxury";
+  const stylePrefs = input.stylePrefs?.length
+    ? input.stylePrefs
+    : undefined;
+  const baseProfile =
+    input.profile ||
+    inferOccasionProfile(
+      input.occasion,
+      resolvePrimaryStyle(stylePrefs, input.style)
+    );
+  const profile: OccasionProfile = {
+    ...baseProfile,
+    styleHints: blendStyleHints(stylePrefs, baseProfile.styleHints),
+  };
+  // DNA first — do not let last outfit / occasion defaults erase what they chose
+  const style = resolvePrimaryStyle(stylePrefs, input.style);
   const formality = profile.formality;
   const exclude = new Set([...(input.excludeIds || [])]);
   const demotePenalty = input.demotePenalty ?? -6;
@@ -457,7 +553,8 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       profile,
       input.taste,
       demote,
-      demotePenalty
+      demotePenalty,
+      stylePrefs
     );
 
   let selected: Garment[] = [];
@@ -708,11 +805,12 @@ export function parseVoiceIntent(transcript: string) {
     let item = inferCategoryFromSpeech(t) || (shoeAsk ? "shoes" : "bottom");
     if (shoeAsk) item = "shoes";
 
-    let style = "quiet luxury";
+    let style: string | undefined;
     if (t.includes("old money")) style = "old money";
-    if (t.includes("street")) style = "streetwear";
-    if (t.includes("minimal")) style = "minimal";
-    if (t.includes("romantic")) style = "romantic";
+    else if (t.includes("street")) style = "streetwear";
+    else if (t.includes("minimal")) style = "minimal";
+    else if (t.includes("romantic")) style = "romantic";
+    else if (t.includes("quiet luxury")) style = "quiet luxury";
 
     const occasion = inferOccasionFromSpeech(t);
 
@@ -784,13 +882,16 @@ export function parseVoiceIntent(transcript: string) {
   }
 
   const occasion = inferOccasionFromSpeech(t);
+  // Only set style when they said it — otherwise DNA from onboarding/settings wins
   const style = t.includes("old money")
     ? "old money"
     : t.includes("street")
       ? "streetwear"
       : t.includes("minimal")
         ? "minimal"
-        : "quiet luxury";
+        : t.includes("quiet luxury")
+          ? "quiet luxury"
+          : undefined;
   const tempNote = spokenWeather
     ? spokenWeather.hypothetical
       ? ` as if it were ${spokenWeather.label}`
