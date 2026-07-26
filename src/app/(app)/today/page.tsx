@@ -158,10 +158,12 @@ export default function TodayPage() {
 
   const pickEvent = (event: (typeof QUICK_EVENTS)[number]) => {
     setComposing(true);
-    void generateOutfitAsync(event.occasion, event.style).finally(() =>
-      setComposing(false)
-    );
     speak(`Dressing you for ${event.occasion}.`);
+    void generateOutfitAsync(event.occasion, event.style)
+      .then((outfit) => {
+        if (outfit?.stylingGuide) speak(outfit.stylingGuide);
+      })
+      .finally(() => setComposing(false));
   };
 
   const firstName = user?.displayName?.split(" ")[0];

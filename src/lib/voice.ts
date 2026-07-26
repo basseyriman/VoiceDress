@@ -90,7 +90,7 @@ export async function handleVoiceCommandAsync(
 
   if (useLocal) {
     const parsed = parseVoiceIntent(transcript);
-    const reply = applyLocalIntent(parsed, actions);
+    const reply = await applyLocalIntent(parsed, actions);
     speak(reply);
     return { reply, source: "keyword" as const, parsed };
   }
@@ -106,7 +106,7 @@ export async function handleVoiceCommandAsync(
     });
     if (!res.ok) {
       const parsed = parseVoiceIntent(transcript);
-      const reply = applyLocalIntent(parsed, actions);
+      const reply = await applyLocalIntent(parsed, actions);
       speak(reply);
       return { reply, source: "keyword" as const, parsed };
     }
@@ -116,7 +116,7 @@ export async function handleVoiceCommandAsync(
     return { reply, source: data.source || "llm", actions: data.actions };
   } catch {
     const parsed = parseVoiceIntent(transcript);
-    const reply = applyLocalIntent(parsed, actions);
+    const reply = await applyLocalIntent(parsed, actions);
     speak(reply);
     return { reply, source: "keyword" as const, parsed };
   }
@@ -128,15 +128,14 @@ export function handleVoiceCommand(
   actions: VoiceActionHandlers
 ) {
   const parsed = parseVoiceIntent(transcript);
-  const reply = applyLocalIntent(parsed, actions);
-  speak(reply);
+  void applyLocalIntent(parsed, actions).then((reply) => speak(reply));
   return parsed;
 }
 
-function applyLocalIntent(
+async function applyLocalIntent(
   parsed: ReturnType<typeof parseVoiceIntent>,
   actions: VoiceActionHandlers
-): string {
+): Promise<string> {
   const catMap: Record<string, Garment["category"]> = {
     top: "top",
     bottom: "bottom",
@@ -156,10 +155,11 @@ function applyLocalIntent(
         parsed.entities.occasion,
         parsed.entities.garmentQuery
       );
-      break;
+      return parsed.reply;
     }
-    case "change_style":
-      void (actions.generateOutfitAsync || actions.generateOutfit)(
+    case "change_style": {
+      const outfit = (await (actions.generateOutfitAsync ||
+        actions.generateOutfit)(
         "today",
         parsed.entities.style,
         {
@@ -167,25 +167,28 @@ function applyLocalIntent(
           freshLook: true,
           transcript: parsed.transcript,
         }
-      );
-      break;
+      )) as { stylingGuide?: string; name?: string } | null | undefined;
+      if (outfit?.stylingGuide) return outfit.stylingGuide;
+      return parsed.reply;
+    }
     case "open_wardrobe":
       actions.onOpenWardrobe?.();
       actions.onNavigate?.("/wardrobe");
-      break;
+      return parsed.reply;
     case "weather_check": {
       const w = actions.onWeather?.();
       if (typeof w === "string" && w) return w;
-      break;
+      return parsed.reply;
     }
     case "explain_look": {
       const e = actions.onExplainLook?.();
       if (typeof e === "string" && e) return e;
-      break;
+      return parsed.reply;
     }
     case "suggest_outfit":
-    default:
-      void (actions.generateOutfitAsync || actions.generateOutfit)(
+    default: {
+      const outfit = (await (actions.generateOutfitAsync ||
+        actions.generateOutfit)(
         parsed.entities.occasion,
         parsed.entities.style,
         {
@@ -193,10 +196,11 @@ function applyLocalIntent(
           freshLook: parsed.entities.freshLook,
           transcript: parsed.transcript,
         }
-      );
-      break;
+      )) as { stylingGuide?: string; name?: string } | null | undefined;
+      if (outfit?.stylingGuide) return outfit.stylingGuide;
+      return parsed.reply;
+    }
   }
-  return parsed.reply;
 }
 
 async function applyActions(
@@ -207,8 +211,9 @@ async function applyActions(
   let reply = fallbackReply;
   for (const a of list) {
     switch (a.tool) {
-      case "suggest_look":
-        await (actions.generateOutfitAsync || actions.generateOutfit)(
+      case "suggest_look": {
+        const outfit = (await (actions.generateOutfitAsync ||
+          actions.generateOutfit)(
           a.occasion || "today",
           a.style || undefined,
           {
@@ -216,8 +221,10 @@ async function applyActions(
             freshLook: Boolean(a.freshLook ?? a.tempC != null),
             transcript: a.transcript ?? undefined,
           }
-        );
+        )) as { stylingGuide?: string } | null | undefined;
+        if (outfit?.stylingGuide) reply = outfit.stylingGuide;
         break;
+      }
       case "swap_piece":
         if (a.category) {
           actions.swapFromVoice(

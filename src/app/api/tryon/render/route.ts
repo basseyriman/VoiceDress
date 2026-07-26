@@ -211,6 +211,31 @@ async function kontextWatchTextEdit(opts: {
   return parseFalImages(res);
 }
 
+/** Light drape/tuck/layer polish after FASHN — identity must stay locked by the client after. */
+async function kontextStylePolish(opts: {
+  falKey: string;
+  personImage: string;
+  prompt: string;
+}): Promise<TryResult> {
+  const res = await fetch("https://fal.run/fal-ai/flux-pro/kontext", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${opts.falKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: opts.prompt,
+      image_url: opts.personImage,
+      guidance_scale: 3.5,
+      num_images: 1,
+      output_format: "jpeg",
+      enhance_prompt: false,
+      safety_tolerance: "5",
+    }),
+  });
+  return parseFalImages(res);
+}
+
 async function applyFinishPiece(opts: {
   falKey: string;
   personImage: string;
@@ -338,9 +363,67 @@ export async function POST(req: NextRequest) {
   const maxPieces = Math.min(Number(body.maxPieces) || 6, 6);
   // Face accessories (glasses/watch) only when client explicitly asks — they morph identity.
   const includeFaceAccessories = Boolean(body.includeFaceAccessories);
+  const stylingPrompt =
+    typeof body.stylingPrompt === "string" ? body.stylingPrompt.trim() : "";
 
   if (!personImage) {
     return NextResponse.json({ error: "personImage required" }, { status: 400 });
+  }
+
+  // Style-only polish on an already-dressed photo
+  if (stage === "style") {
+    if (!falKey) {
+      return NextResponse.json({
+        ok: false,
+        needsKey: true,
+        message: "Add FAL_KEY for style polish",
+      });
+    }
+    if (!stylingPrompt) {
+      return NextResponse.json({
+        ok: true,
+        imageUrl: personImage,
+        steps: [],
+        skipped: true,
+      });
+    }
+    const polished = await kontextStylePolish({
+      falKey,
+      personImage,
+      prompt: stylingPrompt,
+    });
+    if (!polished.ok) {
+      if (isFalBillingError(polished.detail)) {
+        return NextResponse.json({
+          ok: false,
+          needsBilling: true,
+          error: "fal.ai balance exhausted",
+          detail: polished.detail,
+          imageUrl: personImage,
+        });
+      }
+      // Soft-fail: keep the FASHN clothes result
+      return NextResponse.json({
+        ok: true,
+        imageUrl: personImage,
+        steps: [],
+        warnings: [
+          `Style polish skipped${polished.detail ? `: ${polished.detail.slice(0, 120)}` : ""}`,
+        ],
+      });
+    }
+    return NextResponse.json({
+      ok: true,
+      imageUrl: polished.url,
+      steps: [
+        {
+          category: "style",
+          name: "Layering polish",
+          url: polished.url,
+          provider: "kontext",
+        },
+      ],
+    });
   }
 
   if (!falKey && !hasOpenAIImageKey()) {

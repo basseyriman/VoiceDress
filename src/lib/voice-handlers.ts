@@ -17,7 +17,11 @@ export function buildVoiceHandlers(
     pickGarmentById: state.pickGarmentById,
     onOpenWardrobe: () => router.push("/wardrobe"),
     onNavigate: (path) => router.push(path),
-    onExplainLook: () => state.currentOutfit?.rationale,
+    onExplainLook: () => {
+      const o = state.currentOutfit;
+      if (!o) return "No look yet — tell me where you’re going.";
+      return o.stylingGuide || o.rationale;
+    },
     onWeather: () => {
       const w = state.weather;
       if (!w) return "Weather isn’t loaded yet.";

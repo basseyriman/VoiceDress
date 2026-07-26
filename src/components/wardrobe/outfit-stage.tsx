@@ -242,6 +242,46 @@ export function OutfitStage({
             : []) {
             if (s?.name) appliedNames.add(s.name);
           }
+
+          // Layering polish (tuck / open coat / etc.) — face-lock again after
+          if (outfit?.stylingTryOnPrompt) {
+            setStepLabel("Layering the look…");
+            setProgress(55);
+            try {
+              const styleRes = await fetch("/api/tryon/render", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  personImage: current,
+                  stage: "style",
+                  stylingPrompt: outfit.stylingTryOnPrompt,
+                }),
+              });
+              const styleData = await styleRes.json();
+              if (cancelled || myId !== requestId.current) return;
+              if (
+                !failOrBilling(styleData) &&
+                styleData.ok &&
+                styleData.imageUrl &&
+                !styleData.skipped
+              ) {
+                try {
+                  current = await lockFaceIdentity(
+                    identityPhoto,
+                    styleData.imageUrl,
+                    "strong"
+                  );
+                } catch {
+                  current = styleData.imageUrl;
+                }
+                if (cancelled || myId !== requestId.current) return;
+                setWornUrl(current);
+              }
+            } catch {
+              // Keep FASHN result if polish fails
+            }
+            setProgress(58);
+          }
         }
 
         // 2) Shoes / glasses / watch via fal Kontext
@@ -566,9 +606,28 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "Clothes with fal FASHN, then shoes, glasses, and watch with fal Kontext. Tap any piece to change it."
+              ? "We’ll dress you, then finish the layering — tuck, open coat, clean break — so it matches how you should wear it. Tap any piece to change it."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
+
+          {outfit?.stylingSteps && outfit.stylingSteps.length > 0 && (
+            <div className="mt-5 rounded-[1.25rem] border border-line bg-white/[0.02] p-4">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-champagne">
+                How to wear it
+              </p>
+              <ul className="mt-3 space-y-2.5">
+                {outfit.stylingSteps.map((step) => (
+                  <li
+                    key={step}
+                    className="flex gap-2.5 text-sm leading-relaxed text-ivory-muted"
+                  >
+                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-champagne" />
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="mt-6">
             <p className="mb-2 text-[10px] uppercase tracking-[0.22em] text-champagne">

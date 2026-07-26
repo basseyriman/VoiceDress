@@ -53,6 +53,12 @@ export interface Outfit {
   garments?: Garment[];
   weatherSnapshot?: WeatherSnapshot;
   rationale: string;
+  /** How to wear / layer the look — bullets for UI */
+  stylingSteps?: string[];
+  /** Speakable layering instructions */
+  stylingGuide?: string;
+  /** Prompt used to polish try-on drape/tuck/layering */
+  stylingTryOnPrompt?: string;
   createdAt: string;
 }
 

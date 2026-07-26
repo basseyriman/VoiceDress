@@ -11,6 +11,7 @@ import {
   inferCategoryFromSpeech,
   matchGarmentFromSpeech,
 } from "./garment-match";
+import { buildStylingGuide } from "./styling-guide";
 
 export type { OccasionProfile, TasteMemory };
 
@@ -537,13 +538,21 @@ export function suggestOutfit(input: SuggestInput): Outfit {
 
   const colors = selected.flatMap((g) => g.hexColors);
   const name = `${style.charAt(0).toUpperCase() + style.slice(1)} for ${profile.label}`;
+  const styling = buildStylingGuide({
+    garments: selected,
+    weather: input.weather,
+    formality,
+    style,
+    occasion: profile.label,
+  });
   const rationale = buildRationale(
     selected,
     input.weather,
     profile,
     style,
     formality,
-    colors
+    colors,
+    styling.steps
   );
 
   return {
@@ -556,6 +565,9 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     garments: selected,
     weatherSnapshot: input.weather,
     rationale,
+    stylingSteps: styling.steps,
+    stylingGuide: styling.spoken,
+    stylingTryOnPrompt: styling.tryOnPrompt,
     createdAt: new Date().toISOString(),
   };
 }
@@ -566,11 +578,16 @@ function buildRationale(
   profile: OccasionProfile,
   style: string,
   formality: Formality,
-  _colors: string[]
+  _colors: string[],
+  stylingSteps?: string[]
 ) {
   const pieces = garments.map((g) => g.name).join(" + ");
   const why = profile.notes ? ` ${profile.notes}` : "";
-  return `${pieces || "Add pieces to your wardrobe"} — ${formality.replace("_", " ")} for ${profile.label} (${Math.round(weather.tempC)}°C, ${weather.condition} in ${weather.location}).${why} Style: ${style}.`;
+  const how =
+    stylingSteps && stylingSteps.length
+      ? ` How to wear it: ${stylingSteps.slice(0, -1).join(" — ")}.`
+      : "";
+  return `${pieces || "Add pieces to your wardrobe"} — ${formality.replace("_", " ")} for ${profile.label} (${Math.round(weather.tempC)}°C, ${weather.condition} in ${weather.location}).${why} Style: ${style}.${how}`;
 }
 
 function inferOccasionFromSpeech(t: string): string {
