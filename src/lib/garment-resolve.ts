@@ -34,11 +34,15 @@ export async function resolveGarmentImageForFal(
   try {
     if (url.startsWith("http://") || url.startsWith("https://")) {
       const parsed = new URL(url);
-      if (
-        parsed.hostname === "localhost" ||
-        parsed.hostname === "127.0.0.1" ||
-        parsed.hostname === "0.0.0.0"
-      ) {
+      const host = parsed.hostname.toLowerCase();
+      const privateLan =
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host === "0.0.0.0" ||
+        /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+        /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host);
+      if (privateLan && parsed.pathname.startsWith("/garments/")) {
         url = parsed.pathname;
       } else {
         return imageUrl;

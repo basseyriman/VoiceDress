@@ -54,9 +54,9 @@ export default function WardrobePage() {
         ))}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((g) => (
-          <GarmentTile key={g.id} garment={g} />
+          <GarmentTile key={g.id} garment={g} large />
         ))}
       </div>
     </div>

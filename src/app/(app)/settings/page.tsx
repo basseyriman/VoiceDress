@@ -106,6 +106,26 @@ export default function SettingsPage() {
 
       <div className="glass shine-border space-y-3 rounded-[1.75rem] p-7 sm:p-8">
         <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-mist">
+          Install as an app
+        </p>
+        <p className="text-sm leading-relaxed text-mist">
+          VoiceDress works on iPhone and Android from the same site — add it to
+          your home screen for a full-screen app feel.
+        </p>
+        <ul className="space-y-2 text-sm text-ivory-muted">
+          <li>
+            <span className="text-champagne">iPhone:</span> Safari → Share → Add
+            to Home Screen
+          </li>
+          <li>
+            <span className="text-champagne">Android:</span> Chrome → menu →
+            Install app / Add to Home screen
+          </li>
+        </ul>
+      </div>
+
+      <div className="glass shine-border space-y-3 rounded-[1.75rem] p-7 sm:p-8">
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-mist">
           More
         </p>
         <div className="flex flex-col gap-2">

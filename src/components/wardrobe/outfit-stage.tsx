@@ -670,6 +670,7 @@ export function GarmentTile({
   badge,
   missing,
   onClick,
+  large,
 }: {
   garment: Garment;
   active?: boolean;
@@ -677,16 +678,47 @@ export function GarmentTile({
   badge?: string;
   missing?: boolean;
   onClick?: () => void;
+  /** Bigger thumb — wardrobe grid on phones */
+  large?: boolean;
 }) {
   const [broken, setBroken] = useState(false);
+  const [src, setSrc] = useState(() =>
+    normalizeGarmentPublicUrl(garment.imageUrl)
+  );
+  const triedAlt = useRef(false);
   const fallback = garment.hexColors[0] || "#36454F";
+
+  useEffect(() => {
+    setBroken(false);
+    triedAlt.current = false;
+    setSrc(normalizeGarmentPublicUrl(garment.imageUrl));
+  }, [garment.imageUrl]);
+
+  const onImgError = () => {
+    // Prefer sibling extension before falling back to a blank color block
+    if (!triedAlt.current) {
+      triedAlt.current = true;
+      if (/\.jpe?g$/i.test(src)) {
+        setSrc(src.replace(/\.(jpe?g)$/i, ".png"));
+        return;
+      }
+      if (/\.png$/i.test(src)) {
+        setSrc(src.replace(/\.png$/i, ".jpg"));
+        return;
+      }
+    }
+    setBroken(true);
+  };
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "group flex w-full gap-3 rounded-2xl border p-3 text-left transition duration-300",
+        "group flex w-full text-left transition duration-300",
+        large
+          ? "flex-col gap-2.5 rounded-[1.25rem] border p-2.5"
+          : "gap-3 rounded-2xl border p-3",
         missing
           ? "border-champagne/35 bg-champagne/[0.04]"
           : active
@@ -695,20 +727,27 @@ export function GarmentTile({
         dressing && "ring-1 ring-champagne/40"
       )}
     >
-      <div className="relative h-16 w-16 overflow-hidden rounded-xl bg-stone">
+      <div
+        className={cn(
+          "relative overflow-hidden rounded-xl bg-stone",
+          large
+            ? "aspect-[3/4] w-full rounded-[1rem]"
+            : "h-16 w-16 shrink-0"
+        )}
+      >
         {broken ? (
           <div className="h-full w-full" style={{ background: fallback }} />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={garment.imageUrl}
+            src={src}
             alt={garment.name}
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-            onError={() => setBroken(true)}
+            onError={onImgError}
           />
         )}
       </div>
-      <div className="min-w-0 flex-1">
+      <div className={cn("min-w-0 flex-1", large && "px-1 pb-1")}>
         <div className="flex items-start justify-between gap-2">
           <p className="truncate text-sm text-ivory">{garment.name}</p>
           {(badge || missing) && (
@@ -727,9 +766,11 @@ export function GarmentTile({
         <p className="truncate text-xs text-mist">
           {garment.brand} · {garment.category}
         </p>
-        <p className="mt-2 text-[10px] uppercase tracking-wider text-mist">
-          Tap to change
-        </p>
+        {!large && (
+          <p className="mt-2 text-[10px] uppercase tracking-wider text-mist">
+            Tap to change
+          </p>
+        )}
       </div>
     </button>
   );

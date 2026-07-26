@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Outfit } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { PwaRegister } from "@/components/pwa-register";
 
 /** Editorial fashion display — couture, not tech-default */
 const cormorant = Cormorant_Garamond({
@@ -19,18 +20,42 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL || "https://voicedress.com"
+  ),
   title: "VoiceDress — Dress without deciding",
   description:
     "Voice-first wardrobe. Speak the day — we dress the full look on you.",
+  applicationName: "VoiceDress",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "VoiceDress",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   openGraph: {
     title: "VoiceDress",
     description: "Dress without deciding.",
     images: ["/og.png"],
   },
   icons: {
-    icon: "/logo.svg",
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
+  manifest: "/manifest.webmanifest",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#121110",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -46,6 +71,7 @@ export default function RootLayout({
     >
       <body className="min-h-full antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
+        <PwaRegister />
       </body>
     </html>
   );

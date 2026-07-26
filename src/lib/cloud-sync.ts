@@ -22,6 +22,7 @@ import type {
   TasteMemory,
   UserProfile,
 } from "@/lib/types";
+import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
 
 function assertCloud() {
   if (!isFirebaseConfigured) {
@@ -50,13 +51,9 @@ export async function uploadDataUrl(
 ): Promise<string> {
   if (!image) return image;
   if (image.startsWith("http://") || image.startsWith("https://")) return image;
-  if (image.startsWith("/")) {
-    // Public path — resolve against origin for try-on; keep as-is for Firestore
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}${image}`;
-    }
-    return image;
-  }
+  // Keep site-relative paths relative — never bake localhost into Firestore
+  // (phones cannot load http://localhost:3000/garments/...).
+  if (image.startsWith("/")) return image;
   if (!image.startsWith("data:")) return image;
 
   const { storage } = assertCloud();
@@ -136,6 +133,8 @@ export async function upsertGarment(
       `users/${uid}/garments/${garment.id}.jpg`,
       imageUrl
     );
+  } else if (imageUrl) {
+    imageUrl = normalizeGarmentPublicUrl(imageUrl);
   }
   // Keep /garments/* as relative paths — fal resolves them server-side as base64.
   // Never rewrite to localhost; fal cannot fetch your machine.

@@ -241,6 +241,22 @@ export const useAetherStore = create<AetherState>()(
           let wardrobe = data.wardrobe;
           if (!wardrobe.length) {
             wardrobe = await upsertGarments(uid, seedWardrobe(uid));
+          } else {
+            // Repair localhost / LAN absolute garment URLs so phones can load them
+            const { normalizeGarmentPublicUrl } = await import(
+              "@/lib/garment-url"
+            );
+            const repaired = wardrobe.map((g) => {
+              const next = normalizeGarmentPublicUrl(g.imageUrl || "");
+              return next !== g.imageUrl ? { ...g, imageUrl: next } : g;
+            });
+            const dirty = repaired.filter(
+              (g, i) => g.imageUrl !== wardrobe[i]?.imageUrl
+            );
+            wardrobe = repaired;
+            if (dirty.length) {
+              void upsertGarments(uid, dirty).catch(() => undefined);
+            }
           }
           // Never restore a saved look on login — wait until the user says
           // where they're going (voice / occasion) before dressing them.
