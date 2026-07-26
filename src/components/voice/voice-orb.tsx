@@ -6,6 +6,7 @@ import { Mic, Square, Sparkles } from "lucide-react";
 import {
   createSpeechRecognizer,
   handleVoiceCommandAsync,
+  stopSpeaking,
 } from "@/lib/voice";
 import { buildVoiceHandlers } from "@/lib/voice-handlers";
 import { useAetherStore } from "@/store/aether-store";
@@ -81,14 +82,22 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
   const start = () => {
     const rec = recognitionRef.current;
     if (!rec) return;
+    stopSpeaking();
     setInterim("");
     setPhase("listening");
     setVoiceListening(true);
     try {
-      rec.start();
+      rec.stop();
     } catch {
-      // already started
+      // not running
     }
+    window.setTimeout(() => {
+      try {
+        rec.start();
+      } catch {
+        // already started
+      }
+    }, 120);
   };
 
   const stop = () => {

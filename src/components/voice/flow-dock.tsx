@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   createSpeechRecognizer,
   handleVoiceCommandAsync,
+  stopSpeaking,
 } from "@/lib/voice";
 import { buildVoiceHandlers } from "@/lib/voice-handlers";
 import { useAetherStore } from "@/store/aether-store";
@@ -87,6 +88,7 @@ export function FlowDock() {
       setListening(false);
       return;
     }
+    stopSpeaking();
     setHint("Listening…");
     try {
       rec.stop();

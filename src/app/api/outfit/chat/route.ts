@@ -118,7 +118,8 @@ ${wardrobeLines || "(empty)"}
 User said: "${transcript}"
 
 Rules:
-- Answer their exact question (fabric weight vs weather, accessories, shoes, belt, socks/stockings, confidence, layering).
+- Answer their exact question (fabric weight vs weather, tuck/untuck, accessories, shoes, belt, socks/stockings, confidence, layering).
+- If they ask whether to tuck a shirt, give a clear yes/no for THIS look and occasion, then one short why.
 - If they ask for something not in the wardrobe (e.g. stockings) say so honestly, then advise what to do with what they HAVE (bare ankle, no belt, etc.).
 - If a change would help (lighter top, different shoes), set actions to swap_piece or pick_garment with a real wardrobe id/query — otherwise tool "none".
 - Do NOT dump raw weather stats as the whole answer. Weave weather into styling advice.
@@ -178,6 +179,18 @@ function fallbackChat(
       return `At ${temp} degrees that ${top.name} is a smart call — the weight will feel right, not too thick.`;
     }
     return `The ${top.name} works with this look${temp != null ? ` for about ${temp} degrees` : ""} — if it feels heavy on you, we can swap the top for something lighter from your wardrobe.`;
+  }
+
+  if (/\b(tuck|untuck|shirt)\b/.test(t)) {
+    const shirt = garments.find(
+      (g) =>
+        g.category === "top" ||
+        /shirt|oxford|blouse/i.test(g.name)
+    );
+    if (shirt) {
+      return `Yes — tuck the ${shirt.name} neatly into the trousers for a cleaner line, leave a soft break at the waist, and keep the rest of the look as styled.`;
+    }
+    return "Tuck the top cleanly for this look — it keeps the silhouette sharp. Untuck only if you want it more casual.";
   }
 
   if (/\b(belt|sock|stocking|tights|tie)\b/.test(t)) {

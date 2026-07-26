@@ -4,18 +4,36 @@ import {
   isHighConfidenceVoiceIntent,
   isOutfitConversation,
   parseVoiceIntent,
+  shouldPreferOutfitChat,
 } from "@/lib/outfit-engine";
 import type { Garment } from "@/lib/types";
 
 export type SpeakFn = (text: string) => void;
 
+/** Bumped whenever the user barges in (mic) so late replies don’t speak over them. */
+let speakGeneration = 0;
+
+export function getSpeakGeneration() {
+  return speakGeneration;
+}
+
+/** Stop TTS immediately — call when the user taps Speak. */
+export function stopSpeaking() {
+  speakGeneration += 1;
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+}
+
 export function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const gen = speakGeneration;
   window.speechSynthesis.cancel();
   const utter = new SpeechSynthesisUtterance(text);
   utter.rate = 0.96;
   utter.pitch = 1;
   utter.lang = "en-GB";
+  // If user tapped Speak mid-flight, don’t start a new utterance
+  if (gen !== speakGeneration) return;
   window.speechSynthesis.speak(utter);
 }
 
@@ -87,15 +105,26 @@ export async function handleVoiceCommandAsync(
   transcript: string,
   actions: VoiceActionHandlers
 ) {
+  const genAtStart = getSpeakGeneration();
   const ctx = actions.getContext?.() || {};
   const hasLook = Array.isArray(ctx.outfit) && ctx.outfit.length > 0;
-  const chatting = isOutfitConversation(transcript) && hasLook;
+  const chatting =
+    shouldPreferOutfitChat(transcript, hasLook) ||
+    (isOutfitConversation(transcript) && hasLook);
+
+  const finish = (reply: string, meta: Record<string, unknown>) => {
+    // User tapped Speak again while we were thinking — don’t talk over them
+    if (genAtStart !== getSpeakGeneration()) {
+      return { reply, ...meta, interrupted: true as const };
+    }
+    speak(reply);
+    return { reply, ...meta };
+  };
 
   // Follow-ups about the suggested look → stylist chat (not weather dump / not re-suggest)
   if (chatting) {
     const reply = await runOutfitChat(transcript, actions);
-    speak(reply);
-    return { reply, source: "chat" as const };
+    return finish(reply, { source: "chat" as const });
   }
 
   const useLocal = isHighConfidenceVoiceIntent(transcript);
@@ -104,12 +133,10 @@ export async function handleVoiceCommandAsync(
     const parsed = parseVoiceIntent(transcript);
     if (parsed.intent === "chat_look" && hasLook) {
       const reply = await runOutfitChat(transcript, actions);
-      speak(reply);
-      return { reply, source: "chat" as const };
+      return finish(reply, { source: "chat" as const });
     }
     const reply = await applyLocalIntent(parsed, actions);
-    speak(reply);
-    return { reply, source: "keyword" as const, parsed };
+    return finish(reply, { source: "keyword" as const, parsed });
   }
 
   try {
@@ -124,38 +151,43 @@ export async function handleVoiceCommandAsync(
     if (!res.ok) {
       if (hasLook) {
         const reply = await runOutfitChat(transcript, actions);
-        speak(reply);
-        return { reply, source: "chat" as const };
+        return finish(reply, { source: "chat" as const });
       }
       const parsed = parseVoiceIntent(transcript);
       const reply = await applyLocalIntent(parsed, actions);
-      speak(reply);
-      return { reply, source: "keyword" as const, parsed };
+      return finish(reply, { source: "keyword" as const, parsed });
     }
     const data = await res.json();
-    // If planner decided it's just weather but user was clearly chatting the look, prefer chat
     const onlyWeather =
       Array.isArray(data.actions) &&
       data.actions.length === 1 &&
       data.actions[0]?.tool === "check_weather";
-    if (onlyWeather && hasLook && isOutfitConversation(transcript)) {
+    if (
+      onlyWeather &&
+      hasLook &&
+      (isOutfitConversation(transcript) ||
+        shouldPreferOutfitChat(transcript, hasLook))
+    ) {
       const reply = await runOutfitChat(transcript, actions);
-      speak(reply);
-      return { reply, source: "chat" as const };
+      return finish(reply, { source: "chat" as const });
+    }
+    if (genAtStart !== getSpeakGeneration()) {
+      return { reply: data.reply, source: data.source || "llm", interrupted: true };
     }
     const reply = await applyActions(data.actions || [], actions, data.reply);
-    speak(reply);
-    return { reply, source: data.source || "llm", actions: data.actions };
+    return finish(reply, { source: data.source || "llm", actions: data.actions });
   } catch {
-    if (hasLook && isOutfitConversation(transcript)) {
+    if (
+      hasLook &&
+      (isOutfitConversation(transcript) ||
+        shouldPreferOutfitChat(transcript, hasLook))
+    ) {
       const reply = await runOutfitChat(transcript, actions);
-      speak(reply);
-      return { reply, source: "chat" as const };
+      return finish(reply, { source: "chat" as const });
     }
     const parsed = parseVoiceIntent(transcript);
     const reply = await applyLocalIntent(parsed, actions);
-    speak(reply);
-    return { reply, source: "keyword" as const, parsed };
+    return finish(reply, { source: "keyword" as const, parsed });
   }
 }
 

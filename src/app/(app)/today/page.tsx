@@ -7,6 +7,7 @@ import {
   createSpeechRecognizer,
   handleVoiceCommandAsync,
   speak,
+  stopSpeaking,
 } from "@/lib/voice";
 import { buildVoiceHandlers } from "@/lib/voice-handlers";
 import { VoiceOrb } from "@/components/voice/voice-orb";
@@ -130,6 +131,9 @@ export default function TodayPage() {
   const startListen = () => {
     const rec = recognitionRef.current;
     if (!rec || !supported) return;
+    // Barge-in: stop the AI mid-sentence and listen to the new ask
+    stopSpeaking();
+    setComposing(false);
     setInterim("");
     try {
       rec.stop();

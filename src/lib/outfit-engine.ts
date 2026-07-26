@@ -819,21 +819,43 @@ export function isOutfitConversation(transcript: string): boolean {
     return false;
   }
   if (wantsOpenWardrobe(t)) return false;
-  if (
-    /\b(what('?s| is) the weather|how('?s| is) the weather|weather (today|like|outside)|check (the )?weather)\b/.test(
-      t
-    ) ||
-    /^\s*weather\s*\.?$/.test(t)
-  ) {
-    return false;
-  }
+  if (isWeatherOnlyAsk(t)) return false;
 
   return (
     /\?/.test(t) ||
-    /^(why|how|what|which|is|are|should|can|do|does|will|would|am i)\b/.test(t) ||
-    /\b(too (thick|thin|hot|cold|warm|much|dressy|casual)|thick|heavy|light enough|for the weather|what about|should i|do i (need|wear|put)|belt|sock|stockings?|tights|tie|confident|sure about|keep the|swap the|change the|instead of)\b/.test(
+    /^(why|how|what|which|is|are|should|can|do|does|will|would|am i|i('?m| am))\b/.test(
+      t
+    ) ||
+    /\b(too (thick|thin|hot|cold|warm|much|dressy|casual)|thick|heavy|light enough|for the weather|what about|should i|do i (need|wear|put|tuck)|am i (tuck|wearing)|tuck(ing|ed)?|untuck|shirt|belt|sock|stockings?|tights|tie|confident|sure about|keep the|swap the|change the|instead of|how (do|should|to) (i )?wear|sleeve|button|layer)\b/.test(
       t
     )
+  );
+}
+
+/**
+ * When a look is already on screen, prefer stylist chat for how-to-wear follow-ups
+ * (tuck, belt, fabric) so we never dump weather or re-roll the outfit.
+ */
+export function shouldPreferOutfitChat(
+  transcript: string,
+  hasLook: boolean
+): boolean {
+  if (!hasLook) return false;
+  const t = transcript.toLowerCase().trim();
+  if (!t) return false;
+  if (isWeatherOnlyAsk(t)) return false;
+  if (wantsOpenWardrobe(t)) return false;
+  if (
+    wantsOutfitSuggestion(t) &&
+    /\b(going|heading|off to|wedding|dinner|interview|meeting|drinks?|birthday)\b/.test(
+      t
+    )
+  ) {
+    return false;
+  }
+  if (isOutfitConversation(t)) return true;
+  return /\b(tuck|untuck|shirt|oxford|knit|rib|trouser|shoe|boot|loafer|blazer|coat|belt|sock|stocking|sleeve|hem|button|layer|how to wear|wear it|this look|the look)\b/.test(
+    t
   );
 }
 
