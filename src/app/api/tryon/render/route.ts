@@ -87,9 +87,9 @@ async function fashnTryOn(opts: {
   garmentImage: string;
   category: "tops" | "bottoms" | "one-pieces";
 }): Promise<TryResult> {
-  // Balanced is the speed/quality sweet spot. Quality is too slow for a
-  // multi-piece look; performance looks pasted-on.
-  const call = async (mode: "balanced" | "performance") => {
+  // Quality on apparel only (2 garments max) — this is the fal path that
+  // keeps your body and swaps clothes. Extra Kontext passes were the problem.
+  const call = async (mode: "quality" | "balanced" | "performance") => {
     const res = await fetch("https://fal.run/fal-ai/fashn/tryon/v1.6", {
       method: "POST",
       headers: {
@@ -105,13 +105,15 @@ async function fashnTryOn(opts: {
         moderation_level: "permissive",
         num_samples: 1,
         segmentation_free: true,
-        output_format: "jpeg",
+        output_format: "png",
       }),
     });
     return parseFalImages(res);
   };
-  const primary = await call("balanced");
+  const primary = await call("quality");
   if (primary.ok) return primary;
+  const mid = await call("balanced");
+  if (mid.ok) return mid;
   return call("performance");
 }
 

@@ -1,13 +1,17 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * Promise: your real photo, your real face — clothes and shoes change on you.
+ * What fal FASHN actually does:
+ *   Your photo in → same person out, wearing the garment.
+ *   Categories: tops, bottoms, one-pieces only.
  *
- * 1. Apparel → fal FASHN on your photo (best identity keep).
- * 2. Shoes → one Kontext pass.
- * 3. Glasses/watch stay in the suggested look list; we do NOT paste product
- *    plates onto the face/wrist (that looked like stickers / grey boxes).
- * 4. If a step fails, keep the already-dressed result and continue.
+ * What FASHN does NOT do:
+ *   Shoes, glasses, watches. Those need other models — and stacking
+ *   them on top of FASHN was rewriting faces and looking broken.
+ *
+ * Product rule:
+ *   Dress clothes with FASHN. Keep the result. Show shoes/accessories
+ *   as part of the suggested look, not as failed “pending” photo edits.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [
@@ -27,6 +31,7 @@ export function isFinishTryOnCategory(category: string) {
   return (TRYON_FINISH_CATEGORIES as readonly string[]).includes(category);
 }
 
+/** Full suggested look for the UI (includes shoes + accessories). */
 export function lookPiecesForTryOn<
   T extends { category: string; name?: string; tags?: string[] },
 >(garments: T[]) {
@@ -54,6 +59,7 @@ export function lookPiecesForTryOn<
   ];
 }
 
+/** Only pieces fal FASHN can dress onto your body. */
 export function apparelForTryOn<T extends { category: string }>(garments: T[]) {
   const order = ["top", "dress", "bottom", "outerwear"] as const;
   return order
@@ -69,5 +75,5 @@ export function finishingPieces<T extends { category: string }>(garments: T[]) {
 }
 
 export function isBodyTryOnCategory(category: string) {
-  return isApparelTryOnCategory(category) || isFinishTryOnCategory(category);
+  return isApparelTryOnCategory(category);
 }

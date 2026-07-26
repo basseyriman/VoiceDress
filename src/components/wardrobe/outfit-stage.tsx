@@ -6,7 +6,7 @@ import type { Garment, Outfit } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { AVATAR_IDB_REF } from "@/lib/avatar-storage";
 import { useAetherStore } from "@/store/aether-store";
-import { lookPiecesForTryOn, isFinishTryOnCategory } from "@/lib/tryon-architecture";
+import { lookPiecesForTryOn, apparelForTryOn } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
 import { letterboxForTryOn } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
@@ -34,9 +34,13 @@ export function OutfitStage({
       imageUrl: normalizeGarmentPublicUrl(g.imageUrl),
     }));
   }, [garments]);
-  const finishPieces = useMemo(
-    () => lookPieces.filter((g) => isFinishTryOnCategory(g.category)),
-    [lookPieces]
+  const apparelPieces = useMemo(() => apparelForTryOn(lookPieces), [lookPieces]);
+  const styledExtras = useMemo(
+    () =>
+      lookPieces.filter(
+        (g) => !apparelPieces.some((a) => a.id === g.id)
+      ),
+    [lookPieces, apparelPieces]
   );
 
   const [resolvedAvatar, setResolvedAvatar] = useState<string | undefined>();
@@ -150,21 +154,17 @@ export function OutfitStage({
           tags: piece.tags,
         });
 
-        const apparelPieces = lookPieces.filter(
-          (p) => !isFinishTryOnCategory(p.category)
-        );
-        const shoePieces = finishPieces.filter((p) => p.category === "shoes");
         const appliedNames = new Set<string>();
 
-        // Clothes via AI — keeps your real face from the photo
+        // fal FASHN only: keep your body, change the clothes. Nothing else on top.
         if (apparelPieces.length) {
           setActivePieceId(apparelPieces[0]?.id ?? null);
           setStepLabel("Dressing you…");
           setProgress(12);
 
           const tick = window.setInterval(() => {
-            setProgress((p) => (p < 55 ? p + 3 : p));
-          }, 700);
+            setProgress((p) => (p < 88 ? p + 2.5 : p));
+          }, 800);
 
           const apparelRes = await fetch("/api/tryon/render", {
             method: "POST",
@@ -172,7 +172,7 @@ export function OutfitStage({
             body: JSON.stringify({
               personImage: current,
               stage: "apparel",
-              maxPieces: 6,
+              maxPieces: 2,
               garments: apparelPieces.map(toPayload),
             }),
           });
@@ -199,8 +199,6 @@ export function OutfitStage({
           current = apparelData.imageUrl;
           setWornUrl(current);
           setKeyConfigured(true);
-          setProgress(62);
-          setStepLabel("Clothes on you");
           for (const s of Array.isArray(apparelData.steps)
             ? apparelData.steps
             : []) {
@@ -208,57 +206,15 @@ export function OutfitStage({
           }
         }
 
-        // Shoes once — no sticker overlays, no face paste
-        for (const piece of shoePieces) {
-          setActivePieceId(piece.id);
-          setStepLabel(`Adding ${piece.name}…`);
-          setProgress(78);
-
-          const finishRes = await fetch("/api/tryon/render", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              personImage: current,
-              stage: "finish",
-              garments: [toPayload(piece)],
-            }),
-          });
-          const finishData = await finishRes.json();
-          if (cancelled || myId !== requestId.current) return;
-          if (failOrBilling(finishData)) return;
-
-          if (
-            finishData.ok &&
-            finishData.imageUrl &&
-            Array.isArray(finishData.steps) &&
-            finishData.steps.length > 0
-          ) {
-            current = finishData.imageUrl;
-            setWornUrl(current);
-            appliedNames.add(piece.name);
-            setKeyConfigured(true);
-          }
-        }
-
-        // Glasses/watch stay in the look list but are not sticker-pasted onto the photo.
-        // (Product plates on the face looked broken — we won’t do that.)
-
-        const missedPieces = lookPieces.filter((p) => !appliedNames.has(p.name));
-        const missedNames = missedPieces.map((p) => p.name);
-        setMissingIds(missedPieces.map((p) => p.id));
-
-        if (missedNames.length) {
-          setNotice(
-            `${missedNames.join(" · ")} in this look — on you when we add accessory try-on.`
-          );
-        }
+        // Extras (shoes / glasses / watch) stay in the look — not forced onto the photo.
+        // Marking them “pending” made the product feel broken.
+        setMissingIds([]);
+        setNotice("");
 
         if (myId === requestId.current) {
           setActivePieceId(null);
           setStepLabel(
-            shoePieces.length || apparelPieces.length
-              ? "You’re dressed"
-              : "Ready"
+            appliedNames.size ? "You’re dressed" : "Ready"
           );
           setProgress(100);
           setDressing(false);
@@ -275,7 +231,7 @@ export function OutfitStage({
     return () => {
       cancelled = true;
     };
-  }, [hasAvatar, displayAvatar, lookKey, retryNonce]);
+  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces]);
 
   const alternatives = swapFor
     ? wardrobe.filter(
@@ -322,7 +278,7 @@ export function OutfitStage({
                 Your look
               </p>
               <p className="text-xs text-mist">
-                Your photo. Your face. This outfit on you.
+                Your photo — clothes changed, you stay you
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -408,14 +364,14 @@ export function OutfitStage({
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {lookPieces.map((g, i) => (
+                    {apparelPieces.map((g, i) => (
                       <div
                         key={g.id}
                         className={cn(
                           "rounded-full border px-2 py-1 text-[10px]",
                           activePieceId === g.id
                             ? "border-champagne/50 bg-champagne/15 text-champagne"
-                            : progress >= ((i + 1) / lookPieces.length) * 100
+                            : progress >= ((i + 1) / Math.max(apparelPieces.length, 1)) * 90
                               ? "border-champagne/30 text-ivory"
                               : "border-white/10 text-mist"
                         )}
@@ -517,7 +473,8 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "Clothes and shoes dressed onto your photo. Tap any piece to change it."
+            {outfit
+              ? "fal dresses the clothes onto your photo. Shoes, glasses, and watch stay in the look below."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
 
@@ -532,7 +489,11 @@ export function OutfitStage({
                   garment={g}
                   active={swapFor === g.category || activePieceId === g.id}
                   dressing={dressing && activePieceId === g.id}
-                  missing={missingIds.includes(g.id)}
+                  badge={
+                    styledExtras.some((e) => e.id === g.id)
+                      ? "In look"
+                      : undefined
+                  }
                   onClick={() =>
                     setSwapFor((c) => (c === g.category ? null : g.category))
                   }
@@ -598,9 +559,9 @@ export function OutfitStage({
               Dressing the full look onto you — one piece at a time.
             </p>
           )}
-          {!generating && !dressing && wornUrl && outfit && missingIds.length === 0 && (
+          {!generating && !dressing && wornUrl && outfit && (
             <p className="mt-4 text-xs text-champagne/80">
-              Look complete. You’re ready to go.
+              Clothes on you. You’re ready to go.
             </p>
           )}
         </div>
