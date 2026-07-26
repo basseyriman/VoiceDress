@@ -40,6 +40,7 @@ import {
 } from "@/lib/avatar-storage";
 import {
   bootstrapUserCloud,
+  deleteGarmentCloud,
   hydrateUserFromCloud,
   saveCurrentOutfit,
   saveUserProfile,
@@ -113,6 +114,7 @@ interface AetherState {
   markShopifyConnected: (shop: string, itemCount?: number) => void;
   disconnectStore: (source: CommerceSource) => void;
   addGarments: (items: Garment[]) => void;
+  removeGarment: (garmentId: string) => Promise<void>;
   setVoiceListening: (v: boolean) => void;
   setTranscript: (t: string) => void;
   setSubscription: (status: UserProfile["subscriptionStatus"]) => void;
@@ -792,6 +794,38 @@ export const useAetherStore = create<AetherState>()(
               });
             })
             .catch(() => undefined);
+        }
+      },
+      removeGarment: async (garmentId) => {
+        const { wardrobe, user, currentOutfit, taste } = get();
+        const piece = wardrobe.find((g) => g.id === garmentId);
+        if (!piece) return;
+
+        set((state) => {
+          const nextWardrobe = state.wardrobe.filter((g) => g.id !== garmentId);
+          const stillInLook = state.currentOutfit?.garmentIds?.includes(garmentId);
+          return {
+            wardrobe: nextWardrobe,
+            currentOutfit: stillInLook ? null : state.currentOutfit,
+            taste: {
+              ...state.taste,
+              rejectedIds: state.taste.rejectedIds.filter((id) => id !== garmentId),
+            },
+          };
+        });
+
+        if (isCloudUid(user?.uid) && user) {
+          try {
+            await deleteGarmentCloud(user.uid, piece);
+          } catch {
+            // Keep local removal even if cloud delete fails
+          }
+          if (currentOutfit?.garmentIds?.includes(garmentId)) {
+            persistOutfitAndTaste(user.uid, null, {
+              ...taste,
+              rejectedIds: taste.rejectedIds.filter((id) => id !== garmentId),
+            });
+          }
         }
       },
       setVoiceListening: (v) => set({ voiceListening: v }),

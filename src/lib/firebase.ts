@@ -26,7 +26,7 @@ import {
   orderBy,
   serverTimestamp,
 } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -95,5 +95,6 @@ export {
   ref,
   uploadBytes,
   getDownloadURL,
+  deleteObject,
 };
 export type { User };

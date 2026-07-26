@@ -14,6 +14,8 @@ import {
   ref,
   serverTimestamp,
   setDoc,
+  deleteDoc,
+  deleteObject,
   uploadBytes,
 } from "@/lib/firebase";
 import type {
@@ -163,6 +165,36 @@ export async function upsertGarments(
     out.push(await upsertGarment(uid, item));
   }
   return out;
+}
+
+/** Remove a garment from Firestore + best-effort Storage cleanup. */
+export async function deleteGarmentCloud(
+  uid: string,
+  garment: Garment
+): Promise<void> {
+  const { db, storage } = assertCloud();
+  await deleteDoc(doc(db, "users", uid, "garments", garment.id));
+
+  const candidates = [
+    `users/${uid}/garments/${garment.id}.jpg`,
+    `users/${uid}/garments/${garment.id}.png`,
+  ];
+  for (const path of candidates) {
+    try {
+      await deleteObject(ref(storage, path));
+    } catch {
+      // File may not exist for seed / relative / external URLs
+    }
+  }
+
+  // If imageUrl is a Firebase Storage download URL, try deleting by URL ref
+  if (garment.imageUrl?.includes("firebasestorage.googleapis.com")) {
+    try {
+      await deleteObject(ref(storage, garment.imageUrl));
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export async function saveCurrentOutfit(
