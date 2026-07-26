@@ -107,7 +107,7 @@ export function FlowDock() {
   };
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center px-4 md:bottom-8">
+    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-[90] flex flex-col items-center px-4 md:bottom-8">
       <AnimatePresence>
         {hint && (
           <motion.div

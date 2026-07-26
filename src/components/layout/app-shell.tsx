@@ -15,7 +15,6 @@ import { useAetherStore } from "@/store/aether-store";
 import { cn } from "@/lib/utils";
 import { PageTransition } from "@/components/layout/page-transition";
 import { FlowDock } from "@/components/voice/flow-dock";
-import { motion } from "framer-motion";
 
 const nav = [
   { href: "/today", label: "Today", icon: Sparkles },
@@ -32,12 +31,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const signOutLocal = useAetherStore((s) => s.signOutLocal);
 
   return (
-    <div className="min-h-screen pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-16">
-      <header className="sticky top-0 z-50 border-b border-line/50 bg-ink/70 backdrop-blur-2xl pt-[env(safe-area-inset-top)]">
+    <div className="relative min-h-screen pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-16">
+      <header className="sticky top-0 z-[100] isolate border-b border-line/50 bg-ink/80 backdrop-blur-2xl pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-8">
             <Logo />
-            <nav className="hidden items-center gap-1 md:flex">
+            <nav className="relative z-[101] hidden items-center gap-1 md:flex">
               {nav.map((item) => {
                 const Icon = item.icon;
                 const active = pathname.startsWith(item.href);
@@ -45,26 +44,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch
                     className={cn(
-                      "relative inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs tracking-wide transition-colors",
-                      active ? "text-champagne" : "text-mist hover:text-ivory"
+                      "relative z-[101] inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-xs tracking-wide transition-colors",
+                      active
+                        ? "bg-white/[0.07] text-champagne"
+                        : "text-mist hover:bg-white/[0.04] hover:text-ivory"
                     )}
                   >
-                    {active && (
-                      <motion.span
-                        layoutId="nav-pill"
-                        className="absolute inset-0 rounded-full bg-white/[0.07]"
-                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                      />
-                    )}
-                    <Icon className="relative z-10 h-3.5 w-3.5" />
-                    <span className="relative z-10">{item.label}</span>
+                    <Icon className="h-3.5 w-3.5" />
+                    <span>{item.label}</span>
                   </Link>
                 );
               })}
             </nav>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="relative z-[101] flex items-center gap-3">
             {weather && (
               <div className="hidden items-center gap-2 rounded-full border border-line px-3 py-1.5 text-xs text-ivory-muted sm:flex">
                 <CloudSun className="h-3.5 w-3.5 text-champagne" />
@@ -72,6 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <button
+              type="button"
               onClick={() => {
                 void signOutLocal().then(() => router.push("/login"));
               }}
@@ -84,13 +80,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <main className="relative z-0 mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <PageTransition>{children}</PageTransition>
       </main>
 
       <FlowDock />
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-line/50 bg-ink/90 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-[100] isolate border-t border-line/50 bg-ink/95 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)] md:hidden">
         <div className="flex justify-around px-1.5 py-2">
           {nav.map((item) => {
             const Icon = item.icon;
@@ -99,8 +95,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
                 className={cn(
-                  "flex min-h-[3.25rem] min-w-[4.5rem] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] tracking-wide transition",
+                  "relative z-[101] flex min-h-[3.25rem] min-w-[4.5rem] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] tracking-wide transition",
                   active
                     ? "bg-champagne/10 text-champagne"
                     : "text-mist hover:text-ivory"

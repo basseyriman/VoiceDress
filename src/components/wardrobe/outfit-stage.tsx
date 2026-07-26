@@ -698,10 +698,9 @@ export function OutfitStage({
 
   return (
     <motion.div
-      layout
       className="glass shine-border relative overflow-hidden rounded-[2rem] p-5 sm:p-8"
     >
-      <div className="absolute inset-0 bg-[radial-gradient(900px_400px_at_15%_0%,rgba(201,168,124,0.12),transparent_55%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_400px_at_15%_0%,rgba(201,168,124,0.12),transparent_55%)]" />
 
       <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_1.05fr]">
         <div className="relative mx-auto w-full max-w-md">
