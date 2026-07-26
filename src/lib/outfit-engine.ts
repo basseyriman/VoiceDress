@@ -224,6 +224,30 @@ function tastePenalty(g: Garment, taste?: TasteMemory): number {
   return 0;
 }
 
+/**
+ * Google-stylist style recency: hard-suppress last major garments,
+ * softer suppress for shoes/accessories so looks rotate.
+ */
+function recencyPenalty(g: Garment, taste?: TasteMemory): number {
+  const last = taste?.wearLog?.[0];
+  if (!last?.garmentIds?.length) return 0;
+  if (!last.garmentIds.includes(g.id)) return 0;
+
+  const hours =
+    (Date.now() - new Date(last.at).getTime()) / (1000 * 60 * 60);
+  // Only apply “yesterday / last look” rules within ~36h
+  if (Number.isFinite(hours) && hours > 36) return 0;
+
+  if (g.category === "top" || g.category === "bottom" || g.category === "dress") {
+    return -14; // near hard-block; pickBest still falls back if wardrobe is tiny
+  }
+  if (g.category === "shoes" || g.category === "accessory") {
+    return -4;
+  }
+  if (g.category === "outerwear") return -6;
+  return -3;
+}
+
 /** Soft demotion so re-asks / weather what-ifs don't freeze on the same look. */
 function freshLookPenalty(
   g: Garment,
@@ -232,6 +256,67 @@ function freshLookPenalty(
 ): number {
   if (!demoteIds?.length) return 0;
   return demoteIds.includes(g.id) ? demotePenalty : 0;
+}
+
+type ToneBand = "light" | "mid" | "dark";
+
+function toneBand(g: Garment): ToneBand {
+  const lum = luminance(g.hexColors[0] || "#888");
+  const blob = `${g.colors.join(" ")} ${g.name}`.toLowerCase();
+  if (
+    lum >= 180 ||
+    /white|ivory|cream|stone|beige|khaki|sand|champagne/.test(blob)
+  ) {
+    return "light";
+  }
+  if (
+    lum <= 90 ||
+    /black|charcoal|navy|espresso|ink|indigo|dark/.test(blob)
+  ) {
+    return "dark";
+  }
+  return "mid";
+}
+
+/** Light+light / dark+dark preferred; washed mid-clash demoted. */
+function toneHarmony(top: Garment, bottom: Garment): number {
+  const a = toneBand(top);
+  const b = toneBand(bottom);
+  if (a === "light" && b === "light") return 2.5;
+  if (a === "dark" && b === "dark") return 2.2;
+  if (a === "light" && b === "dark") return 1.2;
+  if (a === "dark" && b === "light") return 0.8;
+  if (a === "mid" || b === "mid") return 0.6;
+  return 0.3;
+}
+
+type MetalTone = "gold" | "silver" | "rose" | "none";
+
+function metalTone(g: Garment): MetalTone {
+  const blob =
+    `${g.name} ${g.colors.join(" ")} ${g.tags.join(" ")} ${g.fabric || ""}`.toLowerCase();
+  if (/rose\s*gold|rosegold|pink gold/.test(blob)) return "rose";
+  if (/gold|cognac|brass|champagne|gilt/.test(blob)) return "gold";
+  if (/silver|steel|chrome|platinum|white gold|rhodium/.test(blob))
+    return "silver";
+  const hex = (g.hexColors[0] || "").toLowerCase();
+  if (/^#(c9a87c|d4af37|b76e79|c4a484)/.test(hex)) return "gold";
+  if (/^#(c0c0c0|a8a8a8|e8e8e8|b0b0b0)/.test(hex)) return "silver";
+  return "none";
+}
+
+/** Old-money rule: accessory metals should agree (watch, frames, buckle). */
+function metalSyncScore(candidate: Garment, already: Garment[]): number {
+  if (candidate.category !== "accessory") return 0;
+  const mine = metalTone(candidate);
+  if (mine === "none") return 0;
+  const others = already
+    .filter((g) => g.category === "accessory")
+    .map(metalTone)
+    .filter((m) => m !== "none");
+  if (!others.length) return 0.5;
+  if (others.every((m) => m === mine)) return 2.5;
+  return -5;
 }
 
 function scoreGarment(
@@ -246,7 +331,7 @@ function scoreGarment(
   demotePenalty = -6,
   stylePrefs?: string[]
 ) {
-  return (
+  let score =
     weatherFit(g, weather) +
     formalityFit(g, formality) +
     scoreColorHarmony(g.hexColors, style, stylePrefs) +
@@ -254,8 +339,20 @@ function scoreGarment(
     (profile ? profileFit(g, profile) : 0) +
     styleDnaFit(g, stylePrefs) +
     tastePenalty(g, taste) +
-    freshLookPenalty(g, demoteIds, demotePenalty)
-  );
+    recencyPenalty(g, taste) +
+    freshLookPenalty(g, demoteIds, demotePenalty) +
+    metalSyncScore(g, already);
+
+  const top = already.find((x) => x.category === "top");
+  if (top && g.category === "bottom") {
+    score += toneHarmony(top, g);
+  }
+  const bottom = already.find((x) => x.category === "bottom");
+  if (bottom && g.category === "top") {
+    score += toneHarmony(g, bottom);
+  }
+
+  return score;
 }
 
 function pickBest(
@@ -535,6 +632,26 @@ export function suggestOutfit(input: SuggestInput): Outfit {
   const exclude = new Set([...(input.excludeIds || [])]);
   const demotePenalty = input.demotePenalty ?? -6;
   const demote = input.demoteIds;
+
+  // Hard-block yesterday’s major pieces when the wardrobe has alternatives
+  if (!input.forceGarmentId && !input.swapCategory) {
+    const lastIds = new Set(input.taste?.wearLog?.[0]?.garmentIds || []);
+    const lastAt = input.taste?.wearLog?.[0]?.at;
+    const hours = lastAt
+      ? (Date.now() - new Date(lastAt).getTime()) / (1000 * 60 * 60)
+      : 999;
+    if (lastIds.size && hours <= 36) {
+      for (const cat of ["top", "bottom", "dress"] as const) {
+        const inCat = input.wardrobe.filter((g) => g.category === cat);
+        const fresh = inCat.filter((g) => !lastIds.has(g.id));
+        if (fresh.length >= 1) {
+          for (const g of inCat) {
+            if (lastIds.has(g.id)) exclude.add(g.id);
+          }
+        }
+      }
+    }
+  }
 
   const pool = input.wardrobe.filter((g) => !exclude.has(g.id));
   const byCat = (cat: Garment["category"]) =>

@@ -138,6 +138,22 @@ function persistOutfitAndTaste(
   if (outfit) void saveCurrentOutfit(uid, outfit).catch(() => undefined);
 }
 
+/** Append this look to the wear log (newest first). */
+function withWearLog(taste: TasteMemory, outfit: Outfit): TasteMemory {
+  const entry = {
+    at: new Date().toISOString(),
+    garmentIds: outfit.garmentIds || [],
+  };
+  const wearLog = [entry, ...(taste.wearLog || [])]
+    .filter((e) => e.garmentIds?.length)
+    .slice(0, 14);
+  return {
+    ...taste,
+    wearLog,
+    recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
+  };
+}
+
 async function fetchOccasionProfile(
   occasion: string,
   style?: string
@@ -472,8 +488,7 @@ export const useAetherStore = create<AetherState>()(
           demotePenalty: -6,
         });
         const nextTaste: TasteMemory = {
-          ...taste,
-          recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
+          ...withWearLog(taste, outfit),
           preferredStyle: stylePrefs?.[0] || outfit.style,
         };
         set({ currentOutfit: outfit, taste: nextTaste });
@@ -569,8 +584,7 @@ export const useAetherStore = create<AetherState>()(
         }
 
         const nextTaste: TasteMemory = {
-          ...taste,
-          recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
+          ...withWearLog(taste, outfit),
           preferredStyle: stylePrefs?.[0] || outfit.style,
         };
         set({ currentOutfit: outfit, taste: nextTaste });
@@ -616,8 +630,9 @@ export const useAetherStore = create<AetherState>()(
           currentOutfit: currentOutfit?.garments,
           taste: nextTaste,
         });
-        set({ currentOutfit: outfit, taste: nextTaste });
-        persistOutfitAndTaste(user?.uid, outfit, nextTaste);
+        const logged = withWearLog(nextTaste, outfit);
+        set({ currentOutfit: outfit, taste: logged });
+        persistOutfitAndTaste(user?.uid, outfit, logged);
         return outfit;
       },
       pickGarmentById: (garmentId) => {
@@ -644,8 +659,9 @@ export const useAetherStore = create<AetherState>()(
           currentOutfit: currentOutfit.garments,
           taste: nextTaste,
         });
-        set({ currentOutfit: outfit, taste: nextTaste });
-        persistOutfitAndTaste(user?.uid, outfit, nextTaste);
+        const logged = withWearLog(nextTaste, outfit);
+        set({ currentOutfit: outfit, taste: logged });
+        persistOutfitAndTaste(user?.uid, outfit, logged);
         return outfit;
       },
       rejectPiece: (garmentId) => {

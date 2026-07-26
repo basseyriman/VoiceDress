@@ -128,10 +128,17 @@ export interface VoiceCommandResult {
   confidence?: "high" | "medium" | "low";
 }
 
+export interface WearLogEntry {
+  at: string;
+  garmentIds: string[];
+}
+
 export interface TasteMemory {
   rejectedIds: string[];
   recentOutfitIds: string[];
   preferredStyle?: string;
+  /** Chronological wear log — drives “don’t repeat yesterday’s top/bottom”. */
+  wearLog?: WearLogEntry[];
 }
 
 export interface CommerceConnection {
