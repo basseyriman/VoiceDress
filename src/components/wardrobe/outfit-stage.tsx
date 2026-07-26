@@ -8,7 +8,7 @@ import { AVATAR_IDB_REF } from "@/lib/avatar-storage";
 import { useAetherStore } from "@/store/aether-store";
 import { lookPiecesForTryOn, apparelForTryOn } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import Link from "next/link";
@@ -113,8 +113,10 @@ export function OutfitStage({
       setWornUrl(displayAvatar);
 
       let current = displayAvatar;
+      let identityPhoto = displayAvatar;
       try {
         current = await letterboxForTryOn(displayAvatar);
+        identityPhoto = current;
         if (cancelled || myId !== requestId.current) return;
         setWornUrl(current);
       } catch {
@@ -156,15 +158,15 @@ export function OutfitStage({
 
         const appliedNames = new Set<string>();
 
-        // Clothes only via fal FASHN — OpenAI/Kontext extras rewrite the face
-        // ("started like me, ended up not me"). Keep the likeness that works.
+        // Clothes via fal FASHN, then lock YOUR face from the original photo
+        // so try-on can’t turn you into a lookalike.
         if (apparelPieces.length) {
           setActivePieceId(apparelPieces[0]?.id ?? null);
           setStepLabel("Dressing you…");
           setProgress(12);
 
           const tick = window.setInterval(() => {
-            setProgress((p) => (p < 88 ? p + 2.5 : p));
+            setProgress((p) => (p < 80 ? p + 2.5 : p));
           }, 800);
 
           const apparelRes = await fetch("/api/tryon/render", {
@@ -197,7 +199,18 @@ export function OutfitStage({
             return;
           }
 
-          current = apparelData.imageUrl;
+          setStepLabel("Keeping your face…");
+          setProgress(90);
+          try {
+            current = await lockFaceIdentity(
+              identityPhoto,
+              apparelData.imageUrl,
+              "strong"
+            );
+          } catch {
+            current = apparelData.imageUrl;
+          }
+          if (cancelled || myId !== requestId.current) return;
           setWornUrl(current);
           setKeyConfigured(true);
           for (const s of Array.isArray(apparelData.steps)
@@ -275,7 +288,7 @@ export function OutfitStage({
                 Your look
               </p>
               <p className="text-xs text-mist">
-                Your photo — clothes on you, still you
+                Your real face — clothes changed only
               </p>
             </div>
             <div className="flex items-center gap-2">
