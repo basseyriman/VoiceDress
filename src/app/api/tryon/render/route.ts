@@ -219,7 +219,7 @@ async function applyFinishPiece(opts: {
 }): Promise<TryResult & { provider?: string }> {
   const { falKey, personImage, productImage, piece } = opts;
   const prefer =
-    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() || "openai";
+    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() || "kontext";
 
   const tryOpenAI = async (): Promise<
     (TryResult & { provider?: string }) | null
@@ -244,6 +244,9 @@ async function applyFinishPiece(opts: {
   };
 
   const tryKontext = async (): Promise<TryResult & { provider?: string }> => {
+    if (!falKey) {
+      return { ok: false, status: 503, detail: "FAL_KEY missing for Kontext" };
+    }
     if (isWatch(piece)) {
       const edited = await kontextWatchTextEdit({
         falKey,
@@ -284,8 +287,8 @@ async function applyFinishPiece(opts: {
     return edited;
   };
 
-  // Default: OpenAI image edit first; fall back to fal Kontext if it fails.
-  if (prefer !== "kontext") {
+  // Default: fal Kontext. OpenAI only if TRYON_FINISH_PROVIDER=openai.
+  if (prefer === "openai") {
     const openaiResult = await tryOpenAI();
     if (openaiResult?.ok) return openaiResult;
     if (openaiResult && !openaiResult.ok) {
@@ -294,23 +297,10 @@ async function applyFinishPiece(opts: {
         openaiResult.detail?.slice(0, 200)
       );
     }
-    if (!falKey) {
-      return (
-        openaiResult || {
-          ok: false,
-          status: 503,
-          detail: "OpenAI failed and FAL_KEY missing for Kontext fallback",
-        }
-      );
-    }
     return tryKontext();
   }
 
-  const kontextResult = await tryKontext();
-  if (kontextResult.ok) return kontextResult;
-  const openaiFallback = await tryOpenAI();
-  if (openaiFallback?.ok) return openaiFallback;
-  return kontextResult;
+  return tryKontext();
 }
 
 function apparelCategory(
@@ -547,7 +537,7 @@ export async function GET() {
   return NextResponse.json({
     configured: Boolean(process.env.FAL_KEY?.trim()),
     openaiImage: hasOpenAIImageKey(),
-    finishProvider: process.env.TRYON_FINISH_PROVIDER?.trim() || "openai",
-    provider: "fashn apparel + openai image finish (kontext fallback)",
+    finishProvider: process.env.TRYON_FINISH_PROVIDER?.trim() || "kontext",
+    provider: "fashn apparel + kontext finish (openai optional)",
   });
 }
