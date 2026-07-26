@@ -3,6 +3,8 @@ import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 
+export const runtime = "nodejs";
+
 async function setUserSubscription(
   uid: string,
   patch: Record<string, unknown>
@@ -41,110 +43,131 @@ function mapStripeStatus(
 }
 
 export async function POST(req: NextRequest) {
-  const stripe = getStripe();
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-
-  if (!stripe || !secret) {
-    return NextResponse.json({ received: true, demo: true });
-  }
-
-  if (!isAdminConfigured()) {
-    console.error("Stripe webhook: Firebase Admin not configured");
-    return NextResponse.json(
-      { error: "Firebase Admin required for webhooks" },
-      { status: 503 }
-    );
-  }
-
-  const sig = req.headers.get("stripe-signature");
-  if (!sig) {
-    return NextResponse.json({ error: "missing signature" }, { status: 400 });
-  }
-
-  const body = await req.text();
-  let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, secret);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "webhook error";
-    return NextResponse.json({ error: message }, { status: 400 });
-  }
+    const stripe = getStripe();
+    const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  try {
-    switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session;
-        const uid = uidFromSession(session);
-        if (!uid) break;
-        const customerId =
-          typeof session.customer === "string"
-            ? session.customer
-            : session.customer?.id;
-        const subscriptionId =
-          typeof session.subscription === "string"
-            ? session.subscription
-            : session.subscription?.id;
-
-        let status: "trialing" | "active" = "active";
-        let trialEndsAt: string | undefined;
-        if (subscriptionId) {
-          const sub = await stripe.subscriptions.retrieve(subscriptionId);
-          status = mapStripeStatus(sub.status) === "trialing" ? "trialing" : "active";
-          if (sub.trial_end) {
-            trialEndsAt = new Date(sub.trial_end * 1000).toISOString();
-          }
-        }
-
-        await setUserSubscription(uid, {
-          subscriptionStatus: status,
-          ...(customerId ? { stripeCustomerId: customerId } : {}),
-          ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
-          ...(trialEndsAt ? { trialEndsAt } : {}),
-        });
-        break;
-      }
-      case "customer.subscription.updated":
-      case "customer.subscription.deleted": {
-        const sub = event.data.object as Stripe.Subscription;
-        const uid =
-          sub.metadata?.firebaseUid ||
-          (await findUidByCustomer(
-            typeof sub.customer === "string" ? sub.customer : sub.customer.id
-          ));
-        if (!uid) break;
-        const status = mapStripeStatus(
-          event.type === "customer.subscription.deleted" ? "canceled" : sub.status
-        );
-        await setUserSubscription(uid, {
-          subscriptionStatus: status,
-          stripeSubscriptionId: sub.id,
-          stripeCustomerId:
-            typeof sub.customer === "string" ? sub.customer : sub.customer.id,
-          ...(sub.trial_end
-            ? { trialEndsAt: new Date(sub.trial_end * 1000).toISOString() }
-            : {}),
-        });
-        break;
-      }
-      default:
-        break;
+    if (!stripe || !secret) {
+      return NextResponse.json({ received: true, demo: true });
     }
-  } catch (err) {
-    console.error("Stripe webhook handler failed", err);
-    return NextResponse.json({ error: "handler failed" }, { status: 500 });
-  }
 
-  return NextResponse.json({ received: true });
+    if (!isAdminConfigured()) {
+      console.error("Stripe webhook: Firebase Admin not configured");
+      return NextResponse.json(
+        { error: "Firebase Admin required for webhooks" },
+        { status: 503 }
+      );
+    }
+
+    const sig = req.headers.get("stripe-signature");
+    if (!sig) {
+      return NextResponse.json({ error: "missing signature" }, { status: 400 });
+    }
+
+    const body = await req.text();
+    let event: Stripe.Event;
+    try {
+      event = stripe.webhooks.constructEvent(body, sig, secret);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "webhook error";
+      console.error("Stripe webhook signature failed", message);
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const uid = uidFromSession(session);
+          if (!uid) {
+            console.warn("checkout.session.completed missing firebase uid");
+            break;
+          }
+          const customerId =
+            typeof session.customer === "string"
+              ? session.customer
+              : session.customer?.id;
+          const subscriptionId =
+            typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription?.id;
+
+          let status: "trialing" | "active" = "active";
+          let trialEndsAt: string | undefined;
+          if (subscriptionId) {
+            const sub = await stripe.subscriptions.retrieve(subscriptionId);
+            status =
+              mapStripeStatus(sub.status) === "trialing" ? "trialing" : "active";
+            if (sub.trial_end) {
+              trialEndsAt = new Date(sub.trial_end * 1000).toISOString();
+            }
+          }
+
+          await setUserSubscription(uid, {
+            subscriptionStatus: status,
+            ...(customerId ? { stripeCustomerId: customerId } : {}),
+            ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
+            ...(trialEndsAt ? { trialEndsAt } : {}),
+          });
+          break;
+        }
+        case "customer.subscription.updated":
+        case "customer.subscription.deleted": {
+          const sub = event.data.object as Stripe.Subscription;
+          const customerId =
+            typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
+          const uid =
+            sub.metadata?.firebaseUid ||
+            (customerId ? await findUidByCustomer(customerId) : null);
+          if (!uid) {
+            console.warn(
+              `${event.type} missing firebase uid for customer ${customerId || "unknown"}`
+            );
+            break;
+          }
+          const status = mapStripeStatus(
+            event.type === "customer.subscription.deleted"
+              ? "canceled"
+              : sub.status
+          );
+          await setUserSubscription(uid, {
+            subscriptionStatus: status,
+            stripeSubscriptionId: sub.id,
+            ...(customerId ? { stripeCustomerId: customerId } : {}),
+            ...(sub.trial_end
+              ? { trialEndsAt: new Date(sub.trial_end * 1000).toISOString() }
+              : {}),
+          });
+          break;
+        }
+        default:
+          break;
+      }
+    } catch (err) {
+      console.error("Stripe webhook handler failed", err);
+      return NextResponse.json({ error: "handler failed" }, { status: 500 });
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (err) {
+    console.error("Stripe webhook fatal", err);
+    return NextResponse.json({ error: "fatal" }, { status: 500 });
+  }
 }
 
 async function findUidByCustomer(customerId: string): Promise<string | null> {
-  const db = getAdminDb();
-  if (!db) return null;
-  const q = await db
-    .collection("users")
-    .where("stripeCustomerId", "==", customerId)
-    .limit(1)
-    .get();
-  if (q.empty) return null;
-  return q.docs[0]!.id;
+  try {
+    const db = getAdminDb();
+    if (!db) return null;
+    const q = await db
+      .collection("users")
+      .where("stripeCustomerId", "==", customerId)
+      .limit(1)
+      .get();
+    if (q.empty) return null;
+    return q.docs[0]!.id;
+  } catch (err) {
+    console.error("findUidByCustomer failed", err);
+    return null;
+  }
 }
