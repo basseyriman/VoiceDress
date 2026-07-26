@@ -93,10 +93,14 @@ export async function letterboxForTryOn(src: string): Promise<string> {
 /**
  * Paste the real face/head from the original photo onto the dressed result
  * so AI try-on can’t replace you with a lookalike.
+ *
+ * - strong: after apparel/shoes — restore full face identity
+ * - soft: after glasses — restore eyes/nose/mouth only so frames can stay
  */
 export async function lockFaceIdentity(
   identitySrc: string,
-  dressedSrc: string
+  dressedSrc: string,
+  strength: "strong" | "soft" = "strong"
 ): Promise<string> {
   const [identity, dressed] = await Promise.all([
     loadHtmlImage(identitySrc),
@@ -113,11 +117,11 @@ export async function lockFaceIdentity(
 
   ctx.drawImage(dressed, 0, 0, w, h);
 
-  // Full-body shots: face sits in the upper center. Soft ellipse, not a hard stamp.
+  // Full-body shots: face sits in the upper center.
   const cx = w * 0.5;
-  const cy = h * 0.18;
-  const rx = w * 0.22;
-  const ry = h * 0.14;
+  const cy = strength === "strong" ? h * 0.175 : h * 0.17;
+  const rx = strength === "strong" ? w * 0.24 : w * 0.14;
+  const ry = strength === "strong" ? h * 0.155 : h * 0.09;
 
   const faceLayer = document.createElement("canvas");
   faceLayer.width = w;
@@ -125,7 +129,6 @@ export async function lockFaceIdentity(
   const fctx = faceLayer.getContext("2d");
   if (!fctx) return dressedSrc;
 
-  // Scale identity to dressed canvas (same letterbox framing expected)
   fctx.drawImage(identity, 0, 0, w, h);
 
   const mask = document.createElement("canvas");
@@ -134,10 +137,23 @@ export async function lockFaceIdentity(
   const mctx = mask.getContext("2d");
   if (!mctx) return dressedSrc;
 
-  const grad = mctx.createRadialGradient(cx, cy, ry * 0.35, cx, cy, ry);
-  grad.addColorStop(0, "rgba(0,0,0,1)");
-  grad.addColorStop(0.72, "rgba(0,0,0,0.85)");
-  grad.addColorStop(1, "rgba(0,0,0,0)");
+  const grad = mctx.createRadialGradient(
+    cx,
+    cy,
+    ry * (strength === "strong" ? 0.28 : 0.4),
+    cx,
+    cy,
+    ry
+  );
+  if (strength === "strong") {
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(0.65, "rgba(0,0,0,0.92)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+  } else {
+    grad.addColorStop(0, "rgba(0,0,0,0.95)");
+    grad.addColorStop(0.7, "rgba(0,0,0,0.55)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+  }
   mctx.fillStyle = grad;
   mctx.beginPath();
   mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
@@ -147,7 +163,7 @@ export async function lockFaceIdentity(
   fctx.drawImage(mask, 0, 0);
 
   ctx.drawImage(faceLayer, 0, 0);
-  return canvas.toDataURL("image/jpeg", 0.92);
+  return canvas.toDataURL("image/jpeg", 0.93);
 }
 
 /**

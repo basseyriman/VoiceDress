@@ -140,14 +140,25 @@ export function OutfitStage({
         return false;
       };
 
-      const lockMyFace = async (dressed: string) => {
+      const lockMyFace = async (
+        dressed: string,
+        strength: "strong" | "soft" = "strong"
+      ) => {
         try {
-          const locked = await lockFaceIdentity(identityPhoto, dressed);
-          return locked;
+          return await lockFaceIdentity(identityPhoto, dressed, strength);
         } catch {
           return dressed;
         }
       };
+
+      const isWatchPiece = (p: (typeof lookPieces)[number]) =>
+        /watch|wrist|chrono|time/i.test(
+          `${p.name || ""} ${(p.tags || []).join(" ")}`
+        );
+      const isEyewearPiece = (p: (typeof lookPieces)[number]) =>
+        /glass|frame|optic|sunglass|spec/i.test(
+          `${p.name || ""} ${(p.tags || []).join(" ")}`
+        );
 
       try {
         const toPayload = (piece: (typeof lookPieces)[number]) => ({
@@ -164,18 +175,32 @@ export function OutfitStage({
         const apparelPieces = lookPieces.filter(
           (p) => !isFinishTryOnCategory(p.category)
         );
-        // Auto: shoes only. Glasses/watch AI rewrites your face and often crops the body.
-        const shoePieces = finishPieces.filter((p) => p.category === "shoes");
+        // Full look: shoes → glasses → watch (face locked between steps)
+        const orderedFinish = [
+          ...finishPieces.filter((p) => p.category === "shoes"),
+          ...finishPieces.filter(
+            (p) => p.category === "accessory" && isEyewearPiece(p)
+          ),
+          ...finishPieces.filter(
+            (p) => p.category === "accessory" && isWatchPiece(p)
+          ),
+          ...finishPieces.filter(
+            (p) =>
+              p.category === "accessory" &&
+              !isEyewearPiece(p) &&
+              !isWatchPiece(p)
+          ),
+        ];
         const appliedNames = new Set<string>();
 
-        // Phase 1 — clothes first so you see yourself dressed sooner
+        // Phase 1 — clothes
         if (apparelPieces.length) {
           setActivePieceId(apparelPieces[0]?.id ?? null);
-          setStepLabel("Putting clothes on you…");
+          setStepLabel("Dressing you…");
           setProgress(10);
 
           const tick = window.setInterval(() => {
-            setProgress((p) => (p < 48 ? p + 3 : p));
+            setProgress((p) => (p < 42 ? p + 3 : p));
           }, 700);
 
           const apparelRes = await fetch("/api/tryon/render", {
@@ -208,12 +233,12 @@ export function OutfitStage({
             return;
           }
 
-          current = await lockMyFace(apparelData.imageUrl);
+          current = await lockMyFace(apparelData.imageUrl, "strong");
           if (cancelled || myId !== requestId.current) return;
           setWornUrl(current);
           setKeyConfigured(true);
-          setProgress(55);
-          setStepLabel("Clothes on — locking your face…");
+          setProgress(48);
+          setStepLabel("Clothes on you");
           for (const s of Array.isArray(apparelData.steps)
             ? apparelData.steps
             : []) {
@@ -221,12 +246,14 @@ export function OutfitStage({
           }
         }
 
-        // Phase 2 — shoes only (keeps full-body framing; skips face-morphing accessories)
-        for (let i = 0; i < shoePieces.length; i++) {
-          const piece = shoePieces[i];
+        // Phase 2 — shoes, glasses, watch
+        for (let i = 0; i < orderedFinish.length; i++) {
+          const piece = orderedFinish[i];
           setActivePieceId(piece.id);
           setStepLabel(`Adding ${piece.name}…`);
-          setProgress(60 + Math.round(((i + 1) / (shoePieces.length + 1)) * 30));
+          setProgress(
+            48 + Math.round(((i + 1) / (orderedFinish.length + 1)) * 46)
+          );
 
           const finishRes = await fetch("/api/tryon/render", {
             method: "POST",
@@ -234,6 +261,7 @@ export function OutfitStage({
             body: JSON.stringify({
               personImage: current,
               stage: "finish",
+              includeFaceAccessories: true,
               garments: [toPayload(piece)],
             }),
           });
@@ -247,7 +275,17 @@ export function OutfitStage({
             Array.isArray(finishData.steps) &&
             finishData.steps.length > 0
           ) {
-            current = await lockMyFace(finishData.imageUrl);
+            // Strong lock after shoes (they drift the face). Soft after glasses
+            // so frames can remain. Watch stays as-is (wrist only).
+            if (piece.category === "shoes") {
+              current = await lockMyFace(finishData.imageUrl, "strong");
+            } else if (isEyewearPiece(piece)) {
+              current = await lockMyFace(finishData.imageUrl, "soft");
+            } else if (isWatchPiece(piece)) {
+              current = finishData.imageUrl;
+            } else {
+              current = await lockMyFace(finishData.imageUrl, "soft");
+            }
             if (cancelled || myId !== requestId.current) return;
             setWornUrl(current);
             appliedNames.add(piece.name);
@@ -255,32 +293,20 @@ export function OutfitStage({
           }
         }
 
-        // Final identity lock so you still look like you
-        current = await lockMyFace(current);
-        if (cancelled || myId !== requestId.current) return;
-        setWornUrl(current);
-
         const missedPieces = lookPieces.filter((p) => !appliedNames.has(p.name));
         const missedNames = missedPieces.map((p) => p.name);
         setMissingIds(missedPieces.map((p) => p.id));
 
-        const accessoryMiss = missedPieces.filter((p) => p.category === "accessory");
-        if (accessoryMiss.length && appliedNames.size) {
+        if (missedNames.length) {
           setNotice(
-            `Your face stays yours. ${accessoryMiss.map((p) => p.name).join(", ")} skipped for now — they were rewriting your face.`
-          );
-        } else if (missedNames.length) {
-          setNotice(
-            `Not on photo yet: ${missedNames.join(", ")}. Tap a piece to swap, or retry.`
+            `${missedNames.join(", ")} didn’t land — tap a piece to change it.`
           );
         }
 
         if (myId === requestId.current) {
           setActivePieceId(null);
           setStepLabel(
-            missedNames.length
-              ? `Look on you — face locked`
-              : "Full look on you — it’s still you"
+            missedNames.length ? "Almost ready" : "You’re dressed"
           );
           setProgress(100);
           setDressing(false);
@@ -344,7 +370,7 @@ export function OutfitStage({
                 Your look
               </p>
               <p className="text-xs text-mist">
-                Your face and body stay yours — only the clothes change
+                Still you — dressed for the day
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -501,13 +527,24 @@ export function OutfitStage({
             )}
 
             {!error && notice && (
-              <div className="absolute inset-x-4 top-4 z-30 rounded-2xl border border-champagne/30 bg-ink/85 px-4 py-3 text-xs text-champagne">
+              <div className="absolute inset-x-4 top-4 z-30 rounded-2xl border border-line bg-ink/80 px-4 py-3 text-xs text-mist backdrop-blur-md">
                 {notice}
               </div>
             )}
 
-            {!dressing && wornUrl && outfit && (
+            {!dressing && wornUrl && outfit && !notice && !error && (
               <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md">
+                <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
+                  Ready · dressed for
+                </p>
+                <p className="font-display text-sm text-ivory">
+                  {outfit.occasion}
+                </p>
+              </div>
+            )}
+
+            {!dressing && wornUrl && outfit && (notice || error) && (
+              <div className="pointer-events-none absolute left-4 bottom-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
                   Dressed for
                 </p>
@@ -528,7 +565,7 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "Your real face and body — with this outfit on you. Clothes, shoes, glasses, watch. Don’t like a piece? Tap it or say “change the shoes.”"
+              ? "The full look on your photo — clothes, shoes, glasses, watch. Tap any piece to change it, or just say it."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
 
@@ -606,7 +643,12 @@ export function OutfitStage({
 
           {(generating || dressing) && (
             <p className="mt-4 text-xs text-mist">
-              Clothes and shoes on your real photo — your face stays locked as you.
+              Dressing the full look onto you — one piece at a time.
+            </p>
+          )}
+          {!generating && !dressing && wornUrl && outfit && missingIds.length === 0 && (
+            <p className="mt-4 text-xs text-champagne/80">
+              Look complete. You’re ready to go.
             </p>
           )}
         </div>
@@ -640,7 +682,7 @@ export function GarmentTile({
       className={cn(
         "group flex w-full gap-3 rounded-2xl border p-3 text-left transition duration-300",
         missing
-          ? "border-danger/35 bg-danger/5"
+          ? "border-champagne/35 bg-champagne/[0.04]"
           : active
             ? "border-champagne/60 bg-champagne/10"
             : "border-line bg-white/[0.02] hover:border-champagne/40",
@@ -668,24 +710,19 @@ export function GarmentTile({
               className={cn(
                 "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
                 missing
-                  ? "border-danger/40 text-[#e8b4ac]"
+                  ? "border-champagne/40 text-champagne"
                   : "border-line text-mist"
               )}
             >
-              {missing ? "Not on photo" : badge}
+              {missing ? "Pending" : badge}
             </span>
           )}
         </div>
         <p className="truncate text-xs text-mist">
           {garment.brand} · {garment.category}
         </p>
-        <p
-          className={cn(
-            "mt-2 text-[10px] uppercase tracking-wider",
-            missing ? "text-[#e8b4ac]" : "text-mist"
-          )}
-        >
-          {missing ? "Suggested · tap to retry swap" : "Tap to change"}
+        <p className="mt-2 text-[10px] uppercase tracking-wider text-mist">
+          Tap to change
         </p>
       </div>
     </button>
