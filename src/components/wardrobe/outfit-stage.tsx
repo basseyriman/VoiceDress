@@ -18,10 +18,13 @@ export function OutfitStage({
   outfit,
   avatarUrl,
   generating = false,
+  /** When false, show photo/look without kicking off fal try-on (Photo page). */
+  autoTryOn = true,
 }: {
   outfit: Outfit | null;
   avatarUrl?: string;
   generating?: boolean;
+  autoTryOn?: boolean;
 }) {
   const garments = outfit?.garments || [];
   const wardrobe = useAetherStore((s) => s.wardrobe);
@@ -74,6 +77,7 @@ export function OutfitStage({
   const [retryNonce, setRetryNonce] = useState(0);
   const [missingIds, setMissingIds] = useState<string[]>([]);
   const requestId = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const lookKey = lookPieces.map((g) => g.id).join("|");
 
@@ -87,19 +91,32 @@ export function OutfitStage({
   // Full suggested look on body: apparel (FASHN) then shoes/glasses/watch (Kontext)
   useEffect(() => {
     const myId = ++requestId.current;
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
 
     if (!hasAvatar || !displayAvatar) {
       setWornUrl(null);
       setDressing(false);
       setMissingIds([]);
-      return;
+      return () => {
+        ac.abort();
+      };
     }
 
-    if (!lookPieces.length) {
+    if (!autoTryOn || !lookPieces.length) {
       setWornUrl(displayAvatar);
       setDressing(false);
       setMissingIds([]);
-      return;
+      setNeedsKey(false);
+      setNeedsBilling(false);
+      setError("");
+      setNotice("");
+      setProgress(0);
+      setActivePieceId(null);
+      return () => {
+        ac.abort();
+      };
     }
 
     let cancelled = false;
@@ -119,7 +136,7 @@ export function OutfitStage({
       try {
         current = await letterboxForTryOn(displayAvatar);
         identityPhoto = current;
-        if (cancelled || myId !== requestId.current) return;
+        if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
         setWornUrl(current);
       } catch {
         // Keep original if letterbox fails
@@ -205,20 +222,25 @@ export function OutfitStage({
             setProgress((p) => (p < 48 ? p + 2.5 : p));
           }, 800);
 
-          const apparelRes = await authFetch("/api/tryon/render", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              personImage: current,
-              stage: "apparel",
-              maxPieces: 2,
-              garments: apparelPieces.map(toPayload),
-            }),
-          });
-          window.clearInterval(tick);
+          let apparelRes: Response;
+          try {
+            apparelRes = await authFetch("/api/tryon/render", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ac.signal,
+              body: JSON.stringify({
+                personImage: current,
+                stage: "apparel",
+                maxPieces: 2,
+                garments: apparelPieces.map(toPayload),
+              }),
+            });
+          } finally {
+            window.clearInterval(tick);
+          }
 
           const apparelData = await apparelRes.json();
-          if (cancelled || myId !== requestId.current) return;
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           if (failOrBilling(apparelData, apparelRes.status)) return;
 
           if (!apparelData.ok || !apparelData.imageUrl) {
@@ -245,7 +267,7 @@ export function OutfitStage({
           } catch {
             current = apparelData.imageUrl;
           }
-          if (cancelled || myId !== requestId.current) return;
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           setWornUrl(current);
           setKeyConfigured(true);
           setProgress(50);
@@ -263,6 +285,7 @@ export function OutfitStage({
               const styleRes = await authFetch("/api/tryon/render", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                signal: ac.signal,
                 body: JSON.stringify({
                   personImage: current,
                   stage: "style",
@@ -270,7 +293,7 @@ export function OutfitStage({
                 }),
               });
               const styleData = await styleRes.json();
-              if (cancelled || myId !== requestId.current) return;
+              if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
               if (
                 !failOrBilling(styleData, styleRes.status) &&
                 styleData.ok &&
@@ -286,10 +309,11 @@ export function OutfitStage({
                 } catch {
                   current = styleData.imageUrl;
                 }
-                if (cancelled || myId !== requestId.current) return;
+                if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
                 setWornUrl(current);
               }
-            } catch {
+            } catch (err) {
+              if (ac.signal.aborted) return;
               // Keep FASHN result if polish fails
             }
             setProgress(58);
@@ -298,6 +322,7 @@ export function OutfitStage({
 
         // 2) Shoes / glasses / watch via fal Kontext
         for (let i = 0; i < finishQueue.length; i++) {
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           const piece = finishQueue[i];
           setActivePieceId(piece.id);
           setStepLabel(`Adding ${piece.name}…`);
@@ -308,6 +333,7 @@ export function OutfitStage({
           const finishRes = await authFetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: ac.signal,
             body: JSON.stringify({
               personImage: current,
               stage: "finish",
@@ -316,7 +342,7 @@ export function OutfitStage({
             }),
           });
           const finishData = await finishRes.json();
-          if (cancelled || myId !== requestId.current) return;
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           if (failOrBilling(finishData, finishRes.status)) return;
 
           if (
@@ -345,7 +371,7 @@ export function OutfitStage({
             } catch {
               current = finishData.imageUrl;
             }
-            if (cancelled || myId !== requestId.current) return;
+            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
             setWornUrl(current);
             appliedNames.add(piece.name);
             setKeyConfigured(true);
@@ -370,7 +396,7 @@ export function OutfitStage({
           }
         }
       } catch (err) {
-        if (cancelled || myId !== requestId.current) return;
+        if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
         setError(
           err instanceof Error ? err.message : "Try-on interrupted — please retry"
         );
@@ -380,8 +406,19 @@ export function OutfitStage({
 
     return () => {
       cancelled = true;
+      ac.abort();
     };
-  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces, styledExtras, outfit, confirmWear]);
+  }, [
+    hasAvatar,
+    displayAvatar,
+    lookKey,
+    retryNonce,
+    apparelPieces,
+    styledExtras,
+    outfit,
+    confirmWear,
+    autoTryOn,
+  ]);
 
   const alternatives = swapFor
     ? wardrobe.filter(
@@ -410,8 +447,8 @@ export function OutfitStage({
     setSwapFor(null);
   };
 
-  const showKeyPrompt = needsKey || keyConfigured === false;
-  const showBillingPrompt = needsBilling;
+  const showKeyPrompt = autoTryOn && (needsKey || keyConfigured === false);
+  const showBillingPrompt = autoTryOn && needsBilling;
 
   return (
     <motion.div

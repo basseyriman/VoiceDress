@@ -33,7 +33,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-16">
-      <header className="sticky top-0 z-40 border-b border-line/50 bg-ink/70 backdrop-blur-2xl pt-[env(safe-area-inset-top)]">
+      <header className="sticky top-0 z-50 border-b border-line/50 bg-ink/70 backdrop-blur-2xl pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-8">
             <Logo />
@@ -90,7 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <FlowDock />
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line/50 bg-ink/90 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-line/50 bg-ink/90 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)] md:hidden">
         <div className="flex justify-around px-2 py-2.5">
           {nav.map((item) => {
             const Icon = item.icon;

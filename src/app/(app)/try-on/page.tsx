@@ -77,8 +77,8 @@ export default function TryOnPage() {
             See yourself dressed
           </h1>
           <p className="mt-2 max-w-xl text-sm text-mist">
-            Add a clear full-body photo — head to shoes. Then go to Today and say
-            where you’re going before we dress you.
+            Add a clear full-body photo — head to shoes. Dressing runs on Today
+            after you say where you’re going — this page won’t lock the app.
           </p>
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
           {displayAvatar && !error && (
@@ -133,6 +133,7 @@ export default function TryOnPage() {
         outfit={currentOutfit}
         avatarUrl={displayAvatar}
         generating={busy}
+        autoTryOn={false}
       />
       <VoiceOrb compact />
     </div>
