@@ -1,10 +1,11 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Apparel (top/bottom) → fal FASHN — keeps you, changes clothes.
- * 2. Shoes → glasses → watch → fal Kontext on that same dressed photo.
- *    No face-paste, no product stickers.
- * 3. If a finish piece fails, keep the dressed result and continue.
+ * fal FASHN dresses tops/bottoms onto your photo and keeps you looking like you.
+ *
+ * Shoes / glasses / watch are NOT run through a second generative model on top.
+ * That second pass (Kontext) rewrites legs/face and spoils the clean FASHN result
+ * (black blocks, melted boots, etc.). Those pieces stay in the suggested look list.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [
@@ -68,7 +69,5 @@ export function finishingPieces<T extends { category: string }>(garments: T[]) {
 }
 
 export function isBodyTryOnCategory(category: string) {
-  return (
-    isApparelTryOnCategory(category) || isFinishTryOnCategory(category)
-  );
+  return isApparelTryOnCategory(category);
 }
