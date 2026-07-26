@@ -210,9 +210,6 @@ export function OutfitStage({
         const finishQueue = [
           ...styledExtras.filter((p) => p.category === "shoes"),
           ...styledExtras.filter(
-            (p) => p.category === "accessory" && isEyewearPiece(p)
-          ),
-          ...styledExtras.filter(
             (p) => p.category === "accessory" && isWatchPiece(p)
           ),
           ...styledExtras.filter(
@@ -220,6 +217,10 @@ export function OutfitStage({
               p.category === "accessory" &&
               !isEyewearPiece(p) &&
               !isWatchPiece(p)
+          ),
+          // Glasses last — they rewrite the face; restore identity before them
+          ...styledExtras.filter(
+            (p) => p.category === "accessory" && isEyewearPiece(p)
           ),
         ];
 
@@ -424,10 +425,27 @@ export function OutfitStage({
           }
         }
 
-        // 2) Shoes / glasses / watch via FASHN Try-On Max (fal Kontext fallback)
+        // 2) Shoes / watch first, then glasses last (face lock between)
         for (let i = 0; i < finishQueue.length; i++) {
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           const piece = finishQueue[i];
+          const isEye = isEyewearPiece(piece);
+
+          // Restore your real face before glasses touch the photo
+          if (isEye) {
+            setStepLabel("Keeping your real face…");
+            try {
+              current = await lockFaceIdentity(
+                identityPhoto,
+                current,
+                "strong"
+              );
+              setWornUrl(current);
+            } catch {
+              // continue with current
+            }
+          }
+
           setActivePieceId(piece.id);
           setStepLabel(`Adding ${piece.name}…`);
           setProgress(
@@ -455,22 +473,20 @@ export function OutfitStage({
             Array.isArray(finishData.steps) &&
             finishData.steps.length > 0
           ) {
-            // Soft face lock after glasses so frames can stay; strong after shoes
             try {
-              if (piece.category === "shoes") {
-                current = await lockFaceIdentity(
-                  identityPhoto,
-                  finishData.imageUrl,
-                  "strong"
-                );
-              } else if (isEyewearPiece(piece)) {
+              if (isEye) {
+                // Soft lock keeps frames; still pulls real skin/eyes back
                 current = await lockFaceIdentity(
                   identityPhoto,
                   finishData.imageUrl,
                   "soft"
                 );
               } else {
-                current = finishData.imageUrl;
+                current = await lockFaceIdentity(
+                  identityPhoto,
+                  finishData.imageUrl,
+                  "strong"
+                );
               }
             } catch {
               current = finishData.imageUrl;
@@ -484,6 +500,20 @@ export function OutfitStage({
             );
             setKeyConfigured(true);
           }
+        }
+
+        // Final identity pass — you should look like your original photo
+        setStepLabel("Restoring your face…");
+        try {
+          const hadGlasses = finishQueue.some((p) => isEyewearPiece(p));
+          current = await lockFaceIdentity(
+            identityPhoto,
+            current,
+            hadGlasses ? "soft" : "strong"
+          );
+          setWornUrl(current);
+        } catch {
+          // keep current
         }
 
         const missed = lookPieces.filter(

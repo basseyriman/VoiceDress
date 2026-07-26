@@ -47,6 +47,9 @@ function resolution(): "1k" | "2k" | "4k" {
   return "2k";
 }
 
+const KEEP_FACE =
+  "CRITICAL: Keep the person's EXACT real face from the model photo — same skin texture, facial features, and identity. Do not beautify, smooth, cartoonize, age, or replace the face.";
+
 /** Prompt hints so Max keeps color/silhouette for known hard cases. */
 export function apparelPromptForPiece(piece: {
   category: string;
@@ -59,6 +62,7 @@ export function apparelPromptForPiece(piece: {
   if (piece.category === "outerwear") {
     if (/blazer|sport coat|suit jacket/.test(name)) {
       return [
+        KEEP_FACE,
         "Layer this structured hip-length blazer over the existing top.",
         "Keep blazer length — not a long overcoat or trench.",
         colors ? `Match exact color: ${colors}.` : "Keep the exact product color.",
@@ -68,6 +72,7 @@ export function apparelPromptForPiece(piece: {
     }
     if (/overcoat|trench|coat|parka|duster/.test(name)) {
       return [
+        KEEP_FACE,
         "Layer this full camel/tan overcoat over the existing outfit naturally.",
         "Smooth continuous coat fabric on both sleeves and body — no black holes, tears, or digital artifacts.",
         colors ? `Exact coat color: ${colors}.` : "Match the product coat color exactly.",
@@ -76,6 +81,7 @@ export function apparelPromptForPiece(piece: {
       ].join(" ");
     }
     return [
+      KEEP_FACE,
       "Layer this outerwear over the existing outfit.",
       colors ? `Match exact color: ${colors}.` : "Keep the exact product color.",
       "Preserve the person's face, pose, and pants.",
@@ -83,9 +89,9 @@ export function apparelPromptForPiece(piece: {
     ].join(" ");
   }
   if (colors && /white|ivory|cream|stone|khaki|beige/.test(colors.toLowerCase())) {
-    return `Wear this exact garment. Keep the ${colors} color — do not darken or recolor it.`;
+    return `${KEEP_FACE} Wear this exact garment. Keep the ${colors} color — do not darken or recolor it.`;
   }
-  return undefined;
+  return KEEP_FACE;
 }
 
 /** Shoes / glasses / watch prompts for Try-On Max. */
@@ -101,6 +107,7 @@ export function finishPromptForPiece(piece: {
 
   if (piece.category === "shoes") {
     return [
+      KEEP_FACE,
       `Replace BOTH shoes with these: ${label}.`,
       colors ? `Exact color: ${colors}.` : "Match the product color exactly.",
       "Keep the rest of the outfit, face, pose, and framing unchanged.",
@@ -110,21 +117,23 @@ export function finishPromptForPiece(piece: {
 
   if (/glass|frame|optic|sunglass|spec/.test(blob)) {
     return [
+      KEEP_FACE,
       `Place these eyeglasses on the person: ${label}.`,
-      "Thin realistic frames on the existing face — do not redesign the face.",
+      "Thin realistic frames on the existing face — do not redesign, beautify, or cartoon the face.",
       "Keep clothes, pose, and framing unchanged.",
     ].join(" ");
   }
 
   if (/watch|wrist|chrono|time/.test(blob) || piece.category === "accessory") {
     return [
+      KEEP_FACE,
       `Add this wristwatch on the most visible wrist: ${label}.`,
       colors ? `Watch colors: ${colors}.` : "Match the product colors.",
       "Small natural watch size. Do not change face, clothes, or shoes.",
     ].join(" ");
   }
 
-  return `Add this accessory (${label}) naturally. Keep face and outfit unchanged.`;
+  return `${KEEP_FACE} Add this accessory (${label}) naturally. Keep face and outfit unchanged.`;
 }
 
 /**

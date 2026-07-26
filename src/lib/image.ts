@@ -94,13 +94,10 @@ export async function letterboxForTryOn(src: string): Promise<string> {
 
 /**
  * Paste the real face/head from the original photo onto the dressed result
- * so AI try-on can’t replace you with a lookalike.
+ * so try-on can’t cartoonize or swap your identity.
  *
- * Tight oval on the face only — a larger mask was re-pasting the original
- * shirt/shoulders and undoing white/light tops.
- *
- * - strong: after apparel/shoes — restore face identity
- * - soft: after glasses — restore eyes/nose/mouth only so frames can stay
+ * - strong: full head (face + hairline + ears), stops above the collar
+ * - soft: eyes/nose/mouth core only — keeps glasses frames
  */
 export async function lockFaceIdentity(
   identitySrc: string,
@@ -120,20 +117,27 @@ export async function lockFaceIdentity(
   const ctx = canvas.getContext("2d");
   if (!ctx) return dressedSrc;
 
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(dressed, 0, 0, w, h);
 
-  // Face-only: keep above the collar so garment colors survive.
+  // Full-body 2:3: head sits in the upper band. Strong covers hair→chin;
+  // soft is a smaller oval so eyewear can remain.
   const cx = w * 0.5;
-  const cy = strength === "strong" ? h * 0.14 : h * 0.145;
-  const rx = strength === "strong" ? w * 0.16 : w * 0.12;
-  const ry = strength === "strong" ? h * 0.1 : h * 0.075;
+  const cy = strength === "strong" ? h * 0.155 : h * 0.15;
+  const rx = strength === "strong" ? w * 0.22 : w * 0.13;
+  const ry = strength === "strong" ? h * 0.145 : h * 0.085;
+  // Never paste below the collar into the shirt
+  const maxY = h * (strength === "strong" ? 0.3 : 0.24);
 
   const faceLayer = document.createElement("canvas");
   faceLayer.width = w;
   faceLayer.height = h;
   const fctx = faceLayer.getContext("2d");
   if (!fctx) return dressedSrc;
-
+  fctx.imageSmoothingEnabled = true;
+  fctx.imageSmoothingQuality = "high";
+  // Scale identity into the same canvas — both should be letterboxed 2:3
   fctx.drawImage(identity, 0, 0, w, h);
 
   const mask = document.createElement("canvas");
@@ -142,21 +146,17 @@ export async function lockFaceIdentity(
   const mctx = mask.getContext("2d");
   if (!mctx) return dressedSrc;
 
-  const grad = mctx.createRadialGradient(
-    cx,
-    cy,
-    ry * (strength === "strong" ? 0.35 : 0.45),
-    cx,
-    cy,
-    ry
-  );
+  const inner = ry * (strength === "strong" ? 0.42 : 0.5);
+  const grad = mctx.createRadialGradient(cx, cy, inner, cx, cy, ry);
   if (strength === "strong") {
+    // Opaque core so skin texture from the real photo wins over AI smoothing
     grad.addColorStop(0, "rgba(0,0,0,1)");
-    grad.addColorStop(0.7, "rgba(0,0,0,0.88)");
+    grad.addColorStop(0.55, "rgba(0,0,0,1)");
+    grad.addColorStop(0.78, "rgba(0,0,0,0.85)");
     grad.addColorStop(1, "rgba(0,0,0,0)");
   } else {
-    grad.addColorStop(0, "rgba(0,0,0,0.95)");
-    grad.addColorStop(0.7, "rgba(0,0,0,0.55)");
+    grad.addColorStop(0, "rgba(0,0,0,0.98)");
+    grad.addColorStop(0.65, "rgba(0,0,0,0.6)");
     grad.addColorStop(1, "rgba(0,0,0,0)");
   }
   mctx.fillStyle = grad;
@@ -164,11 +164,16 @@ export async function lockFaceIdentity(
   mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   mctx.fill();
 
+  // Clip anything below the collar line
+  mctx.globalCompositeOperation = "destination-in";
+  mctx.fillStyle = "#000";
+  mctx.fillRect(0, 0, w, Math.floor(maxY));
+
   fctx.globalCompositeOperation = "destination-in";
   fctx.drawImage(mask, 0, 0);
 
   ctx.drawImage(faceLayer, 0, 0);
-  return canvas.toDataURL("image/jpeg", 0.97);
+  return canvas.toDataURL("image/jpeg", 0.98);
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
