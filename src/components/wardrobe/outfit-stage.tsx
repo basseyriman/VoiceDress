@@ -538,7 +538,6 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-            {outfit
               ? "The full look on your photo — clothes, shoes, glasses, watch. Tap any piece to change it."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
