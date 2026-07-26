@@ -80,8 +80,41 @@ export function OutfitStage({
   const [retryNonce, setRetryNonce] = useState(0);
   const [missingIds, setMissingIds] = useState<string[]>([]);
   const [donePieceIds, setDonePieceIds] = useState<string[]>([]);
+  /** Quick pick = outfit tiles instantly, no photo wait. Full = dress onto photo. */
+  const [photoTryOn, setPhotoTryOn] = useState(true);
   const requestId = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("voicedress_photo_tryon");
+      if (saved === "0") setPhotoTryOn(false);
+      if (saved === "1") setPhotoTryOn(true);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const setPhotoTryOnPref = (on: boolean) => {
+    setPhotoTryOn(on);
+    try {
+      localStorage.setItem("voicedress_photo_tryon", on ? "1" : "0");
+    } catch {
+      // ignore
+    }
+    if (on) setRetryNonce((n) => n + 1);
+  };
+
+  const runTryOn = autoTryOn && photoTryOn;
+
+  const progressPct = Math.max(0, Math.min(100, Math.round(progress)));
+  const piecesTotal = Math.max(1, lookPieces.length);
+  const piecesDone = donePieceIds.length;
+  const piecesLeft = Math.max(0, piecesTotal - piecesDone);
+  // Quality/2k ≈ 15–25s per piece; show a calm estimate
+  const etaSec = dressing
+    ? Math.max(8, piecesLeft * 18 + (activePieceId ? 12 : 0))
+    : 0;
 
   const lookKey = lookPieces.map((g) => g.id).join("|");
 
@@ -110,7 +143,7 @@ export function OutfitStage({
       };
     }
 
-    if (!autoTryOn || !lookPieces.length) {
+    if (!runTryOn || !lookPieces.length) {
       setWornUrl(displayAvatar);
       setDressing(false);
       setMissingIds([]);
@@ -557,7 +590,7 @@ export function OutfitStage({
     styledExtras,
     outfit,
     confirmWear,
-    autoTryOn,
+    autoTryOn: runTryOn,
   ]);
 
   const alternatives = swapFor
@@ -587,8 +620,8 @@ export function OutfitStage({
     setSwapFor(null);
   };
 
-  const showKeyPrompt = autoTryOn && (needsKey || keyConfigured === false);
-  const showBillingPrompt = autoTryOn && needsBilling;
+  const showKeyPrompt = runTryOn && (needsKey || keyConfigured === false);
+  const showBillingPrompt = runTryOn && needsBilling;
 
   return (
     <motion.div
@@ -605,10 +638,42 @@ export function OutfitStage({
                 Your look
               </p>
               <p className="text-xs text-mist">
-                Your photo — clothes + fal Kontext extras
+                {photoTryOn
+                  ? "Your photo — clothes dressed onto you"
+                  : "Quick pick — outfit ready now, photo optional"}
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {autoTryOn && (
+                <div className="flex rounded-full border border-line p-0.5 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => setPhotoTryOnPref(false)}
+                    disabled={dressing}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 transition",
+                      !photoTryOn
+                        ? "bg-champagne/20 text-champagne"
+                        : "text-mist hover:text-ivory"
+                    )}
+                  >
+                    Quick
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPhotoTryOnPref(true)}
+                    disabled={dressing}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 transition",
+                      photoTryOn
+                        ? "bg-champagne/20 text-champagne"
+                        : "text-mist hover:text-ivory"
+                    )}
+                  >
+                    On photo
+                  </button>
+                </div>
+              )}
               <ChangePhotoButton
                 compact
                 onChanged={(url) => {
@@ -618,7 +683,7 @@ export function OutfitStage({
               />
               {dressing && (
                 <span className="rounded-full border border-champagne/30 bg-champagne/10 px-3 py-1 text-[10px] uppercase tracking-wider text-champagne">
-                  Dressing you
+                  {progressPct}%
                 </span>
               )}
             </div>
@@ -682,11 +747,26 @@ export function OutfitStage({
                   exit={{ opacity: 0 }}
                   className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-ink via-ink/85 to-transparent p-6 pt-20"
                 >
-                  <p className="font-display text-xl text-ivory">{stepLabel}</p>
-                  <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
+                  <div className="flex items-end justify-between gap-3">
+                    <p className="font-display text-xl text-ivory">{stepLabel}</p>
+                    <p className="shrink-0 font-display text-2xl tabular-nums text-champagne">
+                      {progressPct}%
+                    </p>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-mist">
+                    <span>
+                      {piecesDone} of {piecesTotal} pieces
+                      {activePieceId ? " · applying" : ""}
+                    </span>
+                    <span>
+                      ~{etaSec < 60 ? `${etaSec}s` : `${Math.ceil(etaSec / 60)}m`}{" "}
+                      left
+                    </span>
+                  </div>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
                     <motion.div
                       className="h-full bg-champagne"
-                      animate={{ width: `${progress}%` }}
+                      animate={{ width: `${progressPct}%` }}
                       transition={{ duration: 0.4 }}
                     />
                   </div>
@@ -879,15 +959,32 @@ export function OutfitStage({
 
           {(generating || dressing) && (
             <p className="mt-4 text-xs text-mist">
-              Dressing the full look — clothes first, then fal Kontext extras…
+              Dressing onto your photo — {progressPct}% complete
+              {etaSec ? ` · about ${etaSec < 60 ? `${etaSec}s` : `${Math.ceil(etaSec / 60)} min`} left` : ""}.
+              Need it faster? Switch to Quick above.
             </p>
           )}
-          {!generating && !dressing && wornUrl && outfit && missingIds.length === 0 && (
+          {!generating && !dressing && autoTryOn && !photoTryOn && outfit && (
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-mist">
+                Outfit ready instantly. Photo try-on is optional when you have a
+                minute.
+              </p>
+              <button
+                type="button"
+                onClick={() => setPhotoTryOnPref(true)}
+                className="shrink-0 rounded-full border border-champagne/40 bg-champagne/15 px-4 py-2 text-xs text-champagne hover:bg-champagne/25"
+              >
+                See on my photo
+              </button>
+            </div>
+          )}
+          {!generating && !dressing && wornUrl && outfit && photoTryOn && missingIds.length === 0 && (
             <p className="mt-4 text-xs text-champagne/80">
               Full look on you. You’re ready to go.
             </p>
           )}
-          {!generating && !dressing && wornUrl && outfit && missingIds.length > 0 && (
+          {!generating && !dressing && wornUrl && outfit && photoTryOn && missingIds.length > 0 && (
             <p className="mt-4 text-xs text-mist">
               Some pieces didn’t match — tap to swap. We won’t spend more credits
               on a wrong body.
