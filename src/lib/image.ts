@@ -347,7 +347,8 @@ export async function verifyApparelLook(
     name?: string;
     colors?: string[];
     hexColors?: string[];
-  }[]
+  }[],
+  opts?: { skipTops?: boolean }
 ): Promise<{ ok: boolean; failedIds: string[]; reason: string }> {
   const img = await loadHtmlImage(wornSrc);
   const canvas = document.createElement("canvas");
@@ -363,6 +364,10 @@ export async function verifyApparelLook(
 
   for (const piece of pieces) {
     if (piece.category === "outerwear") continue;
+    // Blazer/coat covers the torso — don't fail ivory tops as "dark"
+    if (opts?.skipTops && (piece.category === "top" || piece.category === "dress")) {
+      continue;
+    }
     const targets = [
       ...(piece.hexColors || []).map(hexToRgb).filter(Boolean),
       ...namedColorHints(piece.colors),

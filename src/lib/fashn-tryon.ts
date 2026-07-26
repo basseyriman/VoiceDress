@@ -77,6 +77,45 @@ export function apparelPromptForPiece(piece: {
   return undefined;
 }
 
+/** Shoes / glasses / watch prompts for Try-On Max. */
+export function finishPromptForPiece(piece: {
+  category: string;
+  name?: string;
+  colors?: string[];
+  tags?: string[];
+}): string {
+  const label = piece.name || piece.category;
+  const colors = (piece.colors || []).join(", ");
+  const blob = `${piece.name || ""} ${(piece.tags || []).join(" ")}`.toLowerCase();
+
+  if (piece.category === "shoes") {
+    return [
+      `Replace BOTH shoes with these: ${label}.`,
+      colors ? `Exact color: ${colors}.` : "Match the product color exactly.",
+      "Keep the rest of the outfit, face, pose, and framing unchanged.",
+      "Full-body crop — head and feet both visible.",
+    ].join(" ");
+  }
+
+  if (/glass|frame|optic|sunglass|spec/.test(blob)) {
+    return [
+      `Place these eyeglasses on the person: ${label}.`,
+      "Thin realistic frames on the existing face — do not redesign the face.",
+      "Keep clothes, pose, and framing unchanged.",
+    ].join(" ");
+  }
+
+  if (/watch|wrist|chrono|time/.test(blob) || piece.category === "accessory") {
+    return [
+      `Add this wristwatch on the most visible wrist: ${label}.`,
+      colors ? `Watch colors: ${colors}.` : "Match the product colors.",
+      "Small natural watch size. Do not change face, clothes, or shoes.",
+    ].join(" ");
+  }
+
+  return `Add this accessory (${label}) naturally. Keep face and outfit unchanged.`;
+}
+
 /**
  * Run Try-On Max and poll until completed.
  * Images may be https URLs or data:image/...;base64,... strings.

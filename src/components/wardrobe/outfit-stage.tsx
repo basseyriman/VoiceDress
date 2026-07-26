@@ -314,11 +314,17 @@ export function OutfitStage({
           setKeyConfigured(true);
           setProgress(50);
 
-          // Trust gate — don't burn shoes/glasses credits on a wrong body.
+          // Trust gate — skip top checks when a blazer covers the torso.
+          // Partial fails still continue to shoes/glasses (don't abort the look).
+          const hasOuterwear = apparelPieces.some(
+            (p) => p.category === "outerwear"
+          );
           const basePieces = apparelPieces.filter(
             (p) => p.category !== "outerwear"
           );
-          const trust = await verifyApparelLook(current, basePieces);
+          const trust = await verifyApparelLook(current, basePieces, {
+            skipTops: hasOuterwear,
+          });
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           if (!trust.ok) {
             for (const id of trust.failedIds) {
@@ -329,14 +335,9 @@ export function OutfitStage({
             setMissingIds(trust.failedIds);
             setNotice(
               trust.reason
-                ? `${trust.reason}. Tap a piece to change — we stopped before using more credits.`
-                : "Clothes didn’t match the look — we stopped before using more credits."
+                ? `${trust.reason}. Continuing with shoes & accessories…`
+                : "Some clothes didn’t match — continuing with accessories…"
             );
-            setActivePieceId(null);
-            setStepLabel("Needs a better match");
-            setProgress(100);
-            setDressing(false);
-            return;
           }
 
           const expectedOuter = lookPieces.find((p) => p.category === "outerwear");
@@ -392,7 +393,7 @@ export function OutfitStage({
           }
         }
 
-        // 2) Shoes / glasses / watch via fal Kontext
+        // 2) Shoes / glasses / watch via FASHN Try-On Max (fal Kontext fallback)
         for (let i = 0; i < finishQueue.length; i++) {
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           const piece = finishQueue[i];

@@ -7,6 +7,7 @@ import {
 import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 import {
   apparelPromptForPiece,
+  finishPromptForPiece,
   fashnTryOnMax,
   hasFashnApiKey,
 } from "@/lib/fashn-tryon";
@@ -367,10 +368,56 @@ async function applyFinishPiece(opts: {
   personImage: string;
   productImage: string;
   piece: Piece;
-}): Promise<TryResult & { provider?: string }> {
+}): Promise<TryResult & { provider?: string; needsBilling?: boolean }> {
   const { falKey, personImage, productImage, piece } = opts;
   const prefer =
-    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() || "kontext";
+    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() ||
+    (hasFashnApiKey() ? "fashn" : "kontext");
+
+  const tryFashnMax = async (): Promise<
+    (TryResult & { provider?: string; needsBilling?: boolean }) | null
+  > => {
+    if (!hasFashnApiKey()) return null;
+    if (!productImage && !isWatch(piece)) {
+      return {
+        ok: false,
+        status: 400,
+        detail: "product image required for FASHN accessory try-on",
+      };
+    }
+    // Watches: product image still preferred; Max handles jewelry/watches.
+    const edited = await fashnTryOnMax({
+      modelImage: personImage,
+      productImage: productImage || personImage,
+      prompt: finishPromptForPiece(piece),
+    });
+    if (edited.ok && edited.url !== personImage) {
+      return { ...edited, provider: "fashn-tryon-max" };
+    }
+    if (!edited.ok && edited.needsBilling) {
+      return {
+        ok: false,
+        status: edited.status,
+        detail: edited.detail,
+        needsBilling: true,
+        provider: "fashn-tryon-max",
+      };
+    }
+    if (edited.ok) {
+      return {
+        ok: false,
+        status: 502,
+        detail: "FASHN returned unchanged person image",
+        provider: "fashn-tryon-max",
+      };
+    }
+    return {
+      ok: false,
+      status: edited.status,
+      detail: edited.detail,
+      provider: "fashn-tryon-max",
+    };
+  };
 
   const tryOpenAI = async (): Promise<
     (TryResult & { provider?: string }) | null
@@ -438,7 +485,20 @@ async function applyFinishPiece(opts: {
     return edited;
   };
 
-  // Default: fal Kontext. OpenAI only if TRYON_FINISH_PROVIDER=openai.
+  // Default with FASHN_API_KEY: Try-On Max for shoes/glasses/watch.
+  if (prefer === "fashn" || prefer === "fashn-max" || prefer === "tryon-max") {
+    const maxResult = await tryFashnMax();
+    if (maxResult?.ok) return maxResult;
+    if (maxResult?.needsBilling) return maxResult;
+    if (maxResult && !maxResult.ok) {
+      console.warn(
+        `[tryon] FASHN finish failed for ${piece.name || piece.category}, trying Kontext:`,
+        maxResult.detail?.slice(0, 200)
+      );
+    }
+    return tryKontext();
+  }
+
   if (prefer === "openai") {
     const openaiResult = await tryOpenAI();
     if (openaiResult?.ok) return openaiResult;
@@ -732,17 +792,23 @@ export async function POST(req: NextRequest) {
       });
 
       if (!edited.ok) {
-        if (isFalBillingError(edited.detail)) {
+        if (
+          ("needsBilling" in edited && edited.needsBilling) ||
+          isFalBillingError(edited.detail)
+        ) {
           return NextResponse.json({
             ok: false,
             needsBilling: true,
-            error: "fal.ai balance exhausted",
+            error: hasFashnApiKey()
+              ? "FASHN credits exhausted"
+              : "fal.ai balance exhausted",
             detail: edited.detail,
             imageUrl: current,
             steps,
             partial: true,
-            message:
-              "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
+            message: hasFashnApiKey()
+              ? "Your FASHN credits are used up. Top up at fashn.ai, then retry."
+              : "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
           });
         }
         console.error(
@@ -813,9 +879,11 @@ export async function GET() {
     fashnMax: hasFashnApiKey(),
     falFallback: Boolean(process.env.FAL_KEY?.trim()),
     openaiImage: hasOpenAIImageKey(),
-    finishProvider: process.env.TRYON_FINISH_PROVIDER?.trim() || "kontext",
+    finishProvider:
+      process.env.TRYON_FINISH_PROVIDER?.trim() ||
+      (hasFashnApiKey() ? "fashn" : "kontext"),
     provider: hasFashnApiKey()
-      ? "fashn tryon-max (fal kontext finish optional)"
+      ? "fashn tryon-max (clothes + accessories)"
       : "fal-fashn v1.6 fallback",
   });
 }
