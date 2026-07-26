@@ -130,15 +130,15 @@ function shoeGlassesPrompt(piece: Piece): string {
       KEEP_YOU,
       KEEP_FRAMING,
       `Replace ALL footwear on BOTH feet with the shoes from image 2 (${look}).`,
-      "Match color and material from image 2. Natural on the real feet.",
-      "Do not alter face or other clothes.",
+      "Match image 2 color exactly (tan/suede must not stay black). Natural on the real feet.",
+      "Do not alter face, skin, hair, or other clothes.",
     ].join(" ");
   }
   return [
     KEEP_YOU,
     KEEP_FRAMING,
-    `Place the glasses from image 2 (${look}) on the person's face — on the nose and ears.`,
-    "Same face underneath. Only add the frames.",
+    `Place ONLY the glasses from image 2 (${look}) on the person's existing face.`,
+    "Do not redesign or regenerate the face. Same eyes, nose, mouth, skin. Only add thin frames.",
   ].join(" ");
 }
 
@@ -146,12 +146,10 @@ function watchTextPrompt(piece: Piece): string {
   const look = pieceLook(piece);
   return [
     "Edit this photo only.",
-    "Keep the exact same person, face, body, pose, clothes, shoes, glasses, lighting, and background.",
+    "Keep the EXACT same person, face, body, pose, clothes, shoes, glasses, lighting, and background.",
     "Keep the exact same full-body framing — do not zoom or crop.",
     `Add one realistic wristwatch on the most visible wrist: ${look}.`,
-    "Small natural watch size with a clear case, dial, and strap. Sharp detail.",
-    "Do NOT paint white blobs, flares, circles, or abstract shapes on the wrist.",
-    "Do NOT change the hands or arms except for adding the watch.",
+    "Small natural watch size. Sharp detail. No white blobs or floating stickers.",
   ].join(" ");
 }
 
@@ -220,58 +218,37 @@ async function applyFinishPiece(opts: {
 }): Promise<TryResult & { provider?: string }> {
   const { falKey, personImage, productImage, piece } = opts;
 
-  // Few attempts — retries were making dress time feel endless.
+  // One careful attempt each — stacking retries was slow and morphed the face.
   if (isWatch(piece)) {
-    for (const guidance of [3.5, 2.8]) {
-      const edited = await kontextWatchTextEdit({
-        falKey,
-        personImage,
-        piece,
-        guidanceScale: guidance,
-      });
-      if (edited.ok && edited.url !== personImage) {
-        return { ...edited, provider: "kontext-watch-text" };
-      }
-      if (edited.ok === false && isFalBillingError(edited.detail)) return edited;
-    }
-    return {
-      ok: false,
-      status: 502,
-      detail: "watch text edit failed",
-    };
-  }
-
-  const attempts = piece.category === "shoes" ? [6, 4.5] : [5, 4];
-  let lastFail: TryResult = {
-    ok: false,
-    status: 502,
-    detail: "finish edit failed",
-  };
-
-  for (const guidance of attempts) {
-    const edited = await kontextProductEdit({
+    const edited = await kontextWatchTextEdit({
       falKey,
       personImage,
-      productImage,
       piece,
-      guidanceScale: guidance,
+      guidanceScale: 3.2,
     });
-    if (edited.ok) {
-      if (edited.url === personImage) {
-        lastFail = {
-          ok: false,
-          status: 502,
-          detail: "kontext returned unchanged person image",
-        };
-        continue;
-      }
-      return { ...edited, provider: "kontext-product" };
+    if (edited.ok && edited.url !== personImage) {
+      return { ...edited, provider: "kontext-watch-text" };
     }
-    lastFail = edited;
-    if (isFalBillingError(edited.detail)) return edited;
+    return edited.ok
+      ? { ok: false, status: 502, detail: "watch unchanged" }
+      : edited;
   }
 
-  return lastFail;
+  const guidance = piece.category === "shoes" ? 5.5 : 4.2;
+  const edited = await kontextProductEdit({
+    falKey,
+    personImage,
+    productImage,
+    piece,
+    guidanceScale: guidance,
+  });
+  if (edited.ok && edited.url !== personImage) {
+    return { ...edited, provider: "kontext-product" };
+  }
+  if (edited.ok) {
+    return { ok: false, status: 502, detail: "kontext returned unchanged person image" };
+  }
+  return edited;
 }
 
 function apparelCategory(

@@ -1,17 +1,10 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * What fal FASHN actually does:
- *   Your photo in → same person out, wearing the garment.
- *   Categories: tops, bottoms, one-pieces only.
- *
- * What FASHN does NOT do:
- *   Shoes, glasses, watches. Those need other models — and stacking
- *   them on top of FASHN was rewriting faces and looking broken.
- *
- * Product rule:
- *   Dress clothes with FASHN. Keep the result. Show shoes/accessories
- *   as part of the suggested look, not as failed “pending” photo edits.
+ * 1. Apparel (top/bottom) → fal FASHN — keeps you, changes clothes.
+ * 2. Shoes → glasses → watch → fal Kontext on that same dressed photo.
+ *    No face-paste, no product stickers.
+ * 3. If a finish piece fails, keep the dressed result and continue.
  */
 
 export const TRYON_APPAREL_CATEGORIES = [
@@ -75,5 +68,7 @@ export function finishingPieces<T extends { category: string }>(garments: T[]) {
 }
 
 export function isBodyTryOnCategory(category: string) {
-  return isApparelTryOnCategory(category);
+  return (
+    isApparelTryOnCategory(category) || isFinishTryOnCategory(category)
+  );
 }

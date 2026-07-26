@@ -156,14 +156,40 @@ export function OutfitStage({
 
         const appliedNames = new Set<string>();
 
-        // fal FASHN only: keep your body, change the clothes. Nothing else on top.
+        const isWatchPiece = (p: (typeof lookPieces)[number]) =>
+          /watch|wrist|chrono|time/i.test(
+            `${p.name || ""} ${(p.tags || []).join(" ")}`
+          );
+        const isEyewearPiece = (p: (typeof lookPieces)[number]) =>
+          /glass|frame|optic|sunglass|spec/i.test(
+            `${p.name || ""} ${(p.tags || []).join(" ")}`
+          );
+
+        // Complete look order after clothes: shoes → glasses → watch
+        const finishQueue = [
+          ...styledExtras.filter((p) => p.category === "shoes"),
+          ...styledExtras.filter(
+            (p) => p.category === "accessory" && isEyewearPiece(p)
+          ),
+          ...styledExtras.filter(
+            (p) => p.category === "accessory" && isWatchPiece(p)
+          ),
+          ...styledExtras.filter(
+            (p) =>
+              p.category === "accessory" &&
+              !isEyewearPiece(p) &&
+              !isWatchPiece(p)
+          ),
+        ];
+
+        // 1) Clothes via FASHN — the part that already looks like you
         if (apparelPieces.length) {
           setActivePieceId(apparelPieces[0]?.id ?? null);
           setStepLabel("Dressing you…");
-          setProgress(12);
+          setProgress(10);
 
           const tick = window.setInterval(() => {
-            setProgress((p) => (p < 88 ? p + 2.5 : p));
+            setProgress((p) => (p < 48 ? p + 2.5 : p));
           }, 800);
 
           const apparelRes = await fetch("/api/tryon/render", {
@@ -199,6 +225,8 @@ export function OutfitStage({
           current = apparelData.imageUrl;
           setWornUrl(current);
           setKeyConfigured(true);
+          setProgress(50);
+          setStepLabel("Clothes on — finishing the look…");
           for (const s of Array.isArray(apparelData.steps)
             ? apparelData.steps
             : []) {
@@ -206,15 +234,54 @@ export function OutfitStage({
           }
         }
 
-        // Extras (shoes / glasses / watch) stay in the look — not forced onto the photo.
-        // Marking them “pending” made the product feel broken.
-        setMissingIds([]);
-        setNotice("");
+        // 2) Shoes, glasses, watch onto the same dressed photo (no face paste, no stickers)
+        for (let i = 0; i < finishQueue.length; i++) {
+          const piece = finishQueue[i];
+          setActivePieceId(piece.id);
+          setStepLabel(`Adding ${piece.name}…`);
+          setProgress(
+            50 + Math.round(((i + 1) / (finishQueue.length + 1)) * 45)
+          );
+
+          const finishRes = await fetch("/api/tryon/render", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              personImage: current,
+              stage: "finish",
+              includeFaceAccessories: true,
+              garments: [toPayload(piece)],
+            }),
+          });
+          const finishData = await finishRes.json();
+          if (cancelled || myId !== requestId.current) return;
+          if (failOrBilling(finishData)) return;
+
+          if (
+            finishData.ok &&
+            finishData.imageUrl &&
+            Array.isArray(finishData.steps) &&
+            finishData.steps.length > 0
+          ) {
+            current = finishData.imageUrl;
+            setWornUrl(current);
+            appliedNames.add(piece.name);
+            setKeyConfigured(true);
+          }
+        }
+
+        const missed = lookPieces.filter((p) => !appliedNames.has(p.name));
+        setMissingIds(missed.map((p) => p.id));
+        setNotice(
+          missed.length
+            ? `${missed.map((p) => p.name).join(" · ")} didn’t land — tap to change.`
+            : ""
+        );
 
         if (myId === requestId.current) {
           setActivePieceId(null);
           setStepLabel(
-            appliedNames.size ? "You’re dressed" : "Ready"
+            missed.length ? "Almost ready" : "Full look on you"
           );
           setProgress(100);
           setDressing(false);
@@ -231,7 +298,7 @@ export function OutfitStage({
     return () => {
       cancelled = true;
     };
-  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces]);
+  }, [hasAvatar, displayAvatar, lookKey, retryNonce, apparelPieces, styledExtras]);
 
   const alternatives = swapFor
     ? wardrobe.filter(
@@ -278,7 +345,7 @@ export function OutfitStage({
                 Your look
               </p>
               <p className="text-xs text-mist">
-                Your photo — clothes changed, you stay you
+                Your photo — the full suggested look on you
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -364,16 +431,14 @@ export function OutfitStage({
                     />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {apparelPieces.map((g, i) => (
+                    {lookPieces.map((g) => (
                       <div
                         key={g.id}
                         className={cn(
                           "rounded-full border px-2 py-1 text-[10px]",
                           activePieceId === g.id
                             ? "border-champagne/50 bg-champagne/15 text-champagne"
-                            : progress >= ((i + 1) / Math.max(apparelPieces.length, 1)) * 90
-                              ? "border-champagne/30 text-ivory"
-                              : "border-white/10 text-mist"
+                            : "border-white/10 text-mist"
                         )}
                       >
                         <span className="truncate">{g.name}</span>
@@ -473,7 +538,8 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "fal dresses the clothes onto your photo. Shoes, glasses, and watch stay in the look below."
+            {outfit
+              ? "The full look on your photo — clothes, shoes, glasses, watch. Tap any piece to change it."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
 
@@ -488,11 +554,7 @@ export function OutfitStage({
                   garment={g}
                   active={swapFor === g.category || activePieceId === g.id}
                   dressing={dressing && activePieceId === g.id}
-                  badge={
-                    styledExtras.some((e) => e.id === g.id)
-                      ? "In look"
-                      : undefined
-                  }
+                  missing={missingIds.includes(g.id)}
                   onClick={() =>
                     setSwapFor((c) => (c === g.category ? null : g.category))
                   }
@@ -558,9 +620,14 @@ export function OutfitStage({
               Dressing the full look onto you — one piece at a time.
             </p>
           )}
-          {!generating && !dressing && wornUrl && outfit && (
+          {!generating && !dressing && wornUrl && outfit && missingIds.length === 0 && (
             <p className="mt-4 text-xs text-champagne/80">
-              Clothes on you. You’re ready to go.
+              Full look on you. You’re ready to go.
+            </p>
+          )}
+          {!generating && !dressing && wornUrl && outfit && missingIds.length > 0 && (
+            <p className="mt-4 text-xs text-mist">
+              Clothes on you — some extras didn’t land. Tap a piece to change it.
             </p>
           )}
         </div>
