@@ -1,11 +1,10 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Base apparel (top/dress + bottom) → fal FASHN, then lock real face.
- * 2. Outerwear → fal Kontext multi (product + color lock) so blazers/coats
- *    layer correctly — FASHN has no jacket category and drops them at max 2.
- * 3. Shoes → glasses → watch → fal Kontext (default).
- * 4. Optional OpenAI finish: TRYON_FINISH_PROVIDER=openai in .env.local.
+ * 1. Apparel (top/dress/bottom/outerwear) → FASHN Try-On Max (FASHN_API_KEY).
+ *    Falls back to fal-hosted FASHN v1.6 if Max is unavailable.
+ * 2. Outerwear soft-fallback → fal Kontext layer + client color composite.
+ * 3. Shoes / glasses / watch → fal Kontext (or OpenAI if configured).
  */
 
 export const TRYON_APPAREL_CATEGORIES = [

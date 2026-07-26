@@ -5,6 +5,11 @@ import {
   openaiFinishEdit,
 } from "@/lib/openai-finish";
 import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
+import {
+  apparelPromptForPiece,
+  fashnTryOnMax,
+  hasFashnApiKey,
+} from "@/lib/fashn-tryon";
 
 export const maxDuration = 180;
 
@@ -87,13 +92,12 @@ async function parseFalImages(res: Response): Promise<TryResult> {
   return { ok: true, url };
 }
 
-async function fashnTryOn(opts: {
+async function fashnViaFal(opts: {
   falKey: string;
   modelImage: string;
   garmentImage: string;
   category: "tops" | "bottoms" | "one-pieces";
 }): Promise<TryResult> {
-  // Quality first — wrong clothes cost more than a slower call (user trust + retries).
   const call = async (mode: "quality" | "balanced") => {
     const res = await fetch("https://fal.run/fal-ai/fashn/tryon/v1.6", {
       method: "POST",
@@ -118,6 +122,63 @@ async function fashnTryOn(opts: {
   const primary = await call("quality");
   if (primary.ok) return primary;
   return call("balanced");
+}
+
+/** Prefer FASHN Try-On Max; fall back to fal-hosted v1.6. */
+async function applyApparelPiece(opts: {
+  falKey: string;
+  modelImage: string;
+  garmentImage: string;
+  piece: Piece;
+}): Promise<TryResult & { provider?: string; needsBilling?: boolean }> {
+  const prompt = apparelPromptForPiece(opts.piece);
+
+  if (hasFashnApiKey()) {
+    const max = await fashnTryOnMax({
+      modelImage: opts.modelImage,
+      productImage: opts.garmentImage,
+      prompt,
+    });
+    if (max.ok) return { ...max, provider: "fashn-tryon-max" };
+    if (max.needsBilling) {
+      return {
+        ok: false,
+        status: max.status,
+        detail: max.detail,
+        needsBilling: true,
+        provider: "fashn-tryon-max",
+      };
+    }
+    console.warn(
+      `[tryon] Try-On Max failed for ${opts.piece.name || opts.piece.category}, trying fal v1.6:`,
+      max.detail?.slice(0, 200)
+    );
+  }
+
+  if (!opts.falKey) {
+    return {
+      ok: false,
+      status: 503,
+      detail: "Add FASHN_API_KEY (preferred) or FAL_KEY for clothes try-on",
+    };
+  }
+
+  const cat = apparelCategory(opts.piece.category);
+  if (!cat) {
+    return {
+      ok: false,
+      status: 400,
+      detail: `Unsupported apparel category: ${opts.piece.category}`,
+    };
+  }
+
+  const viaFal = await fashnViaFal({
+    falKey: opts.falKey,
+    modelImage: opts.modelImage,
+    garmentImage: opts.garmentImage,
+    category: cat,
+  });
+  return { ...viaFal, provider: "fal-fashn-v1.6" };
 }
 
 const KEEP_YOU =
@@ -494,21 +555,21 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (!falKey && !hasOpenAIImageKey()) {
+  if (!hasFashnApiKey() && !falKey && !hasOpenAIImageKey()) {
     return NextResponse.json({
       ok: false,
       needsKey: true,
       message:
-        "Add FAL_KEY (clothes) and/or OPENAI_API_KEY (shoes/glasses/watch) to .env.local",
+        "Add FASHN_API_KEY for clothes try-on (preferred). Optional: FAL_KEY for extras, OPENAI_API_KEY for shoes/glasses.",
     });
   }
 
-  if ((stage === "auto" || stage === "apparel") && !falKey) {
+  if ((stage === "auto" || stage === "apparel") && !hasFashnApiKey() && !falKey) {
     return NextResponse.json({
       ok: false,
       needsKey: true,
       message:
-        "Add FAL_KEY to .env.local for clothes try-on. Get a key at https://fal.ai/dashboard/keys",
+        "Add FASHN_API_KEY from https://fashn.ai (Try-On Max). FAL_KEY is only a fallback.",
     });
   }
 
@@ -536,7 +597,7 @@ export async function POST(req: NextRequest) {
   const runFinish = stage === "auto" || stage === "finish";
 
   if (runApparel) {
-    // FASHN base first, outerwear last — order already top/dress/bottom/outerwear
+    // Base clothes first, outerwear last
     const ordered = [
       ...apparel.filter((g) => g.category !== "outerwear"),
       ...apparel.filter((g) => g.category === "outerwear"),
@@ -557,44 +618,56 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Outerwear: Kontext product layer (color + silhouette). FASHN has no jacket
-      // category and often morphs navy blazers into long cream coats.
       if (g.category === "outerwear") {
         apparelBaseUrl = current;
-        let result = await kontextOuterwearLayer({
-          falKey: falKey as string,
+      }
+
+      // Prefer FASHN Try-On Max for all apparel including jackets.
+      let result = await applyApparelPiece({
+        falKey: falKey || "",
+        modelImage: current,
+        garmentImage,
+        piece: g,
+      });
+
+      // Outerwear only: if Max/fal failed and we still have fal, try Kontext layer
+      if (
+        !result.ok &&
+        g.category === "outerwear" &&
+        falKey &&
+        !result.needsBilling
+      ) {
+        const kontext = await kontextOuterwearLayer({
+          falKey,
           personImage: current,
           productImage: garmentImage,
           piece: g,
         });
+        if (kontext.ok) {
+          result = { ...kontext, provider: "kontext-outerwear" };
+        }
+      }
 
-        if (!result.ok || result.url === current) {
-          // Fallback: FASHN tops — better than skipping the piece entirely
-          const fashnFallback = await fashnTryOn({
-            falKey: falKey as string,
-            modelImage: current,
-            garmentImage,
-            category: "tops",
+      if (!result.ok) {
+        if (result.needsBilling || isFalBillingError(result.detail)) {
+          return NextResponse.json({
+            ok: false,
+            needsBilling: true,
+            error: hasFashnApiKey()
+              ? "FASHN credits exhausted"
+              : "fal.ai balance exhausted",
+            detail: result.detail,
+            imageUrl: steps.length ? current : undefined,
+            apparelBaseUrl:
+              g.category === "outerwear" ? apparelBaseUrl : undefined,
+            steps,
+            message: hasFashnApiKey()
+              ? "Your FASHN credits are used up. Top up at fashn.ai, then retry."
+              : "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
           });
-          if (fashnFallback.ok) {
-            result = fashnFallback;
-          }
         }
 
-        if (!result.ok) {
-          if (isFalBillingError(result.detail)) {
-            return NextResponse.json({
-              ok: false,
-              needsBilling: true,
-              error: "fal.ai balance exhausted",
-              detail: result.detail,
-              imageUrl: steps.length ? current : undefined,
-              apparelBaseUrl,
-              steps,
-              message:
-                "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
-            });
-          }
+        if (g.category === "outerwear") {
           warnings.push(
             `Couldn’t layer ${g.name || "outerwear"}${
               result.detail ? `: ${result.detail.slice(0, 120)}` : ""
@@ -603,45 +676,6 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        if (result.url === current) {
-          warnings.push(`Outerwear unchanged for ${g.name || "outerwear"}`);
-          continue;
-        }
-
-        current = result.url;
-        steps.push({
-          id: g.id,
-          category: g.category,
-          name: g.name,
-          url: result.url,
-          provider: "kontext-outerwear",
-        });
-        continue;
-      }
-
-      const fashnCat = apparelCategory(g.category);
-      if (!fashnCat) continue;
-
-      const result = await fashnTryOn({
-        falKey: falKey as string,
-        modelImage: current,
-        garmentImage,
-        category: fashnCat,
-      });
-
-      if (!result.ok) {
-        if (isFalBillingError(result.detail)) {
-          return NextResponse.json({
-            ok: false,
-            needsBilling: true,
-            error: "fal.ai balance exhausted",
-            detail: result.detail,
-            imageUrl: steps.length ? current : undefined,
-            steps,
-            message:
-              "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
-          });
-        }
         return NextResponse.json(
           {
             ok: false,
@@ -654,14 +688,23 @@ export async function POST(req: NextRequest) {
         );
       }
 
+      if (result.url === current) {
+        if (g.category === "outerwear") {
+          warnings.push(`Outerwear unchanged for ${g.name || "outerwear"}`);
+          continue;
+        }
+      }
+
       current = result.url;
-      apparelBaseUrl = current;
+      if (g.category !== "outerwear") {
+        apparelBaseUrl = current;
+      }
       steps.push({
         id: g.id,
         category: g.category,
         name: g.name,
         url: result.url,
-        provider: "fashn",
+        provider: result.provider || "fashn",
       });
     }
   }
@@ -754,9 +797,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     applied: true,
-    provider: "fal-fashn+full-look",
+    provider: hasFashnApiKey() ? "fashn-tryon-max" : "fal-fashn+full-look",
     imageUrl: current,
-    /** Pre-outerwear FASHN result — client composites coat without rewriting shirt/pants. */
+    /** Pre-outerwear result — client composites coat without rewriting shirt/pants. */
     apparelBaseUrl:
       runApparel && apparelBaseUrl !== current ? apparelBaseUrl : undefined,
     steps,
@@ -766,9 +809,13 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   return NextResponse.json({
-    configured: Boolean(process.env.FAL_KEY?.trim()),
+    configured: hasFashnApiKey() || Boolean(process.env.FAL_KEY?.trim()),
+    fashnMax: hasFashnApiKey(),
+    falFallback: Boolean(process.env.FAL_KEY?.trim()),
     openaiImage: hasOpenAIImageKey(),
     finishProvider: process.env.TRYON_FINISH_PROVIDER?.trim() || "kontext",
-    provider: "fashn apparel + kontext finish (openai optional)",
+    provider: hasFashnApiKey()
+      ? "fashn tryon-max (fal kontext finish optional)"
+      : "fal-fashn v1.6 fallback",
   });
 }
