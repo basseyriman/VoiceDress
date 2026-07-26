@@ -9,7 +9,6 @@ import { useAetherStore } from "@/store/aether-store";
 import { lookPiecesForTryOn, isFinishTryOnCategory } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
 import { letterboxForTryOn } from "@/lib/image";
-import { overlayAccessoriesOnLook } from "@/lib/accessory-overlay";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import Link from "next/link";
@@ -139,15 +138,6 @@ export function OutfitStage({
         return false;
       };
 
-      const isWatchPiece = (p: (typeof lookPieces)[number]) =>
-        /watch|wrist|chrono|time/i.test(
-          `${p.name || ""} ${(p.tags || []).join(" ")}`
-        );
-      const isEyewearPiece = (p: (typeof lookPieces)[number]) =>
-        /glass|frame|optic|sunglass|spec/i.test(
-          `${p.name || ""} ${(p.tags || []).join(" ")}`
-        );
-
       try {
         const toPayload = (piece: (typeof lookPieces)[number]) => ({
           imageUrl: piece.imageUrl,
@@ -164,11 +154,9 @@ export function OutfitStage({
           (p) => !isFinishTryOnCategory(p.category)
         );
         const shoePieces = finishPieces.filter((p) => p.category === "shoes");
-        const glassesPiece = finishPieces.find(isEyewearPiece);
-        const watchPiece = finishPieces.find(isWatchPiece);
         const appliedNames = new Set<string>();
 
-        // 1) Clothes only via AI — this keeps your face closest to the real photo
+        // Clothes via AI — keeps your real face from the photo
         if (apparelPieces.length) {
           setActivePieceId(apparelPieces[0]?.id ?? null);
           setStepLabel("Dressing you…");
@@ -208,11 +196,10 @@ export function OutfitStage({
             return;
           }
 
-          // Use FASHN result as-is — no face paste (that made you look like someone else)
           current = apparelData.imageUrl;
           setWornUrl(current);
           setKeyConfigured(true);
-          setProgress(58);
+          setProgress(62);
           setStepLabel("Clothes on you");
           for (const s of Array.isArray(apparelData.steps)
             ? apparelData.steps
@@ -221,11 +208,11 @@ export function OutfitStage({
           }
         }
 
-        // 2) Shoes once — feet only; do not run glasses/watch through face-changing AI
+        // Shoes once — no sticker overlays, no face paste
         for (const piece of shoePieces) {
           setActivePieceId(piece.id);
           setStepLabel(`Adding ${piece.name}…`);
-          setProgress(68);
+          setProgress(78);
 
           const finishRes = await fetch("/api/tryon/render", {
             method: "POST",
@@ -253,28 +240,8 @@ export function OutfitStage({
           }
         }
 
-        // 3) Glasses + watch as clean overlays — face pixels stay yours
-        if (glassesPiece || watchPiece) {
-          setStepLabel("Finishing the look…");
-          setProgress(88);
-          if (glassesPiece) setActivePieceId(glassesPiece.id);
-          else if (watchPiece) setActivePieceId(watchPiece.id);
-
-          const overlaid = await overlayAccessoriesOnLook({
-            personImage: current,
-            glassesImageUrl: glassesPiece?.imageUrl,
-            watchImageUrl: watchPiece?.imageUrl,
-          });
-          if (cancelled || myId !== requestId.current) return;
-          current = overlaid.url;
-          setWornUrl(current);
-          if (overlaid.applied.includes("glasses") && glassesPiece) {
-            appliedNames.add(glassesPiece.name);
-          }
-          if (overlaid.applied.includes("watch") && watchPiece) {
-            appliedNames.add(watchPiece.name);
-          }
-        }
+        // Glasses/watch stay in the look list but are not sticker-pasted onto the photo.
+        // (Product plates on the face looked broken — we won’t do that.)
 
         const missedPieces = lookPieces.filter((p) => !appliedNames.has(p.name));
         const missedNames = missedPieces.map((p) => p.name);
@@ -282,13 +249,17 @@ export function OutfitStage({
 
         if (missedNames.length) {
           setNotice(
-            `${missedNames.join(", ")} didn’t land — tap a piece to change it.`
+            `${missedNames.join(" · ")} in this look — on you when we add accessory try-on.`
           );
         }
 
         if (myId === requestId.current) {
           setActivePieceId(null);
-          setStepLabel(missedNames.length ? "Almost ready" : "You’re dressed");
+          setStepLabel(
+            shoePieces.length || apparelPieces.length
+              ? "You’re dressed"
+              : "Ready"
+          );
           setProgress(100);
           setDressing(false);
         }
@@ -546,7 +517,7 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "See yourself in the look — clothes and shoes dressed on your photo, glasses and watch finished cleanly. Tap any piece to change it."
+              ? "Clothes and shoes dressed onto your photo. Tap any piece to change it."
               : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
           </p>
 
