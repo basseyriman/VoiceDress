@@ -772,10 +772,13 @@ function inferOccasionFromSpeech(t: string): string {
 
 export function isHighConfidenceVoiceIntent(transcript: string): boolean {
   const t = transcript.toLowerCase();
+  // Conversational follow-ups need the stylist LLM — never keyword-shortcut them
+  if (isOutfitConversation(transcript)) return false;
+
   const swapAsk =
     /\b(swap|change|replace|different|another|instead|don't like|dont like)\b/.test(
       t
-    );
+    ) && !isOutfitConversation(transcript);
   const wantsOutfit = wantsOutfitSuggestion(t);
   const clearSuggest =
     wantsOutfit ||
@@ -783,13 +786,11 @@ export function isHighConfidenceVoiceIntent(transcript: string): boolean {
       t
     ) ||
     /\b(feeling cold|feeling hot|degrees|°)\b/.test(t);
-  const weatherOnly =
-    /\bweather\b/.test(t) &&
-    !/\b(suggest|wear|outfit|dress|what if|degrees|°|pick|choose)\b/.test(t);
-  // "open my wardrobe" = nav. "outfit from my wardrobe" = suggest — never treat as nav.
+  const weatherOnly = isWeatherOnlyAsk(transcript);
   const clearNav =
     weatherOnly ||
-    (/\b(why this|explain)\b/.test(t) && !wantsOutfit) ||
+    (/\b(why this|explain (this |the |my )?(look|outfit))\b/.test(t) &&
+      !wantsOutfit) ||
     (wantsOpenWardrobe(t) && !wantsOutfit);
   if (
     /\b(go to|connect|photo|settings|billing|add|upload)\b/.test(t) &&
@@ -797,39 +798,84 @@ export function isHighConfidenceVoiceIntent(transcript: string): boolean {
   )
     return false;
   if (clearNav && !swapAsk) return true;
-  if (swapAsk) return true;
+  if (swapAsk && !/\b(too |thick|belt|sock|stocking|should i|what about)\b/.test(t))
+    return true;
   if (clearSuggest && t.length < 200) return true;
   return false;
 }
 
-/** True when the user is asking for a look, not just browsing pieces. */
-function wantsOutfitSuggestion(t: string): boolean {
-  return (
-    /\b(dress me|outfit for|what should i wear|suggest|what would you|pick (an |a |my )?outfit|help me (pick|choose|find)|choose (an |a )?outfit|recommend (an |a )?outfit|put (me )?together|style me)\b/.test(
+/**
+ * Follow-up chat about the current look (fabric vs weather, belt, confidence…)
+ * — not a fresh occasion suggest, and not a weather dump.
+ */
+export function isOutfitConversation(transcript: string): boolean {
+  const t = transcript.toLowerCase().trim();
+  if (!t) return false;
+  // Fresh occasion / dress-me asks are suggestions, not chat
+  if (
+    wantsOutfitSuggestion(t) &&
+    /\b(going|heading|off to|wedding|dinner|interview|meeting|drinks?)\b/.test(t)
+  ) {
+    return false;
+  }
+  if (wantsOpenWardrobe(t)) return false;
+  if (
+    /\b(what('?s| is) the weather|how('?s| is) the weather|weather (today|like|outside)|check (the )?weather)\b/.test(
       t
     ) ||
-    (/\b(outfit|look|wear|dress)\b/.test(t) &&
+    /^\s*weather\s*\.?$/.test(t)
+  ) {
+    return false;
+  }
+
+  return (
+    /\?/.test(t) ||
+    /^(why|how|what|which|is|are|should|can|do|does|will|would|am i)\b/.test(t) ||
+    /\b(too (thick|thin|hot|cold|warm|much|dressy|casual)|thick|heavy|light enough|for the weather|what about|should i|do i (need|wear|put)|belt|sock|stockings?|tights|tie|confident|sure about|keep the|swap the|change the|instead of)\b/.test(
+      t
+    )
+  );
+}
+
+/** True when the user is asking for a look, not just browsing pieces. */
+export function wantsOutfitSuggestion(t: string): boolean {
+  const s = t.toLowerCase();
+  return (
+    /\b(dress me|outfit for|what should i wear|suggest|what would you|pick (an |a |my )?outfit|help me (pick|choose|find)|choose (an |a )?outfit|recommend (an |a )?outfit|put (me )?together|style me)\b/.test(
+      s
+    ) ||
+    (/\b(outfit|look|wear|dress)\b/.test(s) &&
       /\b(help|pick|choose|suggest|recommend|from (my )?(wardrobe|closet)|for (a |the |my )?)\b/.test(
-        t
+        s
       )) ||
-    (/\b(going|heading|off to|i('?m| am) going)\b/.test(t) &&
-      /\b(wear|outfit|dress|look|clothes|wardrobe|closet)\b/.test(t))
+    (/\b(going|heading|off to|i('?m| am) going)\b/.test(s) &&
+      /\b(wear|outfit|dress|look|clothes|wardrobe|closet)\b/.test(s))
   );
 }
 
 /** Navigate to wardrobe only when they clearly want the page, not a suggestion. */
-function wantsOpenWardrobe(t: string): boolean {
-  if (wantsOutfitSuggestion(t)) return false;
-  if (/\b(open|show|go to|take me to|see)\b/.test(t) &&
-    /\b(wardrobe|closet)\b/.test(t)
+export function wantsOpenWardrobe(t: string): boolean {
+  const s = t.toLowerCase();
+  if (wantsOutfitSuggestion(s)) return false;
+  if (
+    /\b(open|show|go to|take me to|see)\b/.test(s) &&
+    /\b(wardrobe|closet)\b/.test(s)
   ) {
     return true;
   }
-  // Bare "wardrobe" / "my closet"
   return (
-    /^(open |show )?(my )?(wardrobe|closet)\.?$/.test(t.trim()) ||
-    t.trim() === "wardrobe" ||
-    t.trim() === "closet"
+    /^(open |show )?(my )?(wardrobe|closet)\.?$/.test(s.trim()) ||
+    s.trim() === "wardrobe" ||
+    s.trim() === "closet"
+  );
+}
+
+export function isWeatherOnlyAsk(transcript: string): boolean {
+  const t = transcript.toLowerCase();
+  return (
+    /\b(what('?s| is) the weather|how('?s| is) the weather|weather (today|like|outside|report)|check (the )?weather|tell me the weather)\b/.test(
+      t
+    ) || /^\s*weather\s*\.?$/.test(t)
   );
 }
 
@@ -889,10 +935,7 @@ export function parseVoiceIntent(transcript: string) {
     };
   }
 
-  const weatherOnlyAsk =
-    /\bweather\b/.test(t) &&
-    !spokenWeather &&
-    !/\b(suggest|wear|outfit|dress me|what if|what would)\b/.test(t);
+  const weatherOnlyAsk = isWeatherOnlyAsk(transcript);
   if (weatherOnlyAsk) {
     return {
       transcript,
@@ -900,6 +943,17 @@ export function parseVoiceIntent(transcript: string) {
       entities: {},
       reply: "Here’s the weather for your look.",
       confidence: "high" as const,
+    };
+  }
+
+  // Stylist conversation about the current look (before generic suggest)
+  if (isOutfitConversation(transcript)) {
+    return {
+      transcript,
+      intent: "chat_look" as const,
+      entities: {},
+      reply: "Talking through the look with you.",
+      confidence: "medium" as const,
     };
   }
 

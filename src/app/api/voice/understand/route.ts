@@ -4,6 +4,7 @@ import { z } from "zod";
 import { DEFAULT_CHAT_MODEL, getOpenAI, hasAIKey } from "@/lib/ai";
 import {
   isHighConfidenceVoiceIntent,
+  isOutfitConversation,
   parseVoiceIntent,
 } from "@/lib/outfit-engine";
 
@@ -54,8 +55,12 @@ export async function POST(req: NextRequest) {
 
   const context = body.context || {};
 
-  // Fast path: clear keyword intents without LLM
-  if (isHighConfidenceVoiceIntent(transcript) || !hasAIKey()) {
+  // Fast path: clear keyword intents without LLM — never shortcut outfit chat
+  if (
+    (isHighConfidenceVoiceIntent(transcript) &&
+      !isOutfitConversation(transcript)) ||
+    !hasAIKey()
+  ) {
     const parsed = parseVoiceIntent(transcript);
     return NextResponse.json({
       reply: parsed.reply,
@@ -123,12 +128,12 @@ Rules:
 - Use suggest_look for new occasions OR weather what-ifs ("if it was 16 degrees").
 - CRITICAL: If they ask to pick/choose/suggest/help with an outfit AND mention wardrobe/closet ("from my wardrobe"), that is suggest_look — NOT open_page. Only open /wardrobe when they clearly want to browse the wardrobe page ("open my wardrobe", "show closet").
 - Social plans count as occasions: drinks, pub, friends, dinner, wedding, etc. Set occasion from what they said.
-- reply should sound like a sharp stylist who is happy to help (warm, short, 1–2 sentences) — never a cold system message like "Opening your wardrobe" when they asked for a look.
-- When user mentions a temperature or feeling cold/hot, set tempC (Celsius) and freshLook=true on suggest_look. Keep the current occasion if they don't name a new one.
+- CONVERSATION: If they already have a Current look and ask about fabric weight, weather fit, belt, socks/stockings, confidence, or "what should I add" — answer as a stylist in reply and use tool "none" (or swap_piece if changing). Do NOT use check_weather just because they said "weather" while talking about a garment ("is this knit too thick for the weather").
+- check_weather ONLY when they literally want the forecast ("what's the weather").
+- reply should sound like a sharp stylist who is happy to help (warm, short, 1–3 sentences).
+- When user mentions a temperature or feeling cold/hot as a what-if for a NEW look, set tempC and freshLook=true on suggest_look.
 - Use open_page for navigation (wardrobe, connect, try-on, settings, billing, today).
 - Use add_from_photo to add purchases from a receipt/screenshot.
-- Use explain_look / check_weather when asked only about actual weather (not outfit suggestions).
-- Mention the temperature if they asked a what-if.
 - Return 1–2 actions max.`,
     });
 
@@ -210,6 +215,20 @@ function keywordToActions(parsed: ReturnType<typeof parseVoiceIntent>) {
       return [
         {
           tool: "explain_look" as const,
+          occasion: null,
+          style: null,
+          tempC: null,
+          freshLook: null,
+          category: null,
+          garmentId: null,
+          garmentQuery: null,
+          path: null,
+        },
+      ];
+    case "chat_look":
+      return [
+        {
+          tool: "none" as const,
           occasion: null,
           style: null,
           tempC: null,

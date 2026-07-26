@@ -27,24 +27,39 @@ export function buildVoiceHandlers(
       if (!w) return "Weather isn’t loaded yet.";
       return `${Math.round(w.tempC)} degrees, ${w.condition} in ${w.location}. Rain chance ${w.precipChance} percent.`;
     },
-    getContext: () => ({
-      pathname: pathname || "/today",
-      weather: state.weather
-        ? `${Math.round(state.weather.tempC)}°C ${state.weather.condition} ${state.weather.location}`
-        : null,
-      connectedStores: state.user?.connectedStores || [],
-      outfit: (state.currentOutfit?.garments || []).map((g) => ({
-        id: g.id,
-        name: g.name,
-        category: g.category,
-      })),
-      wardrobe: state.wardrobe.map((g) => ({
-        id: g.id,
-        name: g.name,
-        brand: g.brand,
-        category: g.category,
-        colors: g.colors,
-      })),
-    }),
+    getContext: () => {
+      const o = state.currentOutfit;
+      return {
+        pathname: pathname || "/today",
+        weather: state.weather
+          ? `${Math.round(state.weather.tempC)}°C ${state.weather.condition} ${state.weather.location}`
+          : null,
+        weatherFull: state.weather,
+        connectedStores: state.user?.connectedStores || [],
+        occasion: o?.occasion || null,
+        style: o?.style || state.user?.stylePrefs?.[0] || null,
+        stylingGuide: o?.stylingGuide || null,
+        rationale: o?.rationale || null,
+        outfit: (o?.garments || []).map((g) => ({
+          id: g.id,
+          name: g.name,
+          category: g.category,
+          fabric: g.fabric,
+          formality: g.formality,
+          colors: g.colors,
+        })),
+        outfitGarments: o?.garments || [],
+        wardrobe: state.wardrobe.map((g) => ({
+          id: g.id,
+          name: g.name,
+          brand: g.brand,
+          category: g.category,
+          colors: g.colors,
+          fabric: g.fabric,
+          formality: g.formality,
+        })),
+        wardrobeFull: state.wardrobe,
+      };
+    },
   };
 }

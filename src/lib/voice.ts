@@ -2,6 +2,7 @@
 
 import {
   isHighConfidenceVoiceIntent,
+  isOutfitConversation,
   parseVoiceIntent,
 } from "@/lib/outfit-engine";
 import type { Garment } from "@/lib/types";
@@ -81,15 +82,31 @@ type VoiceAction = {
   transcript?: string | null;
 };
 
-/** Hybrid: keyword fast-path, else LLM understand API. */
+/** Hybrid: keyword fast-path, stylist chat for follow-ups, else LLM understand. */
 export async function handleVoiceCommandAsync(
   transcript: string,
   actions: VoiceActionHandlers
 ) {
+  const ctx = actions.getContext?.() || {};
+  const hasLook = Array.isArray(ctx.outfit) && ctx.outfit.length > 0;
+  const chatting = isOutfitConversation(transcript) && hasLook;
+
+  // Follow-ups about the suggested look → stylist chat (not weather dump / not re-suggest)
+  if (chatting) {
+    const reply = await runOutfitChat(transcript, actions);
+    speak(reply);
+    return { reply, source: "chat" as const };
+  }
+
   const useLocal = isHighConfidenceVoiceIntent(transcript);
 
   if (useLocal) {
     const parsed = parseVoiceIntent(transcript);
+    if (parsed.intent === "chat_look" && hasLook) {
+      const reply = await runOutfitChat(transcript, actions);
+      speak(reply);
+      return { reply, source: "chat" as const };
+    }
     const reply = await applyLocalIntent(parsed, actions);
     speak(reply);
     return { reply, source: "keyword" as const, parsed };
@@ -101,24 +118,81 @@ export async function handleVoiceCommandAsync(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         transcript,
-        context: actions.getContext?.() || {},
+        context: ctx,
       }),
     });
     if (!res.ok) {
+      if (hasLook) {
+        const reply = await runOutfitChat(transcript, actions);
+        speak(reply);
+        return { reply, source: "chat" as const };
+      }
       const parsed = parseVoiceIntent(transcript);
       const reply = await applyLocalIntent(parsed, actions);
       speak(reply);
       return { reply, source: "keyword" as const, parsed };
     }
     const data = await res.json();
+    // If planner decided it's just weather but user was clearly chatting the look, prefer chat
+    const onlyWeather =
+      Array.isArray(data.actions) &&
+      data.actions.length === 1 &&
+      data.actions[0]?.tool === "check_weather";
+    if (onlyWeather && hasLook && isOutfitConversation(transcript)) {
+      const reply = await runOutfitChat(transcript, actions);
+      speak(reply);
+      return { reply, source: "chat" as const };
+    }
     const reply = await applyActions(data.actions || [], actions, data.reply);
     speak(reply);
     return { reply, source: data.source || "llm", actions: data.actions };
   } catch {
+    if (hasLook && isOutfitConversation(transcript)) {
+      const reply = await runOutfitChat(transcript, actions);
+      speak(reply);
+      return { reply, source: "chat" as const };
+    }
     const parsed = parseVoiceIntent(transcript);
     const reply = await applyLocalIntent(parsed, actions);
     speak(reply);
     return { reply, source: "keyword" as const, parsed };
+  }
+}
+
+async function runOutfitChat(
+  transcript: string,
+  actions: VoiceActionHandlers
+): Promise<string> {
+  const ctx = actions.getContext?.() || {};
+  try {
+    const res = await fetch("/api/outfit/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transcript,
+        garments: ctx.outfitGarments || ctx.outfit || [],
+        wardrobe: ctx.wardrobeFull || ctx.wardrobe || [],
+        weather: ctx.weatherFull || undefined,
+        occasion: ctx.occasion || "today",
+        style: ctx.style || "quiet luxury",
+        stylingGuide: ctx.stylingGuide || "",
+        rationale: ctx.rationale || "",
+      }),
+    });
+    if (!res.ok) {
+      const e = actions.onExplainLook?.();
+      return typeof e === "string" && e
+        ? e
+        : "Tell me what you’d like to tweak on this look.";
+    }
+    const data = await res.json();
+    await applyActions(data.actions || [], actions, data.reply);
+    return data.reply || "Happy to refine this look — what should we change?";
+  } catch {
+    const e = actions.onExplainLook?.();
+    return typeof e === "string" && e
+      ? e
+      : "Happy to talk through the look — what are you unsure about?";
   }
 }
 
@@ -185,6 +259,8 @@ async function applyLocalIntent(
       if (typeof e === "string" && e) return e;
       return parsed.reply;
     }
+    case "chat_look":
+      return runOutfitChat(parsed.transcript, actions);
     case "suggest_outfit":
     default: {
       const outfit = (await (actions.generateOutfitAsync ||
@@ -261,6 +337,9 @@ async function applyActions(
         break;
       case "add_from_photo":
         actions.onNavigate?.("/connect");
+        break;
+      case "none":
+      case "chat_look":
         break;
       default:
         break;

@@ -108,6 +108,7 @@ export interface VoiceCommandResult {
     | "weather_check"
     | "open_wardrobe"
     | "explain_look"
+    | "chat_look"
     | "open_page"
     | "add_from_photo"
     | "unknown";
