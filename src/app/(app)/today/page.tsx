@@ -21,17 +21,17 @@ import { useRouter } from "next/navigation";
 const QUICK_EVENTS = [
   {
     id: "work",
-    label: "Work meeting",
+    label: "Work",
     occasion: "work meeting",
   },
   {
     id: "in-laws",
-    label: "Meeting the in-laws",
+    label: "In-laws",
     occasion: "meeting the in-laws",
   },
   {
     id: "dinner",
-    label: "Dinner date",
+    label: "Dinner",
     occasion: "dinner date",
   },
   {
@@ -40,6 +40,12 @@ const QUICK_EVENTS = [
     occasion: "wedding",
   },
 ] as const;
+
+function greetingForHour(hour: number) {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 export default function TodayPage() {
   const router = useRouter();
@@ -54,9 +60,15 @@ export default function TodayPage() {
   const wardrobe = useAetherStore((s) => s.wardrobe);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>();
   const [composing, setComposing] = useState(false);
+  const [activeOccasion, setActiveOccasion] = useState<string | null>(null);
   const [interim, setInterim] = useState("");
   const [supported, setSupported] = useState(true);
+  const [greeting, setGreeting] = useState("Good morning");
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  useEffect(() => {
+    setGreeting(greetingForHour(new Date().getHours()));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,6 +123,7 @@ export default function TodayPage() {
         setTranscript(text);
         setVoiceListening(false);
         setComposing(true);
+        setActiveOccasion(null);
         void handleVoiceCommandAsync(
           text,
           buildVoiceHandlers(router, "/today")
@@ -119,7 +132,6 @@ export default function TodayPage() {
     };
     rec.onend = () => setVoiceListening(false);
     rec.onerror = (event: SpeechRecognitionErrorEvent) => {
-      // Aborted = we restarted; no-speech = user quiet — don't thrash UI
       if (event.error === "aborted" || event.error === "no-speech") {
         setVoiceListening(false);
         return;
@@ -131,16 +143,15 @@ export default function TodayPage() {
   const startListen = () => {
     const rec = recognitionRef.current;
     if (!rec || !supported) return;
-    // Barge-in: stop the AI mid-sentence and listen to the new ask
     stopSpeaking();
     setComposing(false);
+    setActiveOccasion(null);
     setInterim("");
     try {
       rec.stop();
     } catch {
       // not running
     }
-    // Brief pause so Chrome releases the previous session before restart
     window.setTimeout(() => {
       setVoiceListening(true);
       try {
@@ -157,15 +168,22 @@ export default function TodayPage() {
   };
 
   const pickEvent = (event: (typeof QUICK_EVENTS)[number]) => {
+    setActiveOccasion(event.id);
     setComposing(true);
     void generateOutfitAsync(event.occasion)
       .then((outfit) => {
         if (outfit?.stylingGuide) speak(outfit.stylingGuide);
       })
-      .finally(() => setComposing(false));
+      .finally(() => {
+        setComposing(false);
+        setActiveOccasion(null);
+      });
   };
 
   const firstName = user?.displayName?.split(" ")[0];
+  const weatherBit = weather
+    ? `${Math.round(weather.tempC)}° · ${weather.condition}`
+    : null;
 
   return (
     <div className="space-y-8 pb-24">
@@ -176,21 +194,18 @@ export default function TodayPage() {
         className="max-w-2xl"
       >
         <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-          Good morning{firstName ? `, ${firstName}` : ""}
+          {greeting}
+          {firstName ? `, ${firstName}` : ""}
         </p>
         <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
           Where are you going today?
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
-          {weather
-            ? `${Math.round(weather.tempC)}°C · ${weather.condition} in ${weather.location}. `
-            : ""}
-          Nothing dresses onto your photo until you speak or pick an occasion.
-          Then we’ll suggest one look from your wardrobe — change anything by voice.
+          {weatherBit ? `${weatherBit}. ` : ""}
+          Speak or pick an occasion — one look from your wardrobe.
         </p>
       </motion.div>
 
-      {/* Primary: tap to speak */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -205,18 +220,20 @@ export default function TodayPage() {
           <button
             type="button"
             onClick={() => (voiceListening ? stopListen() : startListen())}
-            disabled={!supported || wardrobe.length === 0}
+            disabled={!supported || wardrobe.length === 0 || composing}
             className={cn(
               "mt-4 flex w-full max-w-xl items-center gap-4 rounded-full border px-5 py-4 text-left transition",
               voiceListening
                 ? "border-champagne/50 bg-champagne/15 shadow-[0_0_40px_rgba(201,168,124,0.18)]"
-                : "border-line bg-white/[0.03] hover:border-champagne/35"
+                : composing
+                  ? "border-champagne/30 bg-champagne/[0.08]"
+                  : "border-line bg-white/[0.03] hover:border-champagne/35"
             )}
           >
             <span
               className={cn(
-                "flex h-12 w-12 shrink-0 items-center justify-center rounded-full",
-                voiceListening
+                "flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition",
+                voiceListening || composing
                   ? "bg-champagne text-ink"
                   : "bg-champagne/15 text-champagne"
               )}
@@ -234,14 +251,16 @@ export default function TodayPage() {
                   : composing
                     ? "Composing your look…"
                     : currentOutfit
-                      ? "Tap to change anything — or describe a new event"
+                      ? "Say a change — or a new occasion"
                       : "Tap to speak"}
               </p>
-              <p className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-mist">
+              <p className="mt-0.5 text-xs text-mist">
                 {supported
                   ? voiceListening
-                    ? "Say where you’re going"
-                    : "e.g. work meeting · dinner with parents"
+                    ? "Where you’re going"
+                    : composing
+                      ? "Almost ready"
+                      : "Or pick a quick occasion below"
                   : "Use Chrome for voice"}
               </p>
             </div>
@@ -249,17 +268,26 @@ export default function TodayPage() {
           </button>
 
           <div className="mt-5 flex flex-wrap gap-2">
-            {QUICK_EVENTS.map((event) => (
-              <button
-                key={event.id}
-                type="button"
-                onClick={() => pickEvent(event)}
-                disabled={!wardrobe.length}
-                className="rounded-full border border-line px-3.5 py-2 text-xs text-mist transition hover:border-champagne/40 hover:text-ivory"
-              >
-                {event.label}
-              </button>
-            ))}
+            {QUICK_EVENTS.map((event) => {
+              const selected = activeOccasion === event.id;
+              return (
+                <motion.button
+                  key={event.id}
+                  type="button"
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => pickEvent(event)}
+                  disabled={!wardrobe.length || composing}
+                  className={cn(
+                    "rounded-full border px-3.5 py-2 text-xs tracking-wide transition disabled:opacity-50",
+                    selected
+                      ? "border-champagne/50 bg-champagne/15 text-champagne"
+                      : "border-line text-mist hover:border-champagne/40 hover:text-ivory"
+                  )}
+                >
+                  {selected && composing ? "Dressing…" : event.label}
+                </motion.button>
+              );
+            })}
           </div>
         </div>
       </motion.div>
@@ -271,6 +299,7 @@ export default function TodayPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
           >
             <OutfitStage
               outfit={currentOutfit}
@@ -292,8 +321,7 @@ export default function TodayPage() {
               Waiting for today’s occasion
             </p>
             <p className="mx-auto mt-2 max-w-md text-sm text-mist">
-              Tap Speak above, or pick a quick occasion. We’ll dress you in one
-              look from your wardrobe.
+              Speak above, or tap a quick occasion.
             </p>
           </motion.div>
         )}

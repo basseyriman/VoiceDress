@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import { Trash2 } from "lucide-react";
 import { GarmentTile } from "@/components/wardrobe/outfit-stage";
 import { useAetherStore } from "@/store/aether-store";
@@ -43,14 +44,22 @@ export default function WardrobePage() {
 
   return (
     <div className="space-y-8 pb-20">
-      <div>
-        <p className="text-xs uppercase tracking-[0.28em] text-champagne">Closet</p>
-        <h1 className="mt-2 font-display text-4xl text-ivory">Your wardrobe</h1>
-        <p className="mt-2 text-sm text-mist">
-          {wardrobe.length} pieces for Today. Add more via Connect — Shopify
-          orders or a receipt / product photo. Tap the bin to remove a mistake.
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+          Closet
         </p>
-      </div>
+        <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
+          Your wardrobe
+        </h1>
+        <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
+          {wardrobe.length} pieces. Add via Connect — remove mistakes with the
+          bin.
+        </p>
+      </motion.div>
 
       <div className="flex flex-wrap gap-2">
         {filters.map((f) => (

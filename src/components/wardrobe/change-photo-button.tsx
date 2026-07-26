@@ -46,8 +46,8 @@ export function ChangePhotoButton({
   const btn = cn(
     "inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.03] text-mist transition hover:border-champagne/40 hover:text-ivory disabled:opacity-50",
     compact
-      ? "px-3 py-1.5 text-[10px] uppercase tracking-wider"
-      : "px-4 py-2 text-xs"
+      ? "px-3 py-1.5 text-[10px] tracking-wide"
+      : "px-3.5 py-1.5 text-xs tracking-wide"
   );
 
   return (

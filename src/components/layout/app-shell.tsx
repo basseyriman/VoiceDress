@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  CalendarDays,
   CloudSun,
+  Ellipsis,
   LogOut,
   Shirt,
   Sparkles,
@@ -21,7 +21,7 @@ const nav = [
   { href: "/today", label: "Today", icon: Sparkles },
   { href: "/try-on", label: "Photo", icon: UserRound },
   { href: "/wardrobe", label: "Wardrobe", icon: Shirt },
-  { href: "/settings", label: "More", icon: CalendarDays },
+  { href: "/settings", label: "More", icon: Ellipsis },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -91,7 +91,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <FlowDock />
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-line/50 bg-ink/90 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)] md:hidden">
-        <div className="flex justify-around px-2 py-2.5">
+        <div className="flex justify-around px-1.5 py-2">
           {nav.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
@@ -100,11 +100,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex min-w-[4.25rem] flex-col items-center gap-1 rounded-lg px-3 py-1.5 text-[10px] transition",
-                  active ? "text-champagne" : "text-mist"
+                  "flex min-h-[3.25rem] min-w-[4.5rem] flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] tracking-wide transition",
+                  active
+                    ? "bg-champagne/10 text-champagne"
+                    : "text-mist hover:text-ivory"
                 )}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
                 {item.label}
               </Link>
             );

@@ -705,20 +705,27 @@ export function OutfitStage({
 
       <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_1.05fr]">
         <div className="relative mx-auto w-full max-w-md">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.28em] text-champagne">
-                Your look
-              </p>
-              <p className="text-xs text-mist">
-                {photoTryOn
-                  ? "Your photo — clothes dressed onto you"
-                  : "Quick pick — outfit ready now, photo optional"}
-              </p>
+          <div className="mb-3 space-y-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.28em] text-champagne">
+                  Your look
+                </p>
+                <p className="mt-0.5 text-xs text-mist">
+                  {photoTryOn
+                    ? "Dressed onto your photo"
+                    : "Quick pick — photo optional"}
+                </p>
+              </div>
+              {dressing && (
+                <span className="shrink-0 rounded-full border border-champagne/40 bg-champagne/15 px-3 py-1 text-[11px] font-medium tabular-nums tracking-wide text-champagne">
+                  {progressPct}%
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {autoTryOn && (
-                <div className="flex rounded-full border border-line p-0.5 text-[10px]">
+                <div className="flex rounded-full border border-line p-0.5 text-[10px] tracking-wide">
                   <button
                     type="button"
                     onClick={() => setPhotoTryOnPref(false)}
@@ -754,11 +761,6 @@ export function OutfitStage({
                   setRetryNonce((n) => n + 1);
                 }}
               />
-              {dressing && (
-                <span className="rounded-full border border-champagne/40 bg-champagne/15 px-3 py-1 text-[11px] font-medium tabular-nums tracking-wide text-champagne">
-                  {progressPct}%
-                </span>
-              )}
             </div>
           </div>
 
@@ -771,12 +773,12 @@ export function OutfitStage({
                   key={wornUrl || displayAvatar || "empty"}
                   src={wornUrl || displayAvatar || undefined}
                   alt="You in this outfit"
-                  initial={{ opacity: 0.55 }}
+                  initial={{ opacity: 0.55, filter: "brightness(0.96)" }}
                   animate={{
                     opacity: 1,
                     filter: dressing ? "brightness(0.92)" : "brightness(1)",
                   }}
-                  transition={{ duration: 0.45, ease: "easeOut" }}
+                  transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
                   className="relative z-[1] mx-auto block h-auto max-h-[min(72vh,42rem)] w-full object-contain object-center"
                   onError={() => {
                     void resolveDisplayAvatar(avatarUrl).then((url) => {
@@ -868,11 +870,11 @@ export function OutfitStage({
             {showBillingPrompt && hasAvatar && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center backdrop-blur-sm">
                 <p className="font-display text-2xl text-ivory">
-                  fal.ai credits used up
+                  Try-on credits used up
                 </p>
                 <p className="max-w-sm text-xs text-mist">
-                  Try-on is locked until you top up your fal balance. Your photo
-                  and wardrobe are fine — this is only billing.
+                  Top up billing to keep dressing onto your photo. Your wardrobe
+                  is fine.
                 </p>
                 <a
                   href="https://fal.ai/dashboard/billing"
@@ -880,21 +882,23 @@ export function OutfitStage({
                   rel="noreferrer"
                   className="rounded-full bg-champagne px-4 py-2 text-xs font-medium text-ink"
                 >
-                  Top up fal billing →
+                  Top up billing →
                 </a>
               </div>
             )}
 
             {showKeyPrompt && hasAvatar && !showBillingPrompt && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center backdrop-blur-sm">
-                <p className="font-display text-2xl text-ivory">Try-on needs fal credits</p>
+                <p className="font-display text-2xl text-ivory">
+                  Try-on needs credits
+                </p>
                 <a
                   href="https://fal.ai/dashboard/billing"
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-full bg-champagne px-4 py-2 text-xs font-medium text-ink"
                 >
-                  Check fal billing →
+                  Check billing →
                 </a>
               </div>
             )}
@@ -921,16 +925,24 @@ export function OutfitStage({
               </div>
             )}
 
-            {!dressing && wornUrl && outfit && !notice && !error && (
-              <div className="pointer-events-none absolute left-4 top-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
-                  Ready · dressed for
-                </p>
-                <p className="font-display text-sm text-ivory">
-                  {outfit.occasion}
-                </p>
-              </div>
-            )}
+            <AnimatePresence>
+              {!dressing && wornUrl && outfit && !notice && !error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="pointer-events-none absolute left-4 top-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md"
+                >
+                  <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
+                    Ready · dressed for
+                  </p>
+                  <p className="font-display text-sm text-ivory">
+                    {outfit.occasion}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {!dressing && wornUrl && outfit && (notice || error) && (
               <div className="pointer-events-none absolute left-4 bottom-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md">
@@ -954,8 +966,8 @@ export function OutfitStage({
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
             {outfit
-              ? "Tap any piece to swap it from your wardrobe. Ask by voice how to wear it — tuck, layers, belt — and we’ll talk it through."
-              : "Tell VoiceDress where you’re going and we’ll choose one look from your wardrobe."}
+              ? "Tap a piece to swap it. Ask by voice how to wear it."
+              : "Tell VoiceDress where you’re going — one look from your wardrobe."}
           </p>
 
           <div className="mt-6">
@@ -1055,21 +1067,23 @@ export function OutfitStage({
 
           {(generating || dressing) && (
             <p className="mt-4 text-xs text-mist">
-              Dressing onto your photo — {progressPct}% complete
-              {etaSec ? ` · about ${etaSec < 60 ? `${etaSec}s` : `${Math.ceil(etaSec / 60)} min`} left` : ""}.
-              Need it faster? Switch to Quick above.
+              {progressPct}%
+              {etaSec
+                ? ` · ~${etaSec < 60 ? `${etaSec}s` : `${Math.ceil(etaSec / 60)} min`} left`
+                : ""}
+              {" · "}
+              Switch to Quick if you’re in a hurry.
             </p>
           )}
           {!generating && !dressing && autoTryOn && !photoTryOn && outfit && (
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-mist">
-                Outfit ready instantly. Photo try-on is optional when you have a
-                minute.
+                Fast path — outfit picked. Dress onto your photo when you want.
               </p>
               <button
                 type="button"
                 onClick={() => setPhotoTryOnPref(true)}
-                className="shrink-0 rounded-full border border-champagne/40 bg-champagne/15 px-4 py-2 text-xs text-champagne hover:bg-champagne/25"
+                className="shrink-0 rounded-full border border-champagne/40 bg-champagne/15 px-4 py-2 text-xs text-champagne transition hover:bg-champagne/25"
               >
                 See on my photo
               </button>
@@ -1077,13 +1091,12 @@ export function OutfitStage({
           )}
           {!generating && !dressing && wornUrl && outfit && photoTryOn && missingIds.length === 0 && (
             <p className="mt-4 text-xs text-champagne/80">
-              Full look on you. You’re ready to go.
+              You’re ready to go.
             </p>
           )}
           {!generating && !dressing && wornUrl && outfit && photoTryOn && missingIds.length > 0 && (
             <p className="mt-4 text-xs text-mist">
-              Some pieces didn’t match — tap to swap. We won’t spend more credits
-              on a wrong body.
+              Some pieces didn’t match — tap to swap.
             </p>
           )}
         </div>
@@ -1219,12 +1232,12 @@ export function GarmentTile({
           {garment.brand} · {garment.category}
         </p>
         {!large && (
-          <p className="mt-2 text-[10px] uppercase tracking-wider text-mist">
+          <p className="mt-2 text-xs text-mist">
             {dressing
               ? progressPct != null
                 ? `Applying · ${progressPct}%`
-                : "Applying now…"
-              : "Tap to change"}
+                : "Applying…"
+              : "Tap to swap"}
           </p>
         )}
         {dressing && progressPct != null && (
