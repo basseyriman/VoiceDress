@@ -36,29 +36,37 @@ function sleep(ms: number) {
 }
 
 function generationMode(): "fast" | "balanced" | "quality" {
-  const m = (process.env.FASHN_GENERATION_MODE || "quality").toLowerCase();
+  // balanced/1k default — quality+2k is 2–4× the credits per piece
+  const m = (process.env.FASHN_GENERATION_MODE || "balanced").toLowerCase();
   if (m === "fast" || m === "quality" || m === "balanced") return m;
-  return "quality";
+  return "balanced";
 }
 
 function resolution(): "1k" | "2k" | "4k" {
-  const r = (process.env.FASHN_RESOLUTION || "2k").toLowerCase();
+  const r = (process.env.FASHN_RESOLUTION || "1k").toLowerCase();
   if (r === "2k" || r === "4k" || r === "1k") return r;
-  return "2k";
+  return "1k";
 }
 
 const KEEP_FACE =
   "CRITICAL: Keep the person's EXACT real face from the model photo — same skin texture, facial features, and identity. Do not beautify, smooth, cartoonize, age, or replace the face.";
 
+const STRIP_OUTER =
+  "Remove any jacket, blazer, sport coat, overcoat, or hoodie the person is already wearing — this look has no outer layer.";
+
 /** Prompt hints so Max keeps color/silhouette for known hard cases. */
-export function apparelPromptForPiece(piece: {
-  category: string;
-  name?: string;
-  colors?: string[];
-  tags?: string[];
-}): string | undefined {
+export function apparelPromptForPiece(
+  piece: {
+    category: string;
+    name?: string;
+    colors?: string[];
+    tags?: string[];
+  },
+  opts?: { stripOuterwear?: boolean }
+): string | undefined {
   const name = `${piece.name || ""} ${(piece.tags || []).join(" ")}`.toLowerCase();
   const colors = (piece.colors || []).join(", ");
+  const strip = opts?.stripOuterwear ? STRIP_OUTER : "";
   if (piece.category === "outerwear") {
     if (/blazer|sport coat|suit jacket/.test(name)) {
       return [
@@ -88,10 +96,59 @@ export function apparelPromptForPiece(piece: {
       "Clean photoreal fabric — no black patches or glitches.",
     ].join(" ");
   }
-  if (colors && /white|ivory|cream|stone|khaki|beige/.test(colors.toLowerCase())) {
-    return `${KEEP_FACE} Wear this exact garment. Keep the ${colors} color — do not darken or recolor it.`;
+  if (piece.category === "top" || piece.category === "dress") {
+    return [
+      KEEP_FACE,
+      strip,
+      `Wear this exact ${piece.category === "dress" ? "dress" : "top"}: ${piece.name || "garment"}.`,
+      colors ? `Keep the ${colors} color — do not darken or recolor it.` : "Keep the exact product color.",
+      "Replace the current upper clothing completely.",
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
-  return KEEP_FACE;
+  if (piece.category === "bottom") {
+    return [
+      KEEP_FACE,
+      `Wear these exact trousers/bottoms: ${piece.name || "garment"}.`,
+      colors ? `Exact color: ${colors}.` : "Keep the exact product color.",
+      "Replace the current lower clothing. Keep the top/shirt already on the person.",
+    ].join(" ");
+  }
+  if (colors && /white|ivory|cream|stone|khaki|beige/.test(colors.toLowerCase())) {
+    return [KEEP_FACE, strip, `Wear this exact garment. Keep the ${colors} color — do not darken or recolor it.`]
+      .filter(Boolean)
+      .join(" ");
+  }
+  return [KEEP_FACE, strip].filter(Boolean).join(" ") || KEEP_FACE;
+}
+
+/** One-call prompt when top + bottom are combined into a product collage. */
+export function collageApparelPrompt(
+  pieces: { category: string; name?: string; colors?: string[] }[],
+  opts?: { stripOuterwear?: boolean }
+): string {
+  const labels = pieces.map((p, i) => {
+    const slot =
+      i === 0
+        ? "left panel"
+        : i === 1
+          ? "middle/right panel"
+          : `panel ${i + 1}`;
+    const colors = (p.colors || []).join(", ");
+    return `${slot}: ${p.name || p.category}${colors ? ` (${colors})` : ""}`;
+  });
+  return [
+    KEEP_FACE,
+    opts?.stripOuterwear ? STRIP_OUTER : "",
+    "The product image is a collage of multiple garments. Dress the person in ALL of them in one change.",
+    `Garments: ${labels.join("; ")}.`,
+    "Match each panel’s exact fabric and color. Replace existing shirt and trousers to match the collage.",
+    "Do not invent a jacket unless a jacket panel is in the collage.",
+    "Photoreal, clean edges, full-body framing unchanged.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /** Shoes / glasses / watch prompts for Try-On Max. */

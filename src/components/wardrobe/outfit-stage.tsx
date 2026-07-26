@@ -262,18 +262,30 @@ export function OutfitStage({
           if (step.name) appliedNames.add(step.name);
         };
 
-        // 1) Clothes one piece at a time so the gold ring moves shirt → trousers → blazer
+        // 1) Base clothes in one call (top+bottom collage = 1 credit). Outerwear second.
         if (apparelPieces.length) {
           setDonePieceIds([]);
           setProgress(8);
+
+          const baseApparel = apparelPieces.filter(
+            (p) => p.category !== "outerwear"
+          );
+          const outerPiece = apparelPieces.find(
+            (p) => p.category === "outerwear"
+          );
+
           let apparelBaseBeforeOuter = current;
 
-          for (let i = 0; i < apparelPieces.length; i++) {
-            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-            const piece = apparelPieces[i];
-            setActivePieceId(piece.id);
-            setStepLabel(`Dressing ${piece.name}…`);
-            setProgress(8 + Math.round(((i + 0.35) / apparelPieces.length) * 40));
+          if (baseApparel.length) {
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            setActivePieceId(baseApparel[0].id);
+            setStepLabel(
+              baseApparel.length > 1
+                ? `Dressing ${baseApparel.map((p) => p.name).join(" + ")}…`
+                : `Dressing ${baseApparel[0].name}…`
+            );
+            setProgress(12);
 
             const apparelRes = await authFetch("/api/tryon/render", {
               method: "POST",
@@ -282,79 +294,35 @@ export function OutfitStage({
               body: JSON.stringify({
                 personImage: current,
                 stage: "apparel",
-                maxPieces: 1,
-                garments: [toPayload(piece)],
+                maxPieces: baseApparel.length,
+                stripOuterwear: !outerPiece,
+                garments: baseApparel.map(toPayload),
               }),
             });
 
             const apparelData = await apparelRes.json();
-            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
             if (failOrBilling(apparelData, apparelRes.status)) return;
 
             if (!apparelData.ok || !apparelData.imageUrl) {
-              if (piece.category === "outerwear") {
-                setNotice(
-                  `${piece.name || "Outerwear"} didn’t land — continuing…`
-                );
-                continue;
-              }
+              const failedName = baseApparel[0]?.name || "clothes";
               const detail =
                 typeof apparelData.detail === "string"
                   ? apparelData.detail.slice(0, 180)
                   : "";
               setError(
-                [apparelData.error || `Couldn’t dress ${piece.name}`, detail]
+                [apparelData.error || `Couldn’t dress ${failedName}`, detail]
                   .filter(Boolean)
                   .join(" — ")
               );
+              setMissingIds(baseApparel.map((p) => p.id));
               setDressing(false);
               setActivePieceId(null);
               return;
             }
 
             let dressedUrl = apparelData.imageUrl as string;
-            const stepProvider =
-              Array.isArray(apparelData.steps) && apparelData.steps[0]
-                ? String(apparelData.steps[0].provider || "")
-                : "";
-            const usedFashnMax = stepProvider.includes("fashn");
-
-            if (piece.category === "outerwear") {
-              // Pixel composite was for Kontext and can punch black holes into coats.
-              // FASHN Max already layers — use it directly.
-              if (!usedFashnMax) {
-                setStepLabel("Keeping your shirt & trousers…");
-                try {
-                  dressedUrl = await layerOuterwearPreserveBase(
-                    apparelBaseBeforeOuter,
-                    apparelData.imageUrl,
-                    {
-                      hexColors: piece.hexColors,
-                      colors: piece.colors,
-                    }
-                  );
-                } catch {
-                  dressedUrl = apparelData.imageUrl;
-                }
-              }
-
-              if (await hasTryOnArtifacts(dressedUrl)) {
-                // Reject glitched coat — keep the clean shirt/trousers body
-                setNotice(
-                  `${piece.name || "Coat"} came out glitched — left it off. Tap to retry.`
-                );
-                setMissingIds((ids) =>
-                  ids.includes(piece.id) ? ids : [...ids, piece.id]
-                );
-                setWornUrl(apparelBaseBeforeOuter);
-                current = apparelBaseBeforeOuter;
-                setProgress(
-                  8 + Math.round(((i + 1) / apparelPieces.length) * 42)
-                );
-                continue;
-              }
-            }
-
             try {
               current = await lockFaceIdentity(
                 identityPhoto,
@@ -364,18 +332,123 @@ export function OutfitStage({
             } catch {
               current = dressedUrl;
             }
-            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
             setWornUrl(current);
             setKeyConfigured(true);
-            markApplied({ id: piece.id, name: piece.name });
-            setDonePieceIds((ids) =>
-              ids.includes(piece.id) ? ids : [...ids, piece.id]
-            );
-            setProgress(8 + Math.round(((i + 1) / apparelPieces.length) * 42));
+            apparelBaseBeforeOuter = current;
 
-            if (piece.category !== "outerwear") {
-              apparelBaseBeforeOuter = current;
+            const stepIds = new Set(
+              Array.isArray(apparelData.steps)
+                ? apparelData.steps
+                    .map((s: { id?: string }) => s.id)
+                    .filter(Boolean)
+                : []
+            );
+            for (const piece of baseApparel) {
+              if (stepIds.size === 0 || stepIds.has(piece.id)) {
+                markApplied({ id: piece.id, name: piece.name });
+                setDonePieceIds((ids) =>
+                  ids.includes(piece.id) ? ids : [...ids, piece.id]
+                );
+              } else {
+                setMissingIds((ids) =>
+                  ids.includes(piece.id) ? ids : [...ids, piece.id]
+                );
+              }
             }
+            setProgress(outerPiece ? 42 : 55);
+          }
+
+          if (outerPiece) {
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            setActivePieceId(outerPiece.id);
+            setStepLabel(`Dressing ${outerPiece.name}…`);
+            setProgress(48);
+
+            const apparelRes = await authFetch("/api/tryon/render", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ac.signal,
+              body: JSON.stringify({
+                personImage: current,
+                stage: "apparel",
+                maxPieces: 1,
+                garments: [toPayload(outerPiece)],
+              }),
+            });
+
+            const apparelData = await apparelRes.json();
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            if (failOrBilling(apparelData, apparelRes.status)) return;
+
+            if (!apparelData.ok || !apparelData.imageUrl) {
+              setNotice(
+                `${outerPiece.name || "Outerwear"} didn’t land — continuing…`
+              );
+              setMissingIds((ids) =>
+                ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
+              );
+            } else {
+              let dressedUrl = apparelData.imageUrl as string;
+              const stepProvider =
+                Array.isArray(apparelData.steps) && apparelData.steps[0]
+                  ? String(apparelData.steps[0].provider || "")
+                  : "";
+              const usedFashnMax = stepProvider.includes("fashn");
+
+              if (!usedFashnMax) {
+                setStepLabel("Keeping your shirt & trousers…");
+                try {
+                  dressedUrl = await layerOuterwearPreserveBase(
+                    apparelBaseBeforeOuter,
+                    apparelData.imageUrl,
+                    {
+                      hexColors: outerPiece.hexColors,
+                      colors: outerPiece.colors,
+                    }
+                  );
+                } catch {
+                  dressedUrl = apparelData.imageUrl;
+                }
+              }
+
+              if (await hasTryOnArtifacts(dressedUrl)) {
+                setNotice(
+                  `${outerPiece.name || "Coat"} came out glitched — left it off. Tap to retry.`
+                );
+                setMissingIds((ids) =>
+                  ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
+                );
+                setWornUrl(apparelBaseBeforeOuter);
+                current = apparelBaseBeforeOuter;
+              } else {
+                try {
+                  current = await lockFaceIdentity(
+                    identityPhoto,
+                    dressedUrl,
+                    "strong"
+                  );
+                } catch {
+                  current = dressedUrl;
+                }
+                if (
+                  cancelled ||
+                  myId !== requestId.current ||
+                  ac.signal.aborted
+                )
+                  return;
+                setWornUrl(current);
+                setKeyConfigured(true);
+                markApplied({ id: outerPiece.id, name: outerPiece.name });
+                setDonePieceIds((ids) =>
+                  ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
+                );
+              }
+            }
+            setProgress(55);
           }
 
           setActivePieceId(null);

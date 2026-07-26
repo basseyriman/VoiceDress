@@ -1,8 +1,8 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Apparel (top/dress/bottom/outerwear) → FASHN Try-On Max (FASHN_API_KEY).
- *    Falls back to fal-hosted FASHN v1.6 if Max is unavailable.
+ * 1. Apparel (top+bottom collage in one FASHN call when possible; outerwear second).
+ *    Falls back to per-piece if collage fails. Strips leftover jackets when look has none.
  * 2. Outerwear soft-fallback → fal Kontext layer + client color composite.
  * 3. Shoes / glasses / watch → fal Kontext (or OpenAI if configured).
  */

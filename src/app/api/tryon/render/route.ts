@@ -7,10 +7,12 @@ import {
 import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
 import {
   apparelPromptForPiece,
+  collageApparelPrompt,
   finishPromptForPiece,
   fashnTryOnMax,
   hasFashnApiKey,
 } from "@/lib/fashn-tryon";
+import { composeApparelCollage } from "@/lib/apparel-collage";
 
 export const maxDuration = 180;
 
@@ -131,8 +133,11 @@ async function applyApparelPiece(opts: {
   modelImage: string;
   garmentImage: string;
   piece: Piece;
+  stripOuterwear?: boolean;
 }): Promise<TryResult & { provider?: string; needsBilling?: boolean }> {
-  const prompt = apparelPromptForPiece(opts.piece);
+  const prompt = apparelPromptForPiece(opts.piece, {
+    stripOuterwear: opts.stripOuterwear,
+  });
 
   if (hasFashnApiKey()) {
     const max = await fashnTryOnMax({
@@ -552,6 +557,7 @@ export async function POST(req: NextRequest) {
   const maxPieces = Math.min(Number(body.maxPieces) || 6, 6);
   // Face accessories (glasses/watch) only when client explicitly asks — they morph identity.
   const includeFaceAccessories = Boolean(body.includeFaceAccessories);
+  const stripOuterwear = Boolean(body.stripOuterwear);
   const stylingPrompt =
     typeof body.stylingPrompt === "string" ? body.stylingPrompt.trim() : "";
 
@@ -663,7 +669,76 @@ export async function POST(req: NextRequest) {
       ...apparel.filter((g) => g.category === "outerwear"),
     ].slice(0, maxPieces);
 
-    for (const g of ordered) {
+    const basePieces = ordered.filter((g) => g.category !== "outerwear");
+    const outerPieces = ordered.filter((g) => g.category === "outerwear");
+    const shouldStrip =
+      stripOuterwear || (outerPieces.length === 0 && basePieces.length > 0);
+
+    let baseAppliedViaCollage = false;
+
+    // One FASHN call for top+bottom (API is one product_image — collage them).
+    if (basePieces.length >= 2 && hasFashnApiKey()) {
+      try {
+        const productImages = await Promise.all(
+          basePieces.map((g) => resolveGarmentImageForFal(g.imageUrl))
+        );
+        const collage = await composeApparelCollage(productImages);
+        const collageResult = await fashnTryOnMax({
+          modelImage: current,
+          productImage: collage,
+          prompt: collageApparelPrompt(basePieces, {
+            stripOuterwear: shouldStrip,
+          }),
+        });
+
+        if (collageResult.ok) {
+          current = collageResult.url;
+          apparelBaseUrl = current;
+          baseAppliedViaCollage = true;
+          for (const g of basePieces) {
+            steps.push({
+              id: g.id,
+              category: g.category,
+              name: g.name,
+              url: current,
+              provider: "fashn-tryon-max-collage",
+            });
+          }
+        } else if (collageResult.needsBilling) {
+          return NextResponse.json({
+            ok: false,
+            needsBilling: true,
+            error: "FASHN credits exhausted",
+            detail: collageResult.detail,
+            imageUrl: steps.length ? current : undefined,
+            steps,
+            message:
+              "Your FASHN credits are used up. Top up at fashn.ai, then retry.",
+          });
+        } else {
+          warnings.push(
+            `Full-look collage skipped${
+              collageResult.detail
+                ? `: ${collageResult.detail.slice(0, 120)}`
+                : ""
+            }`
+          );
+        }
+      } catch (err) {
+        warnings.push(
+          `Full-look collage failed: ${
+            err instanceof Error ? err.message.slice(0, 120) : "unknown"
+          }`
+        );
+      }
+    }
+
+    const sequential = [
+      ...(baseAppliedViaCollage ? [] : basePieces),
+      ...outerPieces,
+    ];
+
+    for (const g of sequential) {
       let garmentImage: string;
       try {
         garmentImage = await resolveGarmentImageForFal(g.imageUrl);
@@ -688,6 +763,7 @@ export async function POST(req: NextRequest) {
         modelImage: current,
         garmentImage,
         piece: g,
+        stripOuterwear: shouldStrip && g.category !== "outerwear",
       });
 
       // Outerwear only: if Max/fal failed and we still have fal, try Kontext layer
