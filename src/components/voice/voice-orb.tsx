@@ -234,22 +234,14 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
         )}
 
         <AnimatePresence>
-          {currentOutfit && phase !== "listening" && (
+          {currentOutfit?.stylingGuide && phase !== "listening" && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               className="mt-6 max-w-lg text-left text-xs leading-relaxed text-mist"
             >
-              {currentOutfit.stylingSteps?.length ? (
-                <ul className="space-y-1.5">
-                  {currentOutfit.stylingSteps.map((step) => (
-                    <li key={step}>— {step}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p>{currentOutfit.rationale}</p>
-              )}
+              <p>{currentOutfit.stylingGuide}</p>
             </motion.div>
           )}
         </AnimatePresence>
