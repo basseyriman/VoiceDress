@@ -8,7 +8,12 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
     ],
   },
-  serverExternalPackages: ["heic-convert", "libheif-js"],
+  serverExternalPackages: [
+    "heic-convert",
+    "libheif-js",
+    "firebase-admin",
+    "@google-cloud/firestore",
+  ],
 };
 
 export default nextConfig;

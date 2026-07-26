@@ -44,7 +44,18 @@ export default function BillingPage() {
           name: user?.displayName,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(
+          data.error ||
+            (res.status === 401
+              ? "Sign in again, then retry billing."
+              : res.status === 503
+                ? "Server auth isn’t ready yet — redeploy after Firebase Admin is set."
+                : `Billing failed (${res.status}). Try again.`)
+        );
+        return;
+      }
       if (data.url) {
         window.location.href = data.url;
         return;
@@ -54,7 +65,7 @@ export default function BillingPage() {
       const trialRes = await authFetch("/api/billing/ensure-trial", {
         method: "POST",
       });
-      const trial = await trialRes.json();
+      const trial = await trialRes.json().catch(() => ({}));
       if (trialRes.ok && trial.subscriptionStatus) {
         updateUser({
           subscriptionStatus: trial.subscriptionStatus,
@@ -68,11 +79,16 @@ export default function BillingPage() {
         setMessage(
           trial.error ||
             data.error ||
+            data.message ||
             "Could not start trial. Sign in and try again."
         );
       }
-    } catch {
-      setMessage("Billing request failed. Check your connection and try again.");
+    } catch (err) {
+      setMessage(
+        err instanceof Error
+          ? `Billing request failed: ${err.message}`
+          : "Billing request failed. Check your connection and try again."
+      );
     } finally {
       setLoading(null);
     }

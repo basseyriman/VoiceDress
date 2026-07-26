@@ -47,31 +47,37 @@ export async function POST(req: NextRequest) {
     customerId = snap.data()?.stripeCustomerId as string | undefined;
   }
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    ...(customerId
-      ? { customer: customerId }
-      : auth.email
-        ? { customer_email: auth.email }
-        : {}),
-    client_reference_id: auth.uid,
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${origin}/billing?success=1`,
-    cancel_url: `${origin}/billing?canceled=1`,
-    metadata: {
-      planId,
-      firebaseUid: auth.uid,
-      name: String(body.name || ""),
-    },
-    allow_promotion_codes: true,
-    subscription_data: {
-      trial_period_days: 7,
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      ...(customerId
+        ? { customer: customerId }
+        : auth.email
+          ? { customer_email: auth.email }
+          : {}),
+      client_reference_id: auth.uid,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${origin}/billing?success=1`,
+      cancel_url: `${origin}/billing?canceled=1`,
       metadata: {
         planId,
         firebaseUid: auth.uid,
+        name: String(body.name || ""),
       },
-    },
-  });
+      allow_promotion_codes: true,
+      subscription_data: {
+        trial_period_days: 7,
+        metadata: {
+          planId,
+          firebaseUid: auth.uid,
+        },
+      },
+    });
 
-  return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Checkout failed";
+    console.error("Stripe checkout error", message);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
