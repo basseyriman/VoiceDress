@@ -168,6 +168,7 @@ export default function TodayPage() {
   };
 
   const pickEvent = (event: (typeof QUICK_EVENTS)[number]) => {
+    stopSpeaking();
     setActiveOccasion(event.id);
     setComposing(true);
     void generateOutfitAsync(event.occasion)

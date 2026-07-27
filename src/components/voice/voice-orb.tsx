@@ -113,6 +113,7 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
   };
 
   const runPrompt = (prompt: string) => {
+    stopSpeaking();
     setTranscript(prompt);
     setPhase("thinking");
     void handleVoiceCommandAsync(

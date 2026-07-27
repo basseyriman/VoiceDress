@@ -13,34 +13,173 @@ import {
   parseSwapSpeech,
 } from "@/lib/garment-match";
 import type { Garment } from "@/lib/types";
+import { useAetherStore } from "@/store/aether-store";
 
 export type SpeakFn = (text: string) => void;
 
 /** Bumped whenever the user barges in (mic) so late replies don’t speak over them. */
 let speakGeneration = 0;
+let speakKeepalive: ReturnType<typeof setInterval> | null = null;
+let preferredVoice: SpeechSynthesisVoice | null = null;
+let voicesListenerBound = false;
 
 export function getSpeakGeneration() {
   return speakGeneration;
 }
 
+function clearSpeakKeepalive() {
+  if (speakKeepalive) {
+    clearInterval(speakKeepalive);
+    speakKeepalive = null;
+  }
+}
+
 /** Stop TTS immediately — call when the user taps Speak. */
 export function stopSpeaking() {
   speakGeneration += 1;
+  clearSpeakKeepalive();
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
 }
 
+function pickBestVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return preferredVoice;
+
+  const score = (v: SpeechSynthesisVoice) => {
+    const name = v.name.toLowerCase();
+    const lang = (v.lang || "").toLowerCase();
+    let s = 0;
+    if (lang.startsWith("en-gb")) s += 60;
+    else if (lang.startsWith("en-us")) s += 25;
+    else if (lang.startsWith("en")) s += 15;
+    if (name.includes("google") && lang.startsWith("en-gb")) s += 35;
+    if (
+      name.includes("natural") ||
+      name.includes("neural") ||
+      name.includes("enhanced") ||
+      name.includes("premium")
+    ) {
+      s += 18;
+    }
+    if (
+      /daniel|martha|serena|libby|ryan|sonia|susan|arthur/.test(name) &&
+      lang.startsWith("en-gb")
+    ) {
+      s += 12;
+    }
+    if (v.localService) s += 2;
+    return s;
+  };
+
+  preferredVoice = [...voices].sort((a, b) => score(b) - score(a))[0] || null;
+  return preferredVoice;
+}
+
+function ensureVoicesLoaded() {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  pickBestVoice();
+  if (voicesListenerBound) return;
+  voicesListenerBound = true;
+  window.speechSynthesis.addEventListener("voiceschanged", () => {
+    pickBestVoice();
+  });
+}
+
+/** Keep Chrome from freezing speechSynthesis after ~15s. */
+function startSpeakKeepalive(gen: number) {
+  clearSpeakKeepalive();
+  speakKeepalive = setInterval(() => {
+    if (gen !== speakGeneration) {
+      clearSpeakKeepalive();
+      return;
+    }
+    if (!window.speechSynthesis) {
+      clearSpeakKeepalive();
+      return;
+    }
+    if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
+      try {
+        window.speechSynthesis.resume();
+      } catch {
+        // ignore
+      }
+    }
+    if (!window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+      clearSpeakKeepalive();
+    }
+  }, 8000);
+}
+
+/** Short chunks speak more smoothly than one long utterance in Chrome. */
+function chunkForSpeech(text: string): string[] {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return [];
+  const parts = cleaned.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [cleaned];
+  const chunks: string[] = [];
+  let buf = "";
+  for (const part of parts) {
+    const next = part.trim();
+    if (!next) continue;
+    const joined = buf ? `${buf} ${next}` : next;
+    if (joined.length > 160 && buf) {
+      chunks.push(buf);
+      buf = next;
+    } else {
+      buf = joined;
+    }
+  }
+  if (buf) chunks.push(buf);
+  return chunks;
+}
+
+function speakChunk(
+  text: string,
+  gen: number,
+  voice: SpeechSynthesisVoice | null
+): Promise<void> {
+  return new Promise((resolve) => {
+    if (gen !== speakGeneration || !window.speechSynthesis) {
+      resolve();
+      return;
+    }
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 0.96;
+    utter.pitch = 1;
+    utter.lang = voice?.lang || "en-GB";
+    if (voice) utter.voice = voice;
+    utter.onend = () => resolve();
+    utter.onerror = () => resolve();
+    window.speechSynthesis.speak(utter);
+  });
+}
+
 export function speak(text: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
+
+  const enabled = useAetherStore.getState().user?.voiceEnabled !== false;
+  if (!enabled) return;
+
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return;
+
   const gen = speakGeneration;
+  clearSpeakKeepalive();
   window.speechSynthesis.cancel();
-  const utter = new SpeechSynthesisUtterance(text);
-  utter.rate = 0.96;
-  utter.pitch = 1;
-  utter.lang = "en-GB";
-  // If user tapped Speak mid-flight, don’t start a new utterance
-  if (gen !== speakGeneration) return;
-  window.speechSynthesis.speak(utter);
+  ensureVoicesLoaded();
+  const voice = pickBestVoice();
+  const chunks = chunkForSpeech(cleaned);
+  if (!chunks.length || gen !== speakGeneration) return;
+
+  startSpeakKeepalive(gen);
+  void (async () => {
+    for (const chunk of chunks) {
+      if (gen !== speakGeneration) break;
+      await speakChunk(chunk, gen, voice);
+    }
+    if (gen === speakGeneration) clearSpeakKeepalive();
+  })();
 }
 
 export function createSpeechRecognizer(): SpeechRecognition | null {
