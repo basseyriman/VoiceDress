@@ -181,35 +181,3 @@ export function isSeedWardrobe(items: Garment[]) {
     items.every((g) => g.id.startsWith("seed_") || g.id.startsWith("seed_v"))
   );
 }
-
-/** Basename without extension — `/garments/white-oxford.jpg` → `white-oxford` */
-function garmentKey(imageUrl: string) {
-  const path = (imageUrl || "").split("?")[0];
-  const file = path.split("/").pop() || "";
-  return file.replace(/\.(jpe?g|png|webp)$/i, "").toLowerCase();
-}
-
-/**
- * Re-add deleted starter pieces without touching user uploads / commerce items.
- * Match by garment image filename or exact name.
- */
-export function missingSeedGarments(
-  userId: string,
-  wardrobe: Garment[]
-): Garment[] {
-  const seeds = seedWardrobe(userId);
-  const haveKeys = new Set(
-    wardrobe.map((g) => garmentKey(g.imageUrl || "")).filter(Boolean)
-  );
-  const haveNames = new Set(
-    wardrobe.map((g) => (g.name || "").trim().toLowerCase()).filter(Boolean)
-  );
-
-  return seeds.filter((seed) => {
-    const key = garmentKey(seed.imageUrl);
-    const name = (seed.name || "").trim().toLowerCase();
-    if (key && haveKeys.has(key)) return false;
-    if (name && haveNames.has(name)) return false;
-    return true;
-  });
-}
