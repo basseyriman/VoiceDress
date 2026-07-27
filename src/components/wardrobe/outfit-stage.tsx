@@ -106,6 +106,8 @@ export function OutfitStage({
   /** Piece ids from the last completed (or in-flight) look on wornUrlRef. */
   const lookIdsRef = useRef<string[]>([]);
   const lastRetryNonceRef = useRef(0);
+  /** Soft trial CTA — wait until the dressed look is on screen first. */
+  const softTrialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     wornUrlRef.current = wornUrl;
@@ -167,6 +169,10 @@ export function OutfitStage({
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
+    if (softTrialTimerRef.current) {
+      clearTimeout(softTrialTimerRef.current);
+      softTrialTimerRef.current = null;
+    }
 
     if (!hasAvatar || !displayAvatar) {
       setWornUrl(null);
@@ -179,6 +185,11 @@ export function OutfitStage({
         ac.abort();
       };
     }
+
+    // Snapshot entitlement once — updating freePhotoTryOnsUsed mid-run must NOT
+    // restart this effect (that aborted the finish and popped the trial modal early).
+    const userAtStart = useAetherStore.getState().user;
+    const looksAvailableAtStart = photoTryOnsAvailable(userAtStart);
 
     if (!runTryOn || !lookPieces.length) {
       setWornUrl(displayAvatar);
@@ -308,18 +319,18 @@ export function OutfitStage({
 
       // Full looks need monthly quota / free gift; surgical swaps stay allowed on membership.
       if (replacePieceOnly && wornUrlRef.current) {
-        if (!isMembershipActive(user) && !canStartPhotoTryOn(user)) {
+        if (!isMembershipActive(userAtStart) && !canStartPhotoTryOn(userAtStart)) {
           setWornUrl(displayAvatar);
           setDressing(false);
           setTrialOffer("hard");
           return;
         }
-      } else if (!canStartPhotoTryOn(user)) {
+      } else if (!canStartPhotoTryOn(userAtStart)) {
         setWornUrl(displayAvatar);
         setDressing(false);
-        if (isMembershipActive(user)) {
+        if (isMembershipActive(userAtStart)) {
           setError(
-            looksAvailable <= 0
+            looksAvailableAtStart <= 0
               ? `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} included looks. Top up for more on-photo dresses — swaps still work.`
               : `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} included looks. Piece swaps still work — or wait until next month.`
           );
@@ -442,7 +453,7 @@ export function OutfitStage({
               updateUser({
                 freePhotoTryOnsUsed: Math.max(
                   1,
-                  (user?.freePhotoTryOnsUsed || 0) + 1
+                  (userAtStart?.freePhotoTryOnsUsed || 0) + 1
                 ),
               });
             }
@@ -734,7 +745,7 @@ export function OutfitStage({
               updateUser({
                 freePhotoTryOnsUsed: Math.max(
                   1,
-                  (user?.freePhotoTryOnsUsed || 0) + 1
+                  (userAtStart?.freePhotoTryOnsUsed || 0) + 1
                 ),
               });
             }
@@ -1029,24 +1040,26 @@ export function OutfitStage({
           if (appliedIds.size > 0 || appliedNames.size > 0) {
             confirmWear(outfit);
           }
-          // Soft paywall after the free aha dress
+          // Soft paywall after the free aha dress — let them see the result first
           const after = {
-            subscriptionStatus: user?.subscriptionStatus || "none",
-            trialEndsAt: user?.trialEndsAt,
+            subscriptionStatus: userAtStart?.subscriptionStatus || "none",
+            trialEndsAt: userAtStart?.trialEndsAt,
             freePhotoTryOnsUsed: consumedFreeThisRun
-              ? Math.max(1, user?.freePhotoTryOnsUsed || 0)
-              : user?.freePhotoTryOnsUsed,
+              ? Math.max(1, userAtStart?.freePhotoTryOnsUsed || 0)
+              : userAtStart?.freePhotoTryOnsUsed,
           };
           if (shouldOfferTrial(after)) {
-            setTrialOffer("soft");
-            try {
-              const { default: posthog } = await import("posthog-js");
-              if (posthog.__loaded) {
-                posthog.capture("trial_offer_shown", { mode: "soft" });
-              }
-            } catch {
-              // ignore
-            }
+            softTrialTimerRef.current = setTimeout(() => {
+              if (myId !== requestId.current) return;
+              setTrialOffer("soft");
+              void import("posthog-js")
+                .then(({ default: posthog }) => {
+                  if (posthog.__loaded) {
+                    posthog.capture("trial_offer_shown", { mode: "soft" });
+                  }
+                })
+                .catch(() => undefined);
+            }, 3200);
           }
         }
       } catch (err) {
@@ -1061,6 +1074,10 @@ export function OutfitStage({
     return () => {
       cancelled = true;
       ac.abort();
+      if (softTrialTimerRef.current) {
+        clearTimeout(softTrialTimerRef.current);
+        softTrialTimerRef.current = null;
+      }
     };
   }, [
     hasAvatar,
@@ -1072,10 +1089,6 @@ export function OutfitStage({
     outfit,
     confirmWear,
     runTryOn,
-    user?.uid,
-    user?.subscriptionStatus,
-    user?.freePhotoTryOnsUsed,
-    user?.trialEndsAt,
     updateUser,
   ]);
 
