@@ -272,19 +272,19 @@ export async function lockFaceIdentity(
   mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   mctx.fill();
 
-  // Soft: very narrow eye slit so frames can remain without a wide
-  // AI skin band that reads as cartoon around the eyes.
+  // Soft: leave a real eye/frame band so glasses survive identity restore.
+  // (Too-narrow slits bury frames completely.)
   if (strength === "soft") {
     mctx.globalCompositeOperation = "destination-out";
-    const eyeY = h * 0.122;
-    const eyeH = h * 0.028;
+    const eyeY = h * 0.1;
+    const eyeH = h * 0.055;
     const eyeGrad = mctx.createLinearGradient(0, eyeY, 0, eyeY + eyeH);
     eyeGrad.addColorStop(0, "rgba(0,0,0,0)");
-    eyeGrad.addColorStop(0.35, "rgba(0,0,0,0.42)");
-    eyeGrad.addColorStop(0.65, "rgba(0,0,0,0.42)");
+    eyeGrad.addColorStop(0.2, "rgba(0,0,0,0.72)");
+    eyeGrad.addColorStop(0.8, "rgba(0,0,0,0.72)");
     eyeGrad.addColorStop(1, "rgba(0,0,0,0)");
     mctx.fillStyle = eyeGrad;
-    mctx.fillRect(w * 0.32, eyeY, w * 0.36, eyeH);
+    mctx.fillRect(w * 0.28, eyeY, w * 0.44, eyeH);
     mctx.globalCompositeOperation = "source-over";
   }
 
@@ -471,11 +471,26 @@ export async function layerOuterwearPreserveBase(
   ] as { r: number; g: number; b: number }[];
 
   if (!targets.length) {
-    targets.push(
-      { r: 180, g: 145, b: 100 },
-      { r: 120, g: 90, b: 60 },
-      { r: 40, g: 50, b: 75 }
-    );
+    const blob = (opts?.colors || []).join(" ").toLowerCase();
+    // Prefer light-neutral coat targets — brown defaults paint hallway smudges
+    // onto shirts when the blazer is beige/stone and hexColors are missing.
+    if (/beige|stone|khaki|sand|camel|tan|taupe|cream|ivory|oat|linen/.test(blob)) {
+      targets.push(
+        { r: 210, g: 190, b: 160 },
+        { r: 190, g: 165, b: 130 },
+        { r: 170, g: 145, b: 110 }
+      );
+    } else if (/navy|midnight|ink|black|charcoal/.test(blob)) {
+      targets.push(
+        { r: 30, g: 42, b: 65 },
+        { r: 40, g: 40, b: 42 }
+      );
+    } else {
+      targets.push(
+        { r: 200, g: 180, b: 150 },
+        { r: 40, g: 50, b: 75 }
+      );
+    }
   }
 
   const y0 = Math.floor(h * 0.12);
@@ -732,6 +747,31 @@ export async function verifyApparelLook(
 }
 
 /**
+ * True when the head band looks wiped (near-white / blown) — common after a
+ * failed glasses Kontext pass. Caller should strong-lock identity instead.
+ */
+export async function faceRegionBlown(src: string): Promise<boolean> {
+  try {
+    const img = await loadHtmlImage(src);
+    const canvas = document.createElement("canvas");
+    const w = Math.min(img.width, 360);
+    const h = Math.min(img.height, 540);
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return false;
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h);
+    const region = sampleRegionAvg(data, w, h, 0.32, 0.68, 0.04, 0.22);
+    // Blown flash / erased head reads very bright with low chroma
+    const chroma = Math.max(region.r, region.g, region.b) - Math.min(region.r, region.g, region.b);
+    return region.lum > 220 && chroma < 28;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Detect black blotches / glitch patches common in failed outerwear composites.
  */
 export async function hasTryOnArtifacts(src: string): Promise<boolean> {
@@ -882,8 +922,16 @@ export async function protectDressedLookAfterShoes(
   opts?: { hasDress?: boolean }
 ): Promise<{ url: string; rolledBack: boolean }> {
   const hasDress = Boolean(opts?.hasDress);
-  // Lower seam on dresses = more of the original boots get overwritten by shoe AI.
-  const seam = hasDress ? 0.82 : 0.88;
+  // Lower seam = more of the original footwear gets overwritten by shoe AI.
+  const seam = hasDress ? 0.8 : 0.83;
+
+  try {
+    if (await shoeEditLooksLikeProductPaste(dressedSrc, shoeEditSrc)) {
+      return { url: dressedSrc, rolledBack: true };
+    }
+  } catch {
+    // continue to blend
+  }
 
   let blended: string;
   try {
@@ -905,6 +953,49 @@ export async function protectDressedLookAfterShoes(
   }
 
   return { url: blended, rolledBack: false };
+}
+
+/**
+ * Kontext sometimes pastes the shoe product sheet as a floating strip at the
+ * bottom instead of putting shoes on the feet. Detect that and roll back.
+ */
+async function shoeEditLooksLikeProductPaste(
+  dressedSrc: string,
+  shoeEditSrc: string
+): Promise<boolean> {
+  const [dressed, edited] = await Promise.all([
+    loadHtmlImage(dressedSrc),
+    loadHtmlImage(shoeEditSrc),
+  ]);
+  const w = Math.min(dressed.width, edited.width, 320);
+  const h = Math.min(dressed.height, edited.height, 480);
+  if (w < 16 || h < 16) return false;
+
+  const mk = (img: HTMLImageElement) => {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, w, h);
+    return ctx.getImageData(0, 0, w, h);
+  };
+  const a = mk(dressed);
+  const b = mk(edited);
+  if (!a || !b) return false;
+
+  const baseFeet = sampleRegionAvg(a, w, h, 0.25, 0.75, 0.86, 0.98);
+  const editFeet = sampleRegionAvg(b, w, h, 0.25, 0.75, 0.86, 0.98);
+  const editCorners = sampleRegionAvg(b, w, h, 0.02, 0.18, 0.9, 0.99);
+  const editCornersR = sampleRegionAvg(b, w, h, 0.82, 0.98, 0.9, 0.99);
+  // Product sheets often have bright empty corners while the product sits mid-bottom
+  const brightCorners =
+    editCorners.lum > 210 &&
+    editCornersR.lum > 210 &&
+    Math.abs(editCorners.lum - editFeet.lum) > 35;
+  // Or the whole bottom band flashes much brighter than the dressed floor/shoes
+  const bottomFlash = editFeet.lum - baseFeet.lum > 55 && editFeet.lum > 190;
+  return brightCorners || bottomFlash;
 }
 
 /** True if the clothed mid-body drifted a lot vs the clean clothes frame. */
