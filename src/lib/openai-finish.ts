@@ -47,8 +47,7 @@ function openaiFinishPrompt(piece: FinishPiece): string {
       keep,
       `Image 2 is the shoe product (${look}).`,
       "Replace ONLY the footwear on BOTH feet with those shoes. Match color and material from Image 2.",
-      "Ankle-height only unless Image 2 clearly shows boots. Never paint footwear up the calves over a dress or skirt.",
-      "Do not change the dress, jeans, top, face, or anything above mid-shin. Keep the garment hem identical to Image 1.",
+      "Do not change jeans, top, face, or anything above the ankles.",
     ].join(" ");
   }
 

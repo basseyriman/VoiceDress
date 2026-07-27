@@ -217,19 +217,12 @@ function isCoatPiece(piece: Piece) {
 function shoeGlassesPrompt(piece: Piece): string {
   const look = pieceLook(piece);
   if (piece.category === "shoes") {
-    const boot =
-      /boot|chelsea|knee[- ]?high|ankle\s*boot/i.test(
-        `${piece.name || ""} ${(piece.tags || []).join(" ")}`
-      );
     return [
       KEEP_YOU,
       KEEP_FRAMING,
-      `Change ONLY the footwear on BOTH feet using image 2 (${look}).`,
-      boot
-        ? "If image 2 is boots, keep boot height realistic but do not cover or rewrite the dress/skirt/trousers above the boot shaft."
-        : "These are shoes/pumps/flats/sneakers/heels — ankle height or lower ONLY. Completely REMOVE any existing boots, knee-highs, or mid-calf footwear from image 1. Do NOT paint mid-calf or knee boots. Do NOT extend footwear up the legs.",
-      "Keep the dress, skirt, trousers, jacket, and everything from mid-shin upward pixel-identical to image 1 — do not blur, feather, recolor, or regenerate the garment hem.",
-      "Match shoe color and silhouette from image 2 exactly. Do not invent denim. Do not alter face, torso, or background.",
+      `Change ONLY the footwear below the ankles — replace BOTH shoes with image 2 (${look}).`,
+      "Match shoe color from image 2 exactly. Keep trousers/pants and everything from the knees up completely unchanged — do not invent denim or change pant color.",
+      "Do not alter face, torso, or pant legs above the shin.",
     ].join(" ");
   }
   return [
@@ -572,18 +565,6 @@ async function applyFinishPiece(opts: {
       );
     }
     return tryKontext();
-  }
-
-  // Shoes: prefer OpenAI when available — Kontext often leaves/extends original boots
-  if (piece.category === "shoes") {
-    const openaiShoes = await tryOpenAI();
-    if (openaiShoes?.ok) return openaiShoes;
-    if (openaiShoes && !openaiShoes.ok) {
-      console.warn(
-        `[tryon] OpenAI shoes failed for ${piece.name || "shoes"}, trying Kontext:`,
-        openaiShoes.detail?.slice(0, 200)
-      );
-    }
   }
 
   return tryKontext();

@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, protectDressedLookAfterShoes, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
@@ -509,21 +509,8 @@ export function OutfitStage({
             try {
               const before = current;
               current = await stabilizeTryOnColors(before, finishData.imageUrl);
-              if (piece.category === "shoes") {
-                const protectedLook = await protectDressedLookAfterShoes(
-                  before,
-                  current,
-                  {
-                    hasDress: lookPieces.some((g) => g.category === "dress"),
-                  }
-                );
-                current = protectedLook.url;
-                if (protectedLook.rolledBack) {
-                  setMissingIds((ids) =>
-                    ids.includes(piece.id) ? ids : [...ids, piece.id]
-                  );
-                }
-              } else {
+              // Shoes: keep full finish result (feet). Other extras: restore trousers.
+              if (piece.category !== "shoes") {
                 current = await preserveLowerBodyFromBase(before, current);
               }
               current = await lockFaceIdentity(
@@ -622,7 +609,6 @@ export function OutfitStage({
             (p) => p.category === "accessory" && isEyewearPiece(p)
           ),
         ];
-        const lookHasDress = lookPieces.some((g) => g.category === "dress");
         // Always run shoes on photo — original avatar boots otherwise stay under the dress.
 
         const markApplied = (step: { id?: string; name?: string }) => {
@@ -900,7 +886,7 @@ export function OutfitStage({
           }
         }
 
-        // 2) Shoes + accessories on the dressed photo (replaces original avatar boots)
+        // 2) All finish extras in one pass — shoes, watch, bag, glasses together
         if (finishQueue.length) {
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
 
@@ -939,10 +925,6 @@ export function OutfitStage({
             Array.isArray(finishData.steps) &&
             finishData.steps.length > 0
           ) {
-            const finishHadShoes = finishQueue.some(
-              (p) => p.category === "shoes"
-            );
-            let shoesRolledBack = false;
             try {
               current = await stabilizeTryOnColors(
                 beforeFinish,
@@ -951,34 +933,12 @@ export function OutfitStage({
             } catch {
               current = finishData.imageUrl;
             }
-            if (finishHadShoes) {
-              try {
-                const protectedLook = await protectDressedLookAfterShoes(
-                  beforeFinish,
-                  current,
-                  { hasDress: lookHasDress }
-                );
-                current = protectedLook.url;
-                shoesRolledBack = protectedLook.rolledBack;
-                if (protectedLook.rolledBack) {
-                  for (const piece of finishQueue.filter(
-                    (p) => p.category === "shoes"
-                  )) {
-                    setMissingIds((ids) =>
-                      ids.includes(piece.id) ? ids : [...ids, piece.id]
-                    );
-                  }
-                }
-              } catch {
-                current = beforeFinish;
-                shoesRolledBack = true;
-              }
-            } else {
-              try {
-                current = await preserveLowerBodyFromBase(beforeFinish, current);
-              } catch {
-                // keep color-stabilized frame
-              }
+            // Restore trousers/skirt from the dressed clothes frame; leave feet
+            // free for shoes (same path as when shoes were applying correctly).
+            try {
+              current = await preserveLowerBodyFromBase(beforeFinish, current);
+            } catch {
+              // keep color-stabilized frame
             }
             const hasEyewear = finishQueue.some((p) =>
               /glass|frame|optic|sunglass|spec/i.test(
@@ -1010,12 +970,10 @@ export function OutfitStage({
                 .filter(Boolean) as string[]
             );
             for (const piece of finishQueue) {
-              const shoeFailed = shoesRolledBack && piece.category === "shoes";
               const landed =
-                !shoeFailed &&
-                (stepIds.size === 0 ||
-                  stepIds.has(piece.id) ||
-                  stepNames.has(piece.name));
+                stepIds.size === 0 ||
+                stepIds.has(piece.id) ||
+                stepNames.has(piece.name);
               if (landed) {
                 appliedIds.add(piece.id);
                 appliedNames.add(piece.name);

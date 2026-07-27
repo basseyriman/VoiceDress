@@ -113,9 +113,6 @@ export function apparelPromptForPiece(
       `Wear this exact ${piece.category === "dress" ? "dress" : "top"}: ${piece.name || "garment"}.`,
       colors ? `Keep the ${colors} color — do not darken or recolor it.` : "Keep the exact product color.",
       "Replace the current upper clothing completely.",
-      piece.category === "dress"
-        ? "Do not invent tall boots or change footwear into knee-high boots — leave feet simple; shoes are applied in a later step."
-        : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -196,8 +193,7 @@ export function finishPromptForPiece(piece: {
       KEEP_FACE,
       `Replace BOTH shoes with these: ${label}.`,
       colors ? `Exact shoe color: ${colors}.` : "Match the product shoe color exactly.",
-      "Change ONLY footwear on the feet / below mid-shin. Do not paint boots over a dress or skirt hem.",
-      "Keep the existing dress/clothes hem, color, and fabric unchanged.",
+      "Change ONLY footwear below the ankles.",
       keepClothes,
       "Keep face, pose, and framing unchanged. Full-body crop — head and feet both visible.",
     ].join(" ");
