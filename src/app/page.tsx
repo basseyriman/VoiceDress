@@ -62,10 +62,13 @@ export default function LandingPage() {
             transition={{ duration: 0.7 }}
             className="flex items-center gap-3"
           >
-            <span className="flex h-11 w-11 items-center justify-center rounded-[0.85rem] border border-champagne/20 bg-[#121110]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.svg" alt="" className="h-[1.55rem] w-auto" />
-            </span>
+            {/* Same mark as header + home-screen icon */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/icon.svg?v=10"
+              alt=""
+              className="h-11 w-11 rounded-[0.85rem] border border-champagne/20"
+            />
             <p className="font-display text-base font-medium tracking-[0.18em] text-champagne">
               VoiceDress
             </p>

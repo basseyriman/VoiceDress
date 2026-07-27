@@ -1,5 +1,5 @@
 /* VoiceDress — installability + light offline shell. Never pin stale JS. */
-const CACHE = "voicedress-shell-v10";
+const CACHE = "voicedress-shell-v11";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
