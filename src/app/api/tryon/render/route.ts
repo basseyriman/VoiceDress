@@ -230,6 +230,7 @@ function shoeGlassesPrompt(piece: Piece): string {
     KEEP_FRAMING,
     `Place ONLY the glasses from image 2 (${look}) on the person's existing face.`,
     "Do not redesign or regenerate the face. Same eyes, nose, mouth, skin. Only add thin frames.",
+    "Do not recolor or restyle clothes, shoes, or background — keep their exact colors.",
   ].join(" ");
 }
 
@@ -289,6 +290,7 @@ function watchTextPrompt(piece: Piece): string {
   return [
     "Edit this photo only.",
     "Keep the EXACT same person, face, body, pose, clothes, shoes, glasses, lighting, and background.",
+    "Keep the exact same clothing colors — do not saturate, brighten, or recolor the outfit.",
     "Keep the exact same full-body framing — do not zoom or crop.",
     `Add one realistic wristwatch on the most visible wrist: ${look}.`,
     "Small natural watch size. Sharp detail. No white blobs or floating stickers.",

@@ -111,8 +111,8 @@ export async function polishTryOnResult(src: string): Promise<string> {
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // Tone: slight contrast + saturation so fabric colors read cleaner
-  ctx.filter = "contrast(1.06) saturate(1.07) brightness(1.02)";
+  // Tone: slight clarity only — heavy saturate was turning finishes neon
+  ctx.filter = "contrast(1.03) saturate(1.01) brightness(1.01)";
   ctx.drawImage(img, 0, 0, w, h);
   ctx.filter = "none";
 
@@ -260,6 +260,94 @@ export async function lockFaceIdentity(
 
   ctx.drawImage(faceLayer, 0, 0);
   return canvas.toDataURL("image/jpeg", 0.98);
+}
+
+/**
+ * After accessory/shoe AI passes, pull overall color grade back toward the
+ * already-dressed clothes frame so watches/glasses don’t neon the whole look.
+ */
+export async function stabilizeTryOnColors(
+  referenceSrc: string,
+  editedSrc: string
+): Promise<string> {
+  const [ref, edited] = await Promise.all([
+    loadHtmlImage(referenceSrc),
+    loadHtmlImage(editedSrc),
+  ]);
+  const w = edited.width;
+  const h = edited.height;
+  if (w < 8 || h < 8) return editedSrc;
+
+  const refCanvas = document.createElement("canvas");
+  refCanvas.width = w;
+  refCanvas.height = h;
+  const rctx = refCanvas.getContext("2d");
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!rctx || !ctx) return editedSrc;
+
+  rctx.drawImage(ref, 0, 0, w, h);
+  ctx.drawImage(edited, 0, 0, w, h);
+  const refData = rctx.getImageData(0, 0, w, h);
+  const editData = ctx.getImageData(0, 0, w, h);
+
+  // Sample torso/mid body — skip face (top) and shoes (bottom edge)
+  const y0 = Math.floor(h * 0.28);
+  const y1 = Math.floor(h * 0.72);
+  const x0 = Math.floor(w * 0.22);
+  const x1 = Math.floor(w * 0.78);
+  let rr = 0;
+  let rg = 0;
+  let rb = 0;
+  let er = 0;
+  let eg = 0;
+  let eb = 0;
+  let n = 0;
+  for (let y = y0; y < y1; y += 2) {
+    for (let x = x0; x < x1; x += 2) {
+      const i = (y * w + x) * 4;
+      rr += refData.data[i];
+      rg += refData.data[i + 1];
+      rb += refData.data[i + 2];
+      er += editData.data[i];
+      eg += editData.data[i + 1];
+      eb += editData.data[i + 2];
+      n += 1;
+    }
+  }
+  if (n < 50) return editedSrc;
+  rr /= n;
+  rg /= n;
+  rb /= n;
+  er /= n;
+  eg /= n;
+  eb /= n;
+  if (er < 8 || eg < 8 || eb < 8) return editedSrc;
+
+  // Soft correction — don’t fully flatten intentional shoe/watch color
+  const mix = 0.55;
+  const sr = 1 + ((rr / er) - 1) * mix;
+  const sg = 1 + ((rg / eg) - 1) * mix;
+  const sb = 1 + ((rb / eb) - 1) * mix;
+  // Ignore tiny drifts
+  if (
+    Math.abs(sr - 1) < 0.02 &&
+    Math.abs(sg - 1) < 0.02 &&
+    Math.abs(sb - 1) < 0.02
+  ) {
+    return editedSrc;
+  }
+
+  const d = editData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = Math.max(0, Math.min(255, d[i] * sr));
+    d[i + 1] = Math.max(0, Math.min(255, d[i + 1] * sg));
+    d[i + 2] = Math.max(0, Math.min(255, d[i + 2] * sb));
+  }
+  ctx.putImageData(editData, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.96);
 }
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {

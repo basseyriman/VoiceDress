@@ -200,6 +200,7 @@ async function runOutfitChat(
   actions: VoiceActionHandlers
 ): Promise<string> {
   const ctx = actions.getContext?.() || {};
+  const explainOnly = isExplainOnlyAsk(transcript);
   try {
     const res = await authFetch("/api/outfit/chat", {
       method: "POST",
@@ -226,7 +227,14 @@ async function runOutfitChat(
         : "Tell me what you’d like to tweak on this look.";
     }
     const data = await res.json();
-    await applyActions(data.actions || [], actions, data.reply);
+    const rawActions = Array.isArray(data.actions) ? data.actions : [];
+    // "Why this look?" must NEVER re-dress — ignore swap/pick tools
+    const safeActions = explainOnly
+      ? rawActions.filter(
+          (a: { tool?: string }) => !a?.tool || a.tool === "none"
+        )
+      : rawActions;
+    await applyActions(safeActions, actions, data.reply);
     return data.reply || "Happy to refine this look — what should we change?";
   } catch {
     const e = actions.onExplainLook?.();
@@ -234,6 +242,25 @@ async function runOutfitChat(
       ? e
       : "Happy to talk through the look — what are you unsure about?";
   }
+}
+
+/** True when the user is only asking for an explanation — not a change. */
+function isExplainOnlyAsk(transcript: string) {
+  const t = transcript.toLowerCase().trim();
+  if (!t) return false;
+  if (
+    /\b(swap|change|replace|different|instead|another|new look|dress me|suggest)\b/.test(
+      t
+    )
+  ) {
+    return false;
+  }
+  return (
+    /\bwhy\b/.test(t) ||
+    /\b(explain|rationale|how come|what made you|tell me about (this|the) look)\b/.test(
+      t
+    )
+  );
 }
 
 /** Sync wrapper for callers that haven't migrated — prefers local parse. */

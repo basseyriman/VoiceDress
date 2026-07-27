@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
@@ -84,6 +84,7 @@ export function OutfitStage({
   const [progress, setProgress] = useState(0);
   const [activePieceId, setActivePieceId] = useState<string | null>(null);
   const [swapFor, setSwapFor] = useState<Garment["category"] | null>(null);
+  const [swapTargetId, setSwapTargetId] = useState<string | null>(null);
   const [keyConfigured, setKeyConfigured] = useState<boolean | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const [missingIds, setMissingIds] = useState<string[]>([]);
@@ -436,16 +437,13 @@ export function OutfitStage({
             }
 
             try {
-              if (isEyewearPiece(piece)) {
-                current = await lockFaceIdentity(
-                  identityPhoto,
-                  finishData.imageUrl,
-                  "soft"
-                );
-              } else {
-                // Skip heavy face re-encode on shoes/watch — preserves sharpness
-                current = finishData.imageUrl;
-              }
+              const before = current;
+              current = await stabilizeTryOnColors(before, finishData.imageUrl);
+              current = await lockFaceIdentity(
+                identityPhoto,
+                current,
+                isEyewearPiece(piece) ? "soft" : "strong"
+              );
             } catch {
               current = finishData.imageUrl;
             }
@@ -740,6 +738,7 @@ export function OutfitStage({
 
           setActivePieceId(null);
           setSwapFor(null);
+          setSwapTargetId(null);
 
           // Trust gate — skip top checks when a blazer covers the torso.
           const hasOuterwear = apparelPieces.some(
@@ -845,6 +844,7 @@ export function OutfitStage({
             50 + Math.round(((i + 1) / (finishQueue.length + 1)) * 40)
           );
 
+          const beforeFinish = current;
           const finishRes = await authFetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -867,19 +867,23 @@ export function OutfitStage({
             finishData.steps.length > 0
           ) {
             try {
-              if (isEye) {
-                // Soft lock keeps frames; still pulls real skin/eyes back
-                current = await lockFaceIdentity(
-                  identityPhoto,
-                  finishData.imageUrl,
-                  "soft"
-                );
-              } else {
-                // Shoes/watch: keep FASHN/Kontext pixels — skip JPEG face re-encode mush
-                current = finishData.imageUrl;
-              }
+              // Pull color grade back toward pre-accessory clothes
+              current = await stabilizeTryOnColors(
+                beforeFinish,
+                finishData.imageUrl
+              );
             } catch {
               current = finishData.imageUrl;
+            }
+            try {
+              // Always restore your face — watch/glasses Kontext morphs identity
+              current = await lockFaceIdentity(
+                identityPhoto,
+                current,
+                isEye ? "soft" : "strong"
+              );
+            } catch {
+              // keep color-stabilized frame
             }
             if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
             setWornUrl(current);
@@ -989,8 +993,13 @@ export function OutfitStage({
 
   const replacePiece = (next: Garment) => {
     if (!outfit) return;
+    // Replace only the tapped piece (important when 2+ accessories share a category)
     const nextGarments = [
-      ...garments.filter((g) => g.category !== next.category),
+      ...garments.filter((g) =>
+        swapTargetId
+          ? g.id !== swapTargetId
+          : g.category !== next.category
+      ),
       next,
     ];
     const order = ["top", "dress", "bottom", "outerwear", "shoes", "accessory"];
@@ -1005,6 +1014,7 @@ export function OutfitStage({
       createdAt: new Date().toISOString(),
     });
     setSwapFor(null);
+    setSwapTargetId(null);
   };
 
   const showKeyPrompt = runTryOn && (needsKey || keyConfigured === false);
@@ -1316,16 +1326,22 @@ export function OutfitStage({
                 <GarmentTile
                   key={g.id}
                   garment={g}
-                  active={swapFor === g.category || activePieceId === g.id}
+                  active={swapTargetId === g.id || activePieceId === g.id}
                   dressing={dressing && activePieceId === g.id}
                   done={donePieceIds.includes(g.id)}
                   missing={missingIds.includes(g.id)}
                   progressPct={
                     dressing && activePieceId === g.id ? progressPct : undefined
                   }
-                  onClick={() =>
-                    setSwapFor((c) => (c === g.category ? null : g.category))
-                  }
+                  onClick={() => {
+                    if (swapTargetId === g.id) {
+                      setSwapFor(null);
+                      setSwapTargetId(null);
+                    } else {
+                      setSwapFor(g.category);
+                      setSwapTargetId(g.id);
+                    }
+                  }}
                 />
               ))}
             </div>
@@ -1347,7 +1363,10 @@ export function OutfitStage({
                     <button
                       type="button"
                       className="text-[11px] text-mist"
-                      onClick={() => setSwapFor(null)}
+                      onClick={() => {
+                        setSwapFor(null);
+                        setSwapTargetId(null);
+                      }}
                     >
                       Close
                     </button>
@@ -1374,6 +1393,7 @@ export function OutfitStage({
                     onClick={() => {
                       swapFromVoice(swapFor, outfit?.style, outfit?.occasion);
                       setSwapFor(null);
+                      setSwapTargetId(null);
                     }}
                   >
                     Auto-pick best {swapFor}

@@ -1182,7 +1182,13 @@ export function parseVoiceIntent(transcript: string) {
 
   if (
     t.includes("why") &&
-    (t.includes("look") || t.includes("outfit") || t.includes("this"))
+    (t.includes("look") ||
+      t.includes("outfit") ||
+      t.includes("this") ||
+      t.includes("suggest") ||
+      t.includes("choose") ||
+      t.includes("pick") ||
+      t.includes("dress"))
   ) {
     return {
       transcript,

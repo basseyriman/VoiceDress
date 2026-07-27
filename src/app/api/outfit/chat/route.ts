@@ -123,9 +123,10 @@ User said: "${transcript}"
 
 Rules:
 - Answer their exact question (fabric weight vs weather, tuck/untuck, accessories, shoes, belt, socks/stockings, confidence, layering).
+- If they ask WHY this look / why you suggested it / explain the outfit: answer in speech only. actions MUST be tool "none" — never swap or pick. Do not re-dress them.
 - If they ask whether to tuck a shirt, give a clear yes/no for THIS look and occasion, then one short why.
 - If they ask for something not in the wardrobe (e.g. stockings) say so honestly, then advise what to do with what they HAVE (bare ankle, no belt, etc.).
-- If a change would help (lighter top, different shoes), set actions to swap_piece or pick_garment with a real wardrobe id/query — otherwise tool "none".
+- Only set swap_piece or pick_garment when they CLEARLY ask to change/swap/replace a piece — otherwise tool "none".
 - Do NOT dump raw weather stats as the whole answer. Weave weather into styling advice.
 - Do NOT open pages or re-suggest a full new outfit unless they clearly ask for a completely different occasion.
 - Reply: warm, short, speakable, 1–3 sentences. Decisive. No emoji spam.`,

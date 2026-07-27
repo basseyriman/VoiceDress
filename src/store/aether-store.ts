@@ -657,6 +657,107 @@ export const useAetherStore = create<AetherState>()(
           if (named) forceGarmentId = named.id;
         }
 
+        // Surgical swap: keep every other piece id identical so try-on
+        // only re-dresses this one item (esp. when 2 accessories are on).
+        if (currentOutfit?.garments?.length) {
+          const currentGarments = currentOutfit.garments;
+          let replaceId = rejectedFromCurrent;
+          if (category === "accessory") {
+            const accessories = currentGarments.filter(
+              (g) => g.category === "accessory"
+            );
+            if (garmentQuery && /glass|sunglass|optic|frame/i.test(garmentQuery)) {
+              replaceId =
+                accessories.find((g) =>
+                  /glass|sunglass|optic|frame/i.test(
+                    `${g.name} ${(g.tags || []).join(" ")}`
+                  )
+                )?.id || replaceId;
+            } else if (garmentQuery && /watch|wrist|chrono/i.test(garmentQuery)) {
+              replaceId =
+                accessories.find((g) =>
+                  /watch|wrist|chrono/i.test(
+                    `${g.name} ${(g.tags || []).join(" ")}`
+                  )
+                )?.id || replaceId;
+            } else if (accessories.length > 1) {
+              // Default: swap the first accessory only, keep the rest
+              replaceId = accessories[0]?.id || replaceId;
+            }
+          }
+
+          let nextPiece =
+            (forceGarmentId &&
+              wardrobe.find((g) => g.id === forceGarmentId)) ||
+            undefined;
+          if (!nextPiece) {
+            const pool = wardrobe.filter(
+              (g) =>
+                g.category === category &&
+                !currentGarments.some((c) => c.id === g.id)
+            );
+            nextPiece = pool[0];
+            // Prefer scored pick via suggestOutfit when available
+            const suggested = suggestOutfit({
+              wardrobe,
+              weather,
+              occasion: occasion || currentOutfit.occasion || "today",
+              style: primaryStyle,
+              stylePrefs,
+              swapCategory: forceGarmentId ? undefined : category,
+              forceGarmentId,
+              currentOutfit: currentGarments,
+              taste,
+              demoteIds: replaceId ? [replaceId] : undefined,
+              demotePenalty: -10,
+            });
+            const picked = suggested.garments?.find(
+              (g) =>
+                g.category === category &&
+                !currentGarments.some((c) => c.id === g.id)
+            );
+            if (picked) nextPiece = picked;
+          }
+
+          if (nextPiece && replaceId) {
+            const nextGarments = [
+              ...currentGarments.filter((g) => g.id !== replaceId),
+              nextPiece,
+            ];
+            const order = [
+              "top",
+              "dress",
+              "bottom",
+              "outerwear",
+              "shoes",
+              "accessory",
+            ] as const;
+            nextGarments.sort(
+              (a, b) =>
+                order.indexOf(a.category as (typeof order)[number]) -
+                order.indexOf(b.category as (typeof order)[number])
+            );
+            const outfit = {
+              ...currentOutfit,
+              id: `outfit_${Date.now()}`,
+              garmentIds: nextGarments.map((g) => g.id),
+              garments: nextGarments,
+              createdAt: new Date().toISOString(),
+            };
+            const nextTaste: TasteMemory = {
+              ...taste,
+              preferredStyle: stylePrefs?.[0] || outfit.style,
+              recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(
+                0,
+                20
+              ),
+            };
+            set({ currentOutfit: outfit, taste: nextTaste });
+            persistOutfitAndTaste(user?.uid, outfit, nextTaste);
+            return outfit;
+          }
+        }
+
         // Soft demote only — don't permanently blacklist on a casual swap.
         const outfit = suggestOutfit({
           wardrobe,
