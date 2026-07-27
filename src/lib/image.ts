@@ -15,7 +15,8 @@ export async function prepareWardrobeIngestPhoto(file: File): Promise<{
   dataUrl: string;
   error?: string;
 }> {
-  return prepareImageUpload(file, 1280, 0.82);
+  // Smaller = faster upload + faster vision; still enough for product/receipt OCR
+  return prepareImageUpload(file, 960, 0.72);
 }
 
 async function prepareImageUpload(

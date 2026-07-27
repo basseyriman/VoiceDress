@@ -17,3 +17,5 @@ export function hasAIKey() {
 
 export const DEFAULT_CHAT_MODEL = "gpt-4o-mini";
 export const DEFAULT_VISION_MODEL = "gpt-4o";
+/** Fast vision for wardrobe photo ingest (receipts / product shots). */
+export const INGEST_VISION_MODEL = "gpt-4o-mini";

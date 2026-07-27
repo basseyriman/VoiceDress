@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import {
-  DEFAULT_VISION_MODEL,
+  INGEST_VISION_MODEL,
   getOpenAI,
   hasAIKey,
 } from "@/lib/ai";
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const { output } = await generateText({
-      model: openai(DEFAULT_VISION_MODEL),
+      model: openai(INGEST_VISION_MODEL),
       output: Output.object({ schema: garmentExtractSchema }),
       messages: [
         {
@@ -112,7 +112,7 @@ detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when re
       const source = normalizeSource(storeHint, preferredSource);
       const colors = item.colors.length ? item.colors : ["neutral"];
       return sanitizeGarmentCategory({
-        id: `ingest_${Date.now()}_${i}`,
+        id: `ingest_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 8)}`,
         userId,
         name: item.name,
         brand: item.brand || "Unknown",

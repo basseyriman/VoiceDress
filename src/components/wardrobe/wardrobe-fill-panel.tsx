@@ -18,6 +18,8 @@ type Props = {
 };
 
 const MAX_BATCH = 20;
+/** Parallel vision calls — much faster than one-by-one. */
+const UPLOAD_CONCURRENCY = 3;
 
 export function WardrobeFillPanel({
   returnTo = "/connect",
@@ -187,21 +189,40 @@ export function WardrobeFillPanel({
 
     let added = 0;
     let photosOk = 0;
+    let completed = 0;
     const failures: string[] = [];
+    const source = ingestSource;
+
+    const markDone = () => {
+      completed += 1;
+      setUploadProgress({ done: completed, total: batch.length });
+    };
+
+    const runPool = async () => {
+      let nextIndex = 0;
+      const workers = Array.from(
+        { length: Math.min(UPLOAD_CONCURRENCY, batch.length) },
+        async () => {
+          while (true) {
+            const i = nextIndex++;
+            if (i >= batch.length) return;
+            const result = await ingestOnePhoto(batch[i], source);
+            if (result.items.length) {
+              addGarments(result.items);
+              added += result.items.length;
+              photosOk += 1;
+            } else if (result.error) {
+              failures.push(result.error);
+            }
+            markDone();
+          }
+        }
+      );
+      await Promise.all(workers);
+    };
 
     try {
-      for (let i = 0; i < batch.length; i++) {
-        setUploadProgress({ done: i, total: batch.length });
-        const result = await ingestOnePhoto(batch[i], ingestSource);
-        if (result.items.length) {
-          addGarments(result.items);
-          added += result.items.length;
-          photosOk += 1;
-        } else if (result.error) {
-          failures.push(result.error);
-        }
-        setUploadProgress({ done: i + 1, total: batch.length });
-      }
+      await runPool();
 
       const parts: string[] = [];
       if (added > 0) {
@@ -234,7 +255,7 @@ export function WardrobeFillPanel({
 
   const progressLabel =
     uploadProgress && uploadProgress.total > 1
-      ? `Extracting ${Math.min(uploadProgress.done + 1, uploadProgress.total)} of ${uploadProgress.total}…`
+      ? `Extracting ${uploadProgress.done}/${uploadProgress.total}…`
       : syncing
         ? "Extracting…"
         : null;
