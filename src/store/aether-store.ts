@@ -12,7 +12,7 @@ import type {
   WeatherSnapshot,
 } from "@/lib/types";
 import { seedWardrobe, WARDROBE_SEED_VERSION } from "@/lib/seed-data";
-import { defaultConnections, normalizeGarmentCategory } from "@/lib/commerce";
+import { defaultConnections, sanitizeGarmentCategory, sanitizeWardrobe, isHosieryOrSocks, isUnderwearOrLounge } from "@/lib/commerce";
 import {
   applySpokenWeather,
   occasionMeaningfullyChanged,
@@ -258,10 +258,23 @@ export const useAetherStore = create<AetherState>()(
             }
           : profile;
 
+        const safeWardrobe = sanitizeWardrobe(wardrobe);
+        const safeOutfit = outfit
+          ? {
+              ...outfit,
+              garments: sanitizeWardrobe(outfit.garments || []).filter(
+                (g) => !isHosieryOrSocks(g) && !isUnderwearOrLounge(g)
+              ),
+            }
+          : null;
+        if (safeOutfit) {
+          safeOutfit.garmentIds = safeOutfit.garments.map((g) => g.id);
+        }
+
         set({
           user: merged,
-          wardrobe,
-          currentOutfit: outfit || null,
+          wardrobe: safeWardrobe,
+          currentOutfit: safeOutfit,
           taste: taste || { rejectedIds: [], recentOutfitIds: [] },
           cloudReady: true,
         });
@@ -322,7 +335,7 @@ export const useAetherStore = create<AetherState>()(
               const next = normalizeGarmentPublicUrl(g.imageUrl || "");
               return next !== g.imageUrl ? { ...g, imageUrl: next } : g;
             });
-            const categorized = repaired.map(normalizeGarmentCategory);
+            const categorized = sanitizeWardrobe(repaired);
             const dirty = categorized.filter((g, i) => {
               const prev = wardrobe[i];
               return (
@@ -769,7 +782,7 @@ export const useAetherStore = create<AetherState>()(
       },
       addGarments: (items) => {
         const user = get().user;
-        const normalized = items.map(normalizeGarmentCategory);
+        const normalized = items.map(sanitizeGarmentCategory);
         set((state) => {
           const existingKeys = new Set(
             state.wardrobe.map(

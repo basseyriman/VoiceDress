@@ -6,7 +6,8 @@
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:categories": "npx --yes tsx src/lib/garment-category.selfcheck.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.20",

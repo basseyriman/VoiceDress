@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   categorizeFromTitle,
   colorNameToHex,
+  sanitizeGarmentCategory,
 } from "@/lib/commerce";
 import type { Garment } from "@/lib/types";
 
@@ -70,27 +71,29 @@ export async function POST(req: NextRequest) {
   for (const order of data.orders || []) {
     for (const line of order.line_items || []) {
       const title = line.title || line.name || "Shopify item";
-      items.push({
-        id: `shopify_${order.id}_${line.id}`,
-        userId,
-        name: title,
-        brand: line.vendor || shop.replace(".myshopify.com", ""),
-        category: categorizeFromTitle(title),
-        colors: ["neutral"],
-        hexColors: [colorNameToHex("neutral")],
-        formality: "smart_casual",
-        season: ["all"],
-        imageUrl:
-          "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png",
-        source: "shopify",
-        price: line.price ? Number(line.price) : undefined,
-        currency: order.currency || "GBP",
-        orderId: String(order.id),
-        tags: ["shopify"],
-        purchaseDate: order.created_at || now,
-        createdAt: now,
-        updatedAt: now,
-      });
+      items.push(
+        sanitizeGarmentCategory({
+          id: `shopify_${order.id}_${line.id}`,
+          userId,
+          name: title,
+          brand: line.vendor || shop.replace(".myshopify.com", ""),
+          category: categorizeFromTitle(title),
+          colors: ["neutral"],
+          hexColors: [colorNameToHex("neutral")],
+          formality: "smart_casual",
+          season: ["all"],
+          imageUrl:
+            "https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png",
+          source: "shopify",
+          price: line.price ? Number(line.price) : undefined,
+          currency: order.currency || "GBP",
+          orderId: String(order.id),
+          tags: ["shopify"],
+          purchaseDate: order.created_at || now,
+          createdAt: now,
+          updatedAt: now,
+        })
+      );
     }
   }
 

@@ -16,7 +16,7 @@ import {
   blendStyleHints,
   resolvePrimaryStyle,
 } from "./style-options";
-import { isHosieryOrSocks, isRealFootwear } from "./commerce";
+import { isHosieryOrSocks, isRealFootwear, ensureLookHasFootwear, sanitizeWardrobe } from "./commerce";
 
 export type { OccasionProfile, TasteMemory };
 
@@ -627,6 +627,11 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     ...baseProfile,
     styleHints: blendStyleHints(stylePrefs, baseProfile.styleHints),
   };
+  // Live guard: fix socks-as-shoes and other mis-tags before scoring
+  const wardrobe = sanitizeWardrobe(input.wardrobe);
+  const currentOutfit = input.currentOutfit
+    ? sanitizeWardrobe(input.currentOutfit)
+    : undefined;
   // DNA first — do not let last outfit / occasion defaults erase what they chose
   const style = resolvePrimaryStyle(stylePrefs, input.style);
   const formality = profile.formality;
@@ -643,7 +648,7 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       : 999;
     if (lastIds.size && hours <= 36) {
       for (const cat of ["top", "bottom", "dress"] as const) {
-        const inCat = input.wardrobe.filter((g) => g.category === cat);
+        const inCat = wardrobe.filter((g) => g.category === cat);
         const fresh = inCat.filter((g) => !lastIds.has(g.id));
         if (fresh.length >= 1) {
           for (const g of inCat) {
@@ -654,7 +659,7 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     }
   }
 
-  const pool = input.wardrobe.filter((g) => !exclude.has(g.id));
+  const pool = wardrobe.filter((g) => !exclude.has(g.id));
   const byCat = (cat: Garment["category"]) =>
     pool.filter((g) => g.category === cat);
 
@@ -677,28 +682,26 @@ export function suggestOutfit(input: SuggestInput): Outfit {
 
   let selected: Garment[] = [];
 
-  if (input.forceGarmentId && input.currentOutfit?.length) {
-    const forced = input.wardrobe.find((g) => g.id === input.forceGarmentId);
+  if (input.forceGarmentId && currentOutfit?.length) {
+    const forced = wardrobe.find((g) => g.id === input.forceGarmentId);
     if (forced) {
-      selected = input.currentOutfit.filter(
-        (g) => g.category !== forced.category
-      );
+      selected = currentOutfit.filter((g) => g.category !== forced.category);
       selected.push(forced);
     } else {
-      selected = [...(input.currentOutfit || [])];
+      selected = [...currentOutfit];
     }
-  } else if (input.swapCategory && input.currentOutfit?.length) {
-    selected = input.currentOutfit.filter(
-      (g) => g.category !== input.swapCategory
-    );
+  } else if (input.swapCategory && currentOutfit?.length) {
+    selected = currentOutfit.filter((g) => g.category !== input.swapCategory);
+    const swapPool =
+      input.swapCategory === "shoes"
+        ? byCat("shoes").filter((g) => isRealFootwear(g))
+        : byCat(input.swapCategory);
     const replacement = pick(
-      byCat(input.swapCategory).filter(
-        (g) => !input.currentOutfit?.some((c) => c.id === g.id)
-      ),
+      swapPool.filter((g) => !currentOutfit.some((c) => c.id === g.id)),
       selected
     );
     if (replacement) selected.push(replacement);
-    else selected = input.currentOutfit;
+    else selected = currentOutfit;
   } else {
     const wantDress =
       profile.preferCategories.includes("dress") ||
@@ -779,6 +782,11 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       if (acc) selected.push(acc);
     }
   }
+
+  // Final live guard: every look gets real shoes when the wardrobe has them
+  selected = ensureLookHasFootwear(selected, wardrobe, (pool, already) =>
+    pick(pool, already)
+  );
 
   const colors = selected.flatMap((g) => g.hexColors);
   const name = `${style.charAt(0).toUpperCase() + style.slice(1)} for ${profile.label}`;

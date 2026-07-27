@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import {
   categorizeFromTitle,
   colorNameToHex,
+  sanitizeGarmentCategory,
 } from "@/lib/commerce";
 import type { Garment } from "@/lib/types";
 
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   const garments: Garment[] = (order.line_items || []).map((line, i) => {
     const title = line.title || line.name || "Shopify item";
     const colors = extractColors(line);
-    return {
+    return sanitizeGarmentCategory({
       id: `shopify_${order.id}_${line.id || i}`,
       userId,
       name: title,
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
       category: categorizeFromTitle(title),
       colors,
       hexColors: colors.map(colorNameToHex),
-      formality: "smart_casual",
+      formality: "smart_casual" as const,
       season: ["all"],
       imageUrl:
         line.image?.src ||
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
       purchaseDate: order.created_at || now,
       createdAt: now,
       updatedAt: now,
-    };
+    });
   });
 
   return NextResponse.json({

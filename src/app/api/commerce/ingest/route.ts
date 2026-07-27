@@ -9,7 +9,7 @@ import {
 import {
   categorizeFromTitle,
   colorNameToHex,
-  normalizeGarmentCategory,
+  sanitizeGarmentCategory,
 } from "@/lib/commerce";
 import type { CommerceSource, Formality, Garment } from "@/lib/types";
 import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
@@ -111,7 +111,7 @@ detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when re
       const storeHint = (item.detectedStore || preferredSource).toLowerCase();
       const source = normalizeSource(storeHint, preferredSource);
       const colors = item.colors.length ? item.colors : ["neutral"];
-      return normalizeGarmentCategory({
+      return sanitizeGarmentCategory({
         id: `ingest_${Date.now()}_${i}`,
         userId,
         name: item.name,
