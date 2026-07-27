@@ -92,6 +92,15 @@ export function OutfitStage({
   const [photoTryOn, setPhotoTryOn] = useState(true);
   const requestId = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  /** Last fully/partially dressed photo — used to swap one piece without restarting. */
+  const wornUrlRef = useRef<string | null>(null);
+  /** Piece ids from the last completed (or in-flight) look on wornUrlRef. */
+  const lookIdsRef = useRef<string[]>([]);
+  const lastRetryNonceRef = useRef(0);
+
+  useEffect(() => {
+    wornUrlRef.current = wornUrl;
+  }, [wornUrl]);
 
   useEffect(() => {
     try {
@@ -146,6 +155,7 @@ export function OutfitStage({
       setMissingIds([]);
       setDonePieceIds([]);
       setActivePieceId(null);
+      lookIdsRef.current = [];
       return () => {
         ac.abort();
       };
@@ -178,28 +188,26 @@ export function OutfitStage({
         return;
       }
 
-      setDressing(true);
-      setError("");
-      setNotice("");
-      setMissingIds([]);
-      setDonePieceIds([]);
-      setActivePieceId(null);
-      setNeedsKey(false);
-      setNeedsBilling(false);
-      setProgress(4);
-      setWornUrl(displayAvatar);
+      const toPayload = (piece: (typeof lookPieces)[number]) => ({
+        id: piece.id,
+        imageUrl: piece.imageUrl,
+        category: piece.category,
+        name: piece.name,
+        colors: piece.colors,
+        hexColors: piece.hexColors,
+        fabric: piece.fabric,
+        texture: piece.texture,
+        tags: piece.tags,
+      });
 
-      let consumedFreeThisRun = false;
-      let current = displayAvatar;
-      let identityPhoto = displayAvatar;
-      try {
-        current = await letterboxForTryOn(displayAvatar);
-        identityPhoto = current;
-        if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-        setWornUrl(current);
-      } catch {
-        // Keep original if letterbox fails
-      }
+      const isWatchPiece = (p: (typeof lookPieces)[number]) =>
+        /watch|wrist|chrono|time/i.test(
+          `${p.name || ""} ${(p.tags || []).join(" ")}`
+        );
+      const isEyewearPiece = (p: (typeof lookPieces)[number]) =>
+        /glass|frame|optic|sunglass|spec/i.test(
+          `${p.name || ""} ${(p.tags || []).join(" ")}`
+        );
 
       const failOrBilling = (data: {
         needsKey?: boolean;
@@ -245,30 +253,243 @@ export function OutfitStage({
         return false;
       };
 
-      try {
-        const toPayload = (piece: (typeof lookPieces)[number]) => ({
-          id: piece.id,
-          imageUrl: piece.imageUrl,
-          category: piece.category,
-          name: piece.name,
-          colors: piece.colors,
-          hexColors: piece.hexColors,
-          fabric: piece.fabric,
-          texture: piece.texture,
-          tags: piece.tags,
-        });
+      const nextIds = lookPieces.map((g) => g.id);
+      const prevIds = lookIdsRef.current;
+      const addedIds = nextIds.filter((id) => !prevIds.includes(id));
+      const removedIds = prevIds.filter((id) => !nextIds.includes(id));
+      const forceFull =
+        retryNonce !== lastRetryNonceRef.current ||
+        !wornUrlRef.current ||
+        prevIds.length === 0;
+      lastRetryNonceRef.current = retryNonce;
 
+      const replacePieceOnly =
+        !forceFull &&
+        addedIds.length === 1 &&
+        removedIds.length <= 1 &&
+        Math.abs(nextIds.length - prevIds.length) <= 1
+          ? lookPieces.find((g) => g.id === addedIds[0]) || null
+          : null;
+
+      // —— Single-piece swap on the already-dressed photo (saves credits) ——
+      if (replacePieceOnly && wornUrlRef.current) {
+        const piece = replacePieceOnly;
+        const baseWorn = wornUrlRef.current;
+        lookIdsRef.current = nextIds;
+
+        setDressing(true);
+        setError("");
+        setNotice("");
+        setNeedsKey(false);
+        setNeedsBilling(false);
+        setMissingIds([]);
+        setWornUrl(baseWorn);
+        setDonePieceIds(nextIds.filter((id) => id !== piece.id));
+        setActivePieceId(piece.id);
+        setStepLabel(`Swapping ${piece.name}…`);
+        setProgress(28);
+
+        let identityPhoto = displayAvatar;
+        try {
+          identityPhoto = await letterboxForTryOn(displayAvatar);
+        } catch {
+          // keep original
+        }
+
+        let current = baseWorn;
+        const isApparel = ["top", "bottom", "dress", "outerwear"].includes(
+          piece.category
+        );
+
+        try {
+          if (isApparel) {
+            const apparelRes = await authFetch("/api/tryon/render", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ac.signal,
+              body: JSON.stringify({
+                personImage: current,
+                stage: "apparel",
+                maxPieces: 1,
+                // Keep everything already on the photo — only swap this piece
+                stripOuterwear: false,
+                garments: [toPayload(piece)],
+              }),
+            });
+            const apparelData = await apparelRes.json();
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            if (failOrBilling(apparelData, apparelRes.status)) return;
+
+            if (!apparelData.ok || !apparelData.imageUrl) {
+              setError(
+                apparelData.error ||
+                  `Couldn’t swap ${piece.name || "that piece"}`
+              );
+              setMissingIds([piece.id]);
+              setDressing(false);
+              setActivePieceId(null);
+              return;
+            }
+
+            let dressedUrl = apparelData.imageUrl as string;
+            if (piece.category === "outerwear") {
+              const stepProvider =
+                Array.isArray(apparelData.steps) && apparelData.steps[0]
+                  ? String(apparelData.steps[0].provider || "")
+                  : "";
+              if (!stepProvider.includes("fashn")) {
+                try {
+                  dressedUrl = await layerOuterwearPreserveBase(
+                    baseWorn,
+                    apparelData.imageUrl,
+                    {
+                      hexColors: piece.hexColors,
+                      colors: piece.colors,
+                    }
+                  );
+                } catch {
+                  dressedUrl = apparelData.imageUrl;
+                }
+              }
+            }
+
+            try {
+              current = await lockFaceIdentity(
+                identityPhoto,
+                dressedUrl,
+                "strong"
+              );
+            } catch {
+              current = dressedUrl;
+            }
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            setWornUrl(current);
+            setKeyConfigured(true);
+            if (apparelData.consumedFreeTryOn) {
+              updateUser({
+                freePhotoTryOnsUsed: Math.max(
+                  1,
+                  (user?.freePhotoTryOnsUsed || 0) + 1
+                ),
+              });
+            }
+          } else {
+            // Shoes / glasses / watch / bag — finish stage only
+            if (isEyewearPiece(piece)) {
+              setStepLabel("Keeping your real face…");
+              try {
+                current = await lockFaceIdentity(
+                  identityPhoto,
+                  current,
+                  "strong"
+                );
+                setWornUrl(current);
+              } catch {
+                // continue
+              }
+            }
+
+            setProgress(55);
+            const finishRes = await authFetch("/api/tryon/render", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ac.signal,
+              body: JSON.stringify({
+                personImage: current,
+                stage: "finish",
+                includeFaceAccessories: true,
+                garments: [toPayload(piece)],
+              }),
+            });
+            const finishData = await finishRes.json();
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            if (failOrBilling(finishData, finishRes.status)) return;
+
+            if (
+              !finishData.ok ||
+              !finishData.imageUrl ||
+              !Array.isArray(finishData.steps) ||
+              finishData.steps.length === 0
+            ) {
+              setError(
+                finishData.error ||
+                  `Couldn’t swap ${piece.name || "that piece"}`
+              );
+              setMissingIds([piece.id]);
+              setDressing(false);
+              setActivePieceId(null);
+              return;
+            }
+
+            try {
+              current = await lockFaceIdentity(
+                identityPhoto,
+                finishData.imageUrl,
+                isEyewearPiece(piece) ? "soft" : "strong"
+              );
+            } catch {
+              current = finishData.imageUrl;
+            }
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            setWornUrl(current);
+            setKeyConfigured(true);
+          }
+
+          if (myId === requestId.current) {
+            setDonePieceIds(nextIds);
+            setMissingIds([]);
+            setActivePieceId(null);
+            setStepLabel("Updated on you");
+            setProgress(100);
+            setDressing(false);
+            setNotice("");
+            confirmWear(outfit);
+          }
+        } catch (err) {
+          if (cancelled || myId !== requestId.current || ac.signal.aborted)
+            return;
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Swap interrupted — please retry"
+          );
+          setDressing(false);
+          setActivePieceId(null);
+        }
+        return;
+      }
+
+      // —— Full look from your photo ——
+      setDressing(true);
+      setError("");
+      setNotice("");
+      setMissingIds([]);
+      setDonePieceIds([]);
+      setActivePieceId(null);
+      setNeedsKey(false);
+      setNeedsBilling(false);
+      setProgress(4);
+      setWornUrl(displayAvatar);
+
+      let consumedFreeThisRun = false;
+      let current = displayAvatar;
+      let identityPhoto = displayAvatar;
+      try {
+        current = await letterboxForTryOn(displayAvatar);
+        identityPhoto = current;
+        if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+        setWornUrl(current);
+      } catch {
+        // Keep original if letterbox fails
+      }
+
+      try {
         const appliedIds = new Set<string>();
         const appliedNames = new Set<string>();
-
-        const isWatchPiece = (p: (typeof lookPieces)[number]) =>
-          /watch|wrist|chrono|time/i.test(
-            `${p.name || ""} ${(p.tags || []).join(" ")}`
-          );
-        const isEyewearPiece = (p: (typeof lookPieces)[number]) =>
-          /glass|frame|optic|sunglass|spec/i.test(
-            `${p.name || ""} ${(p.tags || []).join(" ")}`
-          );
 
         const finishQueue = [
           ...styledExtras.filter((p) => p.category === "shoes"),
@@ -673,6 +894,7 @@ export function OutfitStage({
         );
 
         if (myId === requestId.current) {
+          lookIdsRef.current = nextIds;
           setActivePieceId(null);
           setStepLabel(missed.length ? "Almost ready" : "Full look on you");
           setProgress(100);
@@ -1103,7 +1325,7 @@ export function OutfitStage({
                 <div className="rounded-[1.5rem] border border-champagne/25 bg-champagne/5 p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <p className="text-xs text-champagne">
-                      Replace {swapFor} — we’ll dress it into the look
+                      Replace {swapFor} — only this piece is re-dressed
                     </p>
                     <button
                       type="button"
