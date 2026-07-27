@@ -178,6 +178,53 @@ export default function BillingPage() {
         </div>
       )}
 
+      {/* Members see top-ups first — that’s the action they need after the monthly 30 */}
+      {member && (
+        <div id="topup" className="scroll-mt-24 space-y-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+              Top up
+            </p>
+            <h2 className="mt-2 font-display text-3xl text-ivory">
+              Need more on-photo looks?
+            </h2>
+            <p className="mt-2 max-w-xl text-sm text-mist">
+              Your plan includes {PAID_PHOTO_TRYONS_PER_MONTH} full on-photo looks
+              each month. When those are used, buy a pack below — banked until you
+              use them. Voice swaps stay unlimited.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {LOOK_TOPUP_PACKS.map((pack) => (
+              <div
+                key={pack.id}
+                className="relative rounded-[1.75rem] border border-champagne/25 bg-champagne/[0.06] p-6"
+              >
+                {"badge" in pack && pack.badge ? (
+                  <span className="absolute right-5 top-5 rounded-full border border-champagne/40 bg-champagne/15 px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-champagne">
+                    {pack.badge}
+                  </span>
+                ) : null}
+                <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
+                <p className="mt-2 font-display text-4xl text-ivory">
+                  £{pack.priceGbp}
+                </p>
+                <p className="mt-2 text-sm text-mist">{pack.description}</p>
+                <Button
+                  className="mt-6 w-full"
+                  disabled={loading === pack.id}
+                  onClick={() => checkout(pack.id)}
+                >
+                  {loading === pack.id
+                    ? "Redirecting…"
+                    : `Buy ${pack.looks} looks`}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-2">
         {PLANS.map((plan) => (
           <div
@@ -211,65 +258,60 @@ export default function BillingPage() {
             </ul>
             <Button
               className="mt-8 w-full"
-              disabled={loading === plan.id}
+              disabled={member || loading === plan.id}
               onClick={() => checkout(plan.id)}
             >
-              {loading === plan.id ? "Redirecting…" : "Start 7-day trial"}
+              {member
+                ? "Included in your membership"
+                : loading === plan.id
+                  ? "Redirecting…"
+                  : "Start 7-day trial"}
             </Button>
           </div>
         ))}
       </div>
 
-      <div id="topup" className="scroll-mt-24 space-y-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-            Top up
-          </p>
-          <h2 className="mt-2 font-display text-3xl text-ivory">
-            Need more on-photo looks?
-          </h2>
-          <p className="mt-2 max-w-xl text-sm text-mist">
-            When you’ve used this month’s 30, buy a pack. Top-ups are banked and
-            used after your included looks — they don’t expire at month end.
-            Voice swaps stay unlimited either way.
-          </p>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          {LOOK_TOPUP_PACKS.map((pack) => (
-            <div
-              key={pack.id}
-              className="relative rounded-[1.75rem] border border-line bg-white/[0.02] p-6"
-            >
-              {"badge" in pack && pack.badge ? (
-                <span className="absolute right-5 top-5 rounded-full border border-champagne/40 bg-champagne/15 px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-champagne">
-                  {pack.badge}
-                </span>
-              ) : null}
-              <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
-              <p className="mt-2 font-display text-4xl text-ivory">
-                £{pack.priceGbp}
-              </p>
-              <p className="mt-2 text-sm text-mist">{pack.description}</p>
-              <Button
-                className="mt-6 w-full"
-                disabled={loading === pack.id || !member}
-                onClick={() => checkout(pack.id)}
+      {!member && (
+        <div id="topup" className="scroll-mt-24 space-y-4 opacity-90">
+          <div>
+            <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+              Top up
+            </p>
+            <h2 className="mt-2 font-display text-3xl text-ivory">
+              Extra looks after your monthly 30
+            </h2>
+            <p className="mt-2 max-w-xl text-sm text-mist">
+              Available once you’re on a trial or paid plan. Top-ups are banked
+              and used after your included looks.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {LOOK_TOPUP_PACKS.map((pack) => (
+              <div
+                key={pack.id}
+                className="relative rounded-[1.75rem] border border-line bg-white/[0.02] p-6"
               >
-                {loading === pack.id
-                  ? "Redirecting…"
-                  : member
-                    ? `Buy ${pack.looks} looks`
-                    : "Members only"}
-              </Button>
-              {!member ? (
+                {"badge" in pack && pack.badge ? (
+                  <span className="absolute right-5 top-5 rounded-full border border-champagne/40 bg-champagne/15 px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-champagne">
+                    {pack.badge}
+                  </span>
+                ) : null}
+                <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
+                <p className="mt-2 font-display text-4xl text-ivory">
+                  £{pack.priceGbp}
+                </p>
+                <p className="mt-2 text-sm text-mist">{pack.description}</p>
+                <Button className="mt-6 w-full" disabled>
+                  Members only
+                </Button>
                 <p className="mt-2 text-[11px] text-mist">
                   Start a trial or plan first, then top up anytime.
                 </p>
-              ) : null}
-            </div>
-          ))}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
