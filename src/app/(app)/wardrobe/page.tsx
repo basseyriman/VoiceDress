@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { Trash2 } from "lucide-react";
 import { GarmentTile } from "@/components/wardrobe/outfit-stage";
@@ -25,6 +26,20 @@ export default function WardrobePage() {
   const [filter, setFilter] = useState<(typeof filters)[number]>("all");
   const [pendingDelete, setPendingDelete] = useState<Garment | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  // Hide the floating Speak pill while the confirm dialog is open
+  useEffect(() => {
+    if (!pendingDelete) return;
+    document.body.dataset.hideFlowDock = "1";
+    return () => {
+      delete document.body.dataset.hideFlowDock;
+    };
+  }, [pendingDelete]);
 
   const items = useMemo(
     () =>
@@ -98,47 +113,50 @@ export default function WardrobePage() {
         ))}
       </div>
 
-      {pendingDelete && (
-        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-garment-title"
-            className="mb-16 w-full max-w-md rounded-[1.5rem] border border-line bg-ink p-6 shadow-2xl sm:mb-0"
-          >
-            <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-              Remove piece
-            </p>
-            <h2
-              id="delete-garment-title"
-              className="mt-2 font-display text-2xl text-ivory"
+      {pendingDelete &&
+        portalReady &&
+        createPortal(
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-garment-title"
+              className="w-full max-w-md rounded-[1.5rem] border border-line bg-ink p-6 shadow-2xl"
             >
-              Remove {pendingDelete.name}?
-            </h2>
-            <p className="mt-2 text-sm text-mist">
-              It leaves your wardrobe and stops showing in suggestions.
-            </p>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => setPendingDelete(null)}
-                className="flex-1 rounded-full border border-line px-4 py-2.5 text-sm text-mist hover:text-ivory"
+              <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+                Remove piece
+              </p>
+              <h2
+                id="delete-garment-title"
+                className="mt-2 font-display text-2xl text-ivory"
               >
-                Keep
-              </button>
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => void confirmDelete()}
-                className="flex-1 rounded-full border border-champagne/40 bg-champagne/15 px-4 py-2.5 text-sm text-champagne"
-              >
-                {deleting ? "Removing…" : "Remove"}
-              </button>
+                Remove {pendingDelete.name}?
+              </h2>
+              <p className="mt-2 text-sm text-mist">
+                It leaves your wardrobe and stops showing in suggestions.
+              </p>
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => setPendingDelete(null)}
+                  className="flex-1 rounded-full border border-line px-4 py-2.5 text-sm text-mist hover:text-ivory"
+                >
+                  Keep
+                </button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => void confirmDelete()}
+                  className="flex-1 rounded-full border border-champagne/40 bg-champagne/15 px-4 py-2.5 text-sm text-champagne"
+                >
+                  {deleting ? "Removing…" : "Remove"}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

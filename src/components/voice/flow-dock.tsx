@@ -19,13 +19,27 @@ export function FlowDock() {
   const pathname = usePathname();
   const router = useRouter();
   const [hint, setHint] = useState("");
+  const [dockBlocked, setDockBlocked] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const listening = useAetherStore((s) => s.voiceListening);
   const setListening = useAetherStore((s) => s.setVoiceListening);
   const setTranscript = useAetherStore((s) => s.setTranscript);
 
-  const hidden =
+  const pathHidden =
     pathname.startsWith("/today") || pathname.startsWith("/try-on");
+  const hidden = pathHidden || dockBlocked;
+
+  useEffect(() => {
+    const sync = () =>
+      setDockBlocked(document.body.dataset.hideFlowDock === "1");
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["data-hide-flow-dock"],
+    });
+    return () => obs.disconnect();
+  }, []);
 
   useEffect(() => {
     if (hidden) return;
