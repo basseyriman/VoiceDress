@@ -20,6 +20,8 @@ import {
   canStartPhotoTryOn,
   isMembershipActive,
   PAID_PHOTO_TRYONS_PER_MONTH,
+  photoTryOnsRemaining,
+  photoTryOnsUsedThisMonth,
   shouldOfferTrial,
 } from "@/lib/entitlement";
 import Link from "next/link";
@@ -133,6 +135,9 @@ export function OutfitStage({
   const piecesTotal = Math.max(1, lookPieces.length);
   const piecesDone = donePieceIds.length;
   const piecesLeft = Math.max(0, piecesTotal - piecesDone);
+  const looksUsedThisMonth = photoTryOnsUsedThisMonth(user);
+  const looksLeftThisMonth = photoTryOnsRemaining(user);
+  const showLookQuota = isMembershipActive(user);
   // Two stages: clothes (~45s) then accessories (~25s) — not per-piece × 18s
   const etaSec = dressing
     ? Math.max(
@@ -1384,6 +1389,31 @@ export function OutfitStage({
               ? "Tap a piece to swap it. Ask by voice how to wear it."
               : "Tell VoiceDress where you’re going — one look from your wardrobe."}
           </p>
+          {showLookQuota && (
+            <p className="mt-3 text-xs text-mist">
+              <span
+                className={cn(
+                  "tabular-nums",
+                  looksLeftThisMonth <= 5 ? "text-champagne" : "text-ivory-muted"
+                )}
+              >
+                {looksUsedThisMonth}/{PAID_PHOTO_TRYONS_PER_MONTH}
+              </span>{" "}
+              full on-photo looks used this month
+              {looksLeftThisMonth <= 0
+                ? " — swaps still work"
+                : looksLeftThisMonth <= 5
+                  ? ` · ${looksLeftThisMonth} left`
+                  : ""}
+              {" · "}
+              <Link
+                href="/billing"
+                className="text-champagne/90 underline-offset-2 hover:underline"
+              >
+                Plan
+              </Link>
+            </p>
+          )}
 
           <div className="mt-6 min-w-0">
             <div className="mb-2 flex min-w-0 items-end justify-between gap-2">
