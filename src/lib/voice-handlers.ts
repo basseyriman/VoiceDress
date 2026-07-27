@@ -10,34 +10,72 @@ export function buildVoiceHandlers(
   pathname?: string
 ): VoiceActionHandlers {
   const state = useAetherStore.getState();
+  const path = pathname || "";
+
+  /** After dressing, open Today so the look is visible — don’t bounce for no reason. */
+  const showLookIfNeeded = () => {
+    const hasLook = Boolean(useAetherStore.getState().currentOutfit);
+    if (
+      hasLook &&
+      !path.startsWith("/today") &&
+      !path.startsWith("/try-on")
+    ) {
+      router.push("/today");
+    }
+  };
+
   return {
-    generateOutfit: state.generateOutfit,
-    generateOutfitAsync: state.generateOutfitAsync,
-    swapFromVoice: state.swapFromVoice,
-    pickGarmentById: state.pickGarmentById,
+    generateOutfit: (occasion, style, opts) => {
+      const outfit = state.generateOutfit(occasion, style, opts);
+      showLookIfNeeded();
+      return outfit;
+    },
+    generateOutfitAsync: async (occasion, style, opts) => {
+      const fn = state.generateOutfitAsync || state.generateOutfit;
+      const outfit = await fn(occasion, style, opts);
+      showLookIfNeeded();
+      return outfit;
+    },
+    swapFromVoice: (category, style, occasion, garmentQuery, sourceQuery) => {
+      const result = state.swapFromVoice(
+        category,
+        style,
+        occasion,
+        garmentQuery,
+        sourceQuery
+      );
+      showLookIfNeeded();
+      return result;
+    },
+    pickGarmentById: (garmentId) => {
+      const result = state.pickGarmentById?.(garmentId);
+      showLookIfNeeded();
+      return result;
+    },
     onOpenWardrobe: () => router.push("/wardrobe"),
-    onNavigate: (path) => router.push(path),
+    onNavigate: (next) => router.push(next),
     onExplainLook: () => {
-      const o = state.currentOutfit;
+      const o = useAetherStore.getState().currentOutfit;
       if (!o) return "No look yet — tell me where you’re going.";
       return o.stylingGuide || o.rationale;
     },
     onWeather: () => {
-      const w = state.weather;
+      const w = useAetherStore.getState().weather;
       if (!w) return "Weather isn’t loaded yet.";
       return `${Math.round(w.tempC)} degrees, ${w.condition} in ${w.location}. Rain chance ${w.precipChance} percent.`;
     },
     getContext: () => {
-      const o = state.currentOutfit;
+      const live = useAetherStore.getState();
+      const o = live.currentOutfit;
       return {
-        pathname: pathname || "/today",
-        weather: state.weather
-          ? `${Math.round(state.weather.tempC)}°C ${state.weather.condition} ${state.weather.location}`
+        pathname: path || "/today",
+        weather: live.weather
+          ? `${Math.round(live.weather.tempC)}°C ${live.weather.condition} ${live.weather.location}`
           : null,
-        weatherFull: state.weather,
-        connectedStores: state.user?.connectedStores || [],
+        weatherFull: live.weather,
+        connectedStores: live.user?.connectedStores || [],
         occasion: o?.occasion || null,
-        style: o?.style || state.user?.stylePrefs?.[0] || null,
+        style: o?.style || live.user?.stylePrefs?.[0] || null,
         stylingGuide: o?.stylingGuide || null,
         rationale: o?.rationale || null,
         outfit: (o?.garments || []).map((g) => ({
@@ -49,7 +87,7 @@ export function buildVoiceHandlers(
           colors: g.colors,
         })),
         outfitGarments: o?.garments || [],
-        wardrobe: state.wardrobe.map((g) => ({
+        wardrobe: live.wardrobe.map((g) => ({
           id: g.id,
           name: g.name,
           brand: g.brand,
@@ -58,7 +96,7 @@ export function buildVoiceHandlers(
           fabric: g.fabric,
           formality: g.formality,
         })),
-        wardrobeFull: state.wardrobe,
+        wardrobeFull: live.wardrobe,
       };
     },
   };

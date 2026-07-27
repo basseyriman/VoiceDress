@@ -66,12 +66,6 @@ export function FlowDock() {
           text,
           buildVoiceHandlers(router, pathname)
         ).then(() => {
-          if (
-            !pathname.startsWith("/today") &&
-            !pathname.startsWith("/try-on")
-          ) {
-            router.push("/today");
-          }
           setTimeout(() => setHint(""), 2400);
         });
       }
