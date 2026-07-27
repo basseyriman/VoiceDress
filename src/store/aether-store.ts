@@ -320,6 +320,7 @@ export const useAetherStore = create<AetherState>()(
               data.profile.subscriptionStatus ||
               (data.profile.trialEndsAt ? "trialing" : "none"),
             subscriptionPlan: data.profile.subscriptionPlan,
+            comped: data.profile.comped === true,
             trialEndsAt: data.profile.trialEndsAt,
             freePhotoTryOnsUsed: data.profile.freePhotoTryOnsUsed ?? 0,
             photoTryOnsMonthKey: data.profile.photoTryOnsMonthKey,
@@ -379,6 +380,7 @@ export const useAetherStore = create<AetherState>()(
           const {
             subscriptionStatus: _s,
             subscriptionPlan: _sp,
+            comped: _comp,
             trialEndsAt: _t,
             freePhotoTryOnsUsed: _f,
             photoTryOnsMonthKey: _mk,
@@ -417,6 +419,7 @@ export const useAetherStore = create<AetherState>()(
             stylePrefs: profile.stylePrefs || ["quiet luxury", "old money"],
             subscriptionStatus: profile.subscriptionStatus || "none",
             subscriptionPlan: profile.subscriptionPlan,
+            comped: profile.comped === true,
             trialEndsAt: profile.trialEndsAt,
             freePhotoTryOnsUsed: profile.freePhotoTryOnsUsed ?? 0,
             photoTryOnsMonthKey: profile.photoTryOnsMonthKey,

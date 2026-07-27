@@ -178,6 +178,8 @@ export default function BillingPage() {
     tone: "ok" | "err";
     text: string;
   } | null>(null);
+  /** Live Stripe subscription found (false = canceled / comp / never subscribed). */
+  const [stripeLinked, setStripeLinked] = useState<boolean | null>(null);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -212,11 +214,13 @@ export default function BillingPage() {
         const res = await authFetch("/api/stripe/subscription");
         const data = await res.json().catch(() => ({}));
         if (cancelled || !res.ok) return;
+        const linked = Boolean(data.subscriptionId || data.hasSubscription);
+        setStripeLinked(linked);
         if (data.planId === "monthly" || data.planId === "yearly") {
           updateUser({ subscriptionPlan: data.planId });
         }
       } catch {
-        // ignore — page still works from cached profile
+        if (!cancelled) setStripeLinked(false);
       }
     })();
     return () => {
@@ -391,6 +395,10 @@ export default function BillingPage() {
       : 0;
   const onYearly = user?.subscriptionPlan === "yearly";
   const annualSavings = LIST_PRICE_MONTHLY_GBP * 12 - LIST_PRICE_YEARLY_GBP;
+  const complimentary =
+    user?.comped === true || stripeLinked === false;
+  const canSwitchAnnual =
+    member && !onYearly && stripeLinked === true && !user?.comped;
 
   return (
     <div className="space-y-14 pb-20">
@@ -404,8 +412,10 @@ export default function BillingPage() {
           </h1>
           <p className="mt-3 text-sm text-mist">
             Status{" "}
-            <span className="text-champagne">{statusCopy(user)}</span>
-            {user?.subscriptionPlan ? (
+            <span className="text-champagne">
+              {complimentary ? "Complimentary" : statusCopy(user)}
+            </span>
+            {!complimentary && user?.subscriptionPlan ? (
               <span>
                 {" "}
                 · {user.subscriptionPlan === "yearly" ? "Annual" : "Monthly"}
@@ -491,62 +501,76 @@ export default function BillingPage() {
                 Plan
               </p>
               <h2 className="mt-2 font-display text-3xl text-ivory">
-                {onYearly ? "Annual membership" : "Your plan"}
+                {complimentary
+                  ? "Complimentary access"
+                  : onYearly
+                    ? "Annual membership"
+                    : "Your plan"}
               </h2>
+              {complimentary ? (
+                <p className="mt-2 max-w-xl text-sm text-mist">
+                  You’re on free founder access — there’s no Stripe plan to
+                  switch. Billing details is only for an old card or invoices.
+                </p>
+              ) : null}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div
-                className={`rounded-[1.75rem] border p-6 ${
-                  !onYearly
-                    ? "border-champagne/40 bg-champagne/[0.08]"
-                    : "border-line bg-white/[0.02]"
-                }`}
-              >
-                <p className="text-xs uppercase tracking-[0.2em] text-champagne">
-                  {!onYearly ? "Current" : "Monthly"}
-                </p>
-                <p className="mt-3 font-display text-3xl text-ivory">Monthly</p>
-                <p className="mt-2 font-display text-4xl text-ivory">
-                  £{LIST_PRICE_MONTHLY_GBP}
-                  <span className="text-base text-mist">/month</span>
-                </p>
-                <p className="mt-3 text-sm text-mist">
-                  {PAID_PHOTO_TRYONS_PER_MONTH} looks / month · unlimited voice
-                </p>
-              </div>
+            {!complimentary ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div
+                  className={`rounded-[1.75rem] border p-6 ${
+                    !onYearly
+                      ? "border-champagne/40 bg-champagne/[0.08]"
+                      : "border-line bg-white/[0.02]"
+                  }`}
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-champagne">
+                    {!onYearly ? "Current" : "Monthly"}
+                  </p>
+                  <p className="mt-3 font-display text-3xl text-ivory">
+                    Monthly
+                  </p>
+                  <p className="mt-2 font-display text-4xl text-ivory">
+                    £{LIST_PRICE_MONTHLY_GBP}
+                    <span className="text-base text-mist">/month</span>
+                  </p>
+                  <p className="mt-3 text-sm text-mist">
+                    {PAID_PHOTO_TRYONS_PER_MONTH} looks / month · unlimited voice
+                  </p>
+                </div>
 
-              <div
-                className={`rounded-[1.75rem] border p-6 ${
-                  onYearly
-                    ? "border-champagne/40 bg-champagne/[0.08]"
-                    : "border-champagne/25 bg-champagne/[0.04]"
-                }`}
-              >
-                <p className="text-xs uppercase tracking-[0.2em] text-champagne">
-                  {onYearly ? "Current" : `Save £${annualSavings}`}
-                </p>
-                <p className="mt-3 font-display text-3xl text-ivory">Annual</p>
-                <p className="mt-2 font-display text-4xl text-ivory">
-                  £{LIST_PRICE_YEARLY_GBP}
-                  <span className="text-base text-mist">/year</span>
-                </p>
-                <p className="mt-3 text-sm text-mist">
-                  Same looks & voice — better yearly rate.
-                </p>
-                {!onYearly ? (
-                  <Button
-                    className="mt-6 w-full"
-                    disabled={loading === "change_yearly"}
-                    onClick={() => changePlan("yearly")}
-                  >
-                    {loading === "change_yearly"
-                      ? "Switching…"
-                      : `Switch to annual · £${LIST_PRICE_YEARLY_GBP}`}
-                  </Button>
-                ) : null}
+                <div
+                  className={`rounded-[1.75rem] border p-6 ${
+                    onYearly
+                      ? "border-champagne/40 bg-champagne/[0.08]"
+                      : "border-champagne/25 bg-champagne/[0.04]"
+                  }`}
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-champagne">
+                    {onYearly ? "Current" : `Save £${annualSavings}`}
+                  </p>
+                  <p className="mt-3 font-display text-3xl text-ivory">Annual</p>
+                  <p className="mt-2 font-display text-4xl text-ivory">
+                    £{LIST_PRICE_YEARLY_GBP}
+                    <span className="text-base text-mist">/year</span>
+                  </p>
+                  <p className="mt-3 text-sm text-mist">
+                    Same looks & voice — better yearly rate.
+                  </p>
+                  {canSwitchAnnual ? (
+                    <Button
+                      className="mt-6 w-full"
+                      disabled={loading === "change_yearly"}
+                      onClick={() => changePlan("yearly")}
+                    >
+                      {loading === "change_yearly"
+                        ? "Switching…"
+                        : `Switch to annual · £${LIST_PRICE_YEARLY_GBP}`}
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {planNotice ? (
               <p

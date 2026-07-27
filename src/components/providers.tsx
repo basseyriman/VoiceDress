@@ -77,6 +77,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         updateUser({
           subscriptionStatus: data.subscriptionStatus,
           trialEndsAt: data.trialEndsAt || undefined,
+          comped: true,
         });
       })
       .catch(() => undefined);

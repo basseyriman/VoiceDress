@@ -33,7 +33,12 @@ export async function GET(req: NextRequest) {
     });
 
     if (!sub) {
-      return NextResponse.json({ ok: true, planId: null, status: null });
+      return NextResponse.json({
+        ok: true,
+        planId: null,
+        status: null,
+        hasSubscription: false,
+      });
     }
 
     const planId = planFromSubscription(sub);
@@ -51,6 +56,7 @@ export async function GET(req: NextRequest) {
       planId,
       status: sub.status,
       subscriptionId: sub.id,
+      hasSubscription: true,
     });
   } catch (err) {
     console.error("stripe subscription sync failed", err);

@@ -89,6 +89,7 @@ export async function saveUserProfile(
     "stylePrefs",
     "subscriptionStatus",
     "subscriptionPlan",
+    "comped",
     "trialEndsAt",
     "freePhotoTryOnsUsed",
     "photoTryOnsMonthKey",
