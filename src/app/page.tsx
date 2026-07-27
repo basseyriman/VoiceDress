@@ -33,7 +33,7 @@ export default function LandingPage() {
     <div className="grain relative overflow-hidden">
       <div className="relative z-10">
         <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 sm:px-6">
-          <Logo />
+          <Logo variant="header" />
           <div className="flex items-center gap-3">
             <Link href="/login" className="text-sm text-mist hover:text-ivory">
               Sign in
@@ -56,19 +56,11 @@ export default function LandingPage() {
             <div className="absolute inset-0 bg-gradient-to-t from-ink via-transparent to-ink/50" />
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7 }}
-            className="flex items-center"
-          >
-            <Logo variant="hero" />
-          </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.85, delay: 0.08 }}
-            className="mt-6 max-w-3xl font-display text-5xl font-medium italic leading-[1.08] text-ivory sm:text-7xl"
+            transition={{ duration: 0.85 }}
+            className="max-w-3xl font-display text-5xl font-medium italic leading-[1.08] text-ivory sm:text-7xl"
           >
             Dress without deciding.
           </motion.h1>
