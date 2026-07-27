@@ -204,7 +204,7 @@ function speakChunk(
     }
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 0.96;
-    utter.pitch = 1;
+    utter.pitch = 1.06;
     utter.lang = voice?.lang || "en-GB";
     if (voice) utter.voice = voice;
     utter.onend = () => resolve();
@@ -231,12 +231,32 @@ export function speak(text: string) {
     // ignore
   }
   ensureVoicesLoaded();
-  const voice = pickBestVoice();
   const chunks = chunkForSpeech(cleaned);
   if (!chunks.length || gen !== speakGeneration) return;
 
   startSpeakKeepalive(gen);
   void (async () => {
+    // iOS often returns [] until voiceschanged — wait so we don’t fall back to male Daniel
+    const voice =
+      (await new Promise<SpeechSynthesisVoice | null>((resolve) => {
+        const existing = pickBestVoice();
+        if (existing) {
+          resolve(existing);
+          return;
+        }
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          window.speechSynthesis.removeEventListener("voiceschanged", onChange);
+          resolve(pickBestVoice());
+        };
+        const onChange = () => finish();
+        window.speechSynthesis.addEventListener("voiceschanged", onChange);
+        window.speechSynthesis.getVoices();
+        setTimeout(finish, 600);
+      })) || pickBestVoice();
+
     // Small yield helps WebKit attach the next utterance after cancel()
     await new Promise((r) => setTimeout(r, 40));
     for (const chunk of chunks) {
