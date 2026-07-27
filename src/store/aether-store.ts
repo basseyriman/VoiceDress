@@ -11,7 +11,7 @@ import type {
   UserProfile,
   WeatherSnapshot,
 } from "@/lib/types";
-import { seedWardrobe, WARDROBE_SEED_VERSION } from "@/lib/seed-data";
+import { seedWardrobe, WARDROBE_SEED_VERSION, missingSeedGarments } from "@/lib/seed-data";
 import { defaultConnections } from "@/lib/commerce";
 import {
   applySpokenWeather,
@@ -328,6 +328,13 @@ export const useAetherStore = create<AetherState>()(
             wardrobe = repaired;
             if (dirty.length) {
               void upsertGarments(uid, dirty).catch(() => undefined);
+            }
+
+            // Restore deleted starter pieces only — never remove user uploads
+            const missing = missingSeedGarments(uid, wardrobe);
+            if (missing.length) {
+              const restored = await upsertGarments(uid, missing);
+              wardrobe = [...restored, ...wardrobe];
             }
           }
           // Never restore a saved look on login — wait until the user says
