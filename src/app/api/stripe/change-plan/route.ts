@@ -225,10 +225,8 @@ export async function POST(req: NextRequest) {
       status: updated.status,
       message:
         planId === "yearly"
-          ? updated.status === "trialing"
-            ? `You’re on annual now. Your trial continues — then £${LIST_PRICE_YEARLY_GBP}/year.`
-            : `Switched to annual (£${LIST_PRICE_YEARLY_GBP}/year). Stripe will prorate the difference.`
-          : "Switched to monthly. Stripe will prorate the difference.",
+          ? `You’re on annual — £${LIST_PRICE_YEARLY_GBP}/year.`
+          : "You’re on monthly.",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Plan change failed";

@@ -532,7 +532,7 @@ export default function BillingPage() {
                   <span className="text-base text-mist">/year</span>
                 </p>
                 <p className="mt-3 text-sm text-mist">
-                  Same membership — about two months free vs monthly.
+                  Same looks & voice — better yearly rate.
                 </p>
                 {!onYearly ? (
                   <Button
@@ -556,13 +556,7 @@ export default function BillingPage() {
               >
                 {planNotice.text}
               </p>
-            ) : (
-              <p className="text-sm text-mist">
-                {onYearly
-                  ? "You’re on the best rate. Update your card or invoices below."
-                  : "Switch here in VoiceDress — Stripe keeps your trial and prorates when you’re paid."}
-              </p>
-            )}
+            ) : null}
 
             <button
               type="button"
@@ -570,9 +564,7 @@ export default function BillingPage() {
               onClick={() => openPortal()}
               className="text-sm text-mist underline-offset-4 transition hover:text-ivory hover:underline disabled:opacity-50"
             >
-              {loading === "portal"
-                ? "Opening Stripe…"
-                : "Update card or view invoices"}
+              {loading === "portal" ? "Opening…" : "Billing details"}
             </button>
           </section>
 
