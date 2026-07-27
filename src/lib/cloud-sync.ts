@@ -92,6 +92,7 @@ export async function saveUserProfile(
     "freePhotoTryOnsUsed",
     "photoTryOnsMonthKey",
     "photoTryOnsThisMonth",
+    "photoTryOnCredits",
     "stripeCustomerId",
     "connectedStores",
     "voiceEnabled",

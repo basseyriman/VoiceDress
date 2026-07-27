@@ -103,6 +103,11 @@ export interface UserProfile {
   photoTryOnsMonthKey?: string;
   /** Full on-photo looks used in photoTryOnsMonthKey (swaps excluded). */
   photoTryOnsThisMonth?: number;
+  /**
+   * Banked top-up looks purchased via Stripe (used after monthly 30 is spent).
+   * Server/webhook authoritative.
+   */
+  photoTryOnCredits?: number;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   connectedStores: CommerceSource[];

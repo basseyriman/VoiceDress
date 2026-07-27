@@ -323,6 +323,7 @@ export const useAetherStore = create<AetherState>()(
             freePhotoTryOnsUsed: data.profile.freePhotoTryOnsUsed ?? 0,
             photoTryOnsMonthKey: data.profile.photoTryOnsMonthKey,
             photoTryOnsThisMonth: data.profile.photoTryOnsThisMonth ?? 0,
+            photoTryOnCredits: data.profile.photoTryOnCredits ?? 0,
             stripeCustomerId: data.profile.stripeCustomerId,
             stripeSubscriptionId: data.profile.stripeSubscriptionId,
             connectedStores: data.profile.connectedStores || [],
@@ -380,6 +381,7 @@ export const useAetherStore = create<AetherState>()(
             freePhotoTryOnsUsed: _f,
             photoTryOnsMonthKey: _mk,
             photoTryOnsThisMonth: _mt,
+            photoTryOnCredits: _cr,
             stripeCustomerId: _c,
             stripeSubscriptionId: _sub,
             ...safePatch
@@ -416,6 +418,7 @@ export const useAetherStore = create<AetherState>()(
             freePhotoTryOnsUsed: profile.freePhotoTryOnsUsed ?? 0,
             photoTryOnsMonthKey: profile.photoTryOnsMonthKey,
             photoTryOnsThisMonth: profile.photoTryOnsThisMonth ?? 0,
+            photoTryOnCredits: profile.photoTryOnCredits ?? 0,
             connectedStores: profile.connectedStores || [],
             voiceEnabled: profile.voiceEnabled ?? true,
             createdAt: profile.createdAt || new Date().toISOString(),

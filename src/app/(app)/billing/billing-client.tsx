@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PLANS } from "@/lib/stripe";
+import { LOOK_TOPUP_PACKS, PLANS } from "@/lib/stripe";
 import { authFetch } from "@/lib/auth-fetch";
 import { useAetherStore } from "@/store/aether-store";
 import {
   PAID_PHOTO_TRYONS_PER_MONTH,
+  isMembershipActive,
+  photoTryOnCredits,
   photoTryOnsUsedThisMonth,
 } from "@/lib/entitlement";
 
@@ -22,15 +24,24 @@ export default function BillingPage() {
 
   useEffect(() => {
     const success = searchParams.get("success");
+    const topup = searchParams.get("topup");
     const canceled = searchParams.get("canceled");
     if (canceled) {
-      setMessage("Checkout canceled — your membership was not changed.");
+      setMessage("Checkout canceled — nothing was charged.");
       return;
     }
-    if (success === "1" && user?.uid) {
-      setMessage("Payment received. Refreshing membership…");
+    if ((success === "1" || topup === "1") && user?.uid) {
+      setMessage(
+        topup === "1"
+          ? "Top-up received. Refreshing your look balance…"
+          : "Payment received. Refreshing membership…"
+      );
       void hydrateFromCloud(user.uid).then(() => {
-        setMessage("Membership updated. Welcome to VoiceDress.");
+        setMessage(
+          topup === "1"
+            ? "Extra looks are banked — dress whenever you’re ready."
+            : "Membership updated. Welcome to VoiceDress."
+        );
       });
     }
   }, [searchParams, user?.uid, hydrateFromCloud]);
@@ -72,6 +83,15 @@ export default function BillingPage() {
       }
 
       // Stripe not fully configured — ensure a server-side trial instead of faking paid.
+      // Top-ups need live Stripe; don't fake credits.
+      if (planId.startsWith("looks_")) {
+        setMessage(
+          data.message ||
+            "Add Stripe keys to sell look top-ups. Subscription trial can still start below."
+        );
+        return;
+      }
+
       const trialRes = await authFetch("/api/billing/ensure-trial", {
         method: "POST",
       });
@@ -108,6 +128,8 @@ export default function BillingPage() {
     user?.subscriptionStatus === "none" || !user?.subscriptionStatus
       ? "Not started"
       : user.subscriptionStatus;
+  const member = isMembershipActive(user);
+  const credits = photoTryOnCredits(user);
 
   return (
     <div className="space-y-8 pb-20">
@@ -139,13 +161,12 @@ export default function BillingPage() {
               · free looks used {user.freePhotoTryOnsUsed}/1
             </span>
           ) : null}
-          {user &&
-          (user.subscriptionStatus === "active" ||
-            user.subscriptionStatus === "trialing") ? (
+          {member ? (
             <span className="text-mist">
               {" "}
               · looks this month {photoTryOnsUsedThisMonth(user)}/
               {PAID_PHOTO_TRYONS_PER_MONTH}
+              {credits > 0 ? ` · ${credits} top-up banked` : ""}
             </span>
           ) : null}
         </p>
@@ -197,6 +218,57 @@ export default function BillingPage() {
             </Button>
           </div>
         ))}
+      </div>
+
+      <div id="topup" className="scroll-mt-24 space-y-4">
+        <div>
+          <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+            Top up
+          </p>
+          <h2 className="mt-2 font-display text-3xl text-ivory">
+            Need more on-photo looks?
+          </h2>
+          <p className="mt-2 max-w-xl text-sm text-mist">
+            When you’ve used this month’s 30, buy a pack. Top-ups are banked and
+            used after your included looks — they don’t expire at month end.
+            Voice swaps stay unlimited either way.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {LOOK_TOPUP_PACKS.map((pack) => (
+            <div
+              key={pack.id}
+              className="relative rounded-[1.75rem] border border-line bg-white/[0.02] p-6"
+            >
+              {"badge" in pack && pack.badge ? (
+                <span className="absolute right-5 top-5 rounded-full border border-champagne/40 bg-champagne/15 px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-champagne">
+                  {pack.badge}
+                </span>
+              ) : null}
+              <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
+              <p className="mt-2 font-display text-4xl text-ivory">
+                £{pack.priceGbp}
+              </p>
+              <p className="mt-2 text-sm text-mist">{pack.description}</p>
+              <Button
+                className="mt-6 w-full"
+                disabled={loading === pack.id || !member}
+                onClick={() => checkout(pack.id)}
+              >
+                {loading === pack.id
+                  ? "Redirecting…"
+                  : member
+                    ? `Buy ${pack.looks} looks`
+                    : "Members only"}
+              </Button>
+              {!member ? (
+                <p className="mt-2 text-[11px] text-mist">
+                  Start a trial or plan first, then top up anytime.
+                </p>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import {
   freePhotoTryOnsUsed,
   hasMonthlyPhotoTryOnQuota,
   isMembershipActive,
+  photoTryOnCredits,
   photoTryOnsUsedThisMonth,
 } from "@/lib/entitlement";
 
@@ -186,10 +187,12 @@ export async function requireTryOnAccess(
       return NextResponse.json(
         {
           error:
-            "You’ve used this month’s 30 full on-photo looks. Piece swaps still work — or wait until next month.",
+            "You’ve used this month’s 30 included looks. Buy a top-up to keep dressing on photo — or wait until next month. Piece swaps still work.",
           code: "quota_exceeded",
           used: photoTryOnsUsedThisMonth(profile),
           limit: PAID_PHOTO_TRYONS_PER_MONTH,
+          credits: photoTryOnCredits(profile),
+          topup: true,
         },
         { status: 402 }
       );
@@ -246,13 +249,19 @@ export async function consumeFreePhotoTryOn(
 }
 
 /**
- * Increment monthly full-look counter for trial/paid members after a successful
- * multi-garment apparel dress. No-op for comps, non-members, or month already full.
+ * After a successful multi-garment apparel dress for members:
+ * burn one included monthly look, else one banked top-up credit.
  */
 export async function consumeMonthlyPhotoTryOn(
   uid: string,
   opts?: { email?: string | null }
-): Promise<{ consumed: boolean; used: number; monthKey: string }> {
+): Promise<{
+  consumed: boolean;
+  used: number;
+  monthKey: string;
+  credits?: number;
+  from?: "monthly" | "credit";
+}> {
   const monthKey = currentPhotoTryOnMonthKey();
   const db = getAdminDb();
   if (!db) return { consumed: false, used: 0, monthKey };
@@ -269,18 +278,43 @@ export async function consumeMonthlyPhotoTryOn(
   }
 
   const used = photoTryOnsUsedThisMonth(profile);
-  if (used >= PAID_PHOTO_TRYONS_PER_MONTH) {
-    return { consumed: false, used, monthKey };
+  if (used < PAID_PHOTO_TRYONS_PER_MONTH) {
+    const next = used + 1;
+    await ref.set(
+      {
+        photoTryOnsMonthKey: monthKey,
+        photoTryOnsThisMonth: next,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return {
+      consumed: true,
+      used: next,
+      monthKey,
+      credits: photoTryOnCredits(profile),
+      from: "monthly",
+    };
   }
 
-  const next = used + 1;
+  const credits = photoTryOnCredits(profile);
+  if (credits < 1) {
+    return { consumed: false, used, monthKey, credits: 0 };
+  }
+
+  const nextCredits = credits - 1;
   await ref.set(
     {
-      photoTryOnsMonthKey: monthKey,
-      photoTryOnsThisMonth: next,
+      photoTryOnCredits: nextCredits,
       updatedAt: new Date().toISOString(),
     },
     { merge: true }
   );
-  return { consumed: true, used: next, monthKey };
+  return {
+    consumed: true,
+    used,
+    monthKey,
+    credits: nextCredits,
+    from: "credit",
+  };
 }

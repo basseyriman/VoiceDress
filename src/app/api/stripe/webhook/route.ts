@@ -92,6 +92,43 @@ export async function POST(req: NextRequest) {
               ? session.subscription
               : session.subscription?.id;
 
+          // One-time look top-up — bank credits; do not touch subscription status
+          const isLookTopup =
+            session.mode === "payment" &&
+            (session.metadata?.type === "look_topup" ||
+              Boolean(session.metadata?.looks));
+          if (isLookTopup) {
+            const add = Math.max(
+              0,
+              Math.floor(Number(session.metadata?.looks || 0))
+            );
+            if (add > 0) {
+              const db = getAdminDb()!;
+              const ref = db.collection("users").doc(uid);
+              await db.runTransaction(async (tx) => {
+                const snap = await tx.get(ref);
+                const prev = Math.max(
+                  0,
+                  Math.floor(Number(snap.data()?.photoTryOnCredits || 0))
+                );
+                tx.set(
+                  ref,
+                  {
+                    photoTryOnCredits: prev + add,
+                    ...(customerId ? { stripeCustomerId: customerId } : {}),
+                    updatedAt: new Date().toISOString(),
+                  },
+                  { merge: true }
+                );
+              });
+            }
+            break;
+          }
+
+          if (!subscriptionId && session.mode !== "subscription") {
+            break;
+          }
+
           let status: "trialing" | "active" = "active";
           let trialEndsAt: string | undefined;
           if (subscriptionId) {

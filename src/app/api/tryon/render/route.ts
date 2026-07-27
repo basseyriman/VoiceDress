@@ -1105,6 +1105,7 @@ export async function POST(req: NextRequest) {
     stage === "base";
   let photoTryOnsThisMonth: number | undefined;
   let photoTryOnsMonthKey: string | undefined;
+  let photoTryOnCredits: number | undefined;
   if (isApparelStage && steps.length > 0) {
     try {
       const burn = await consumeFreePhotoTryOn(auth.uid);
@@ -1121,6 +1122,9 @@ export async function POST(req: NextRequest) {
         if (monthly.consumed || monthly.used > 0) {
           photoTryOnsThisMonth = monthly.used;
           photoTryOnsMonthKey = monthly.monthKey;
+        }
+        if (typeof monthly.credits === "number") {
+          photoTryOnCredits = monthly.credits;
         }
       } catch {
         // don't fail the dress if counter write fails
@@ -1140,6 +1144,7 @@ export async function POST(req: NextRequest) {
     consumedFreeTryOn: consumedFreeTryOn || undefined,
     photoTryOnsThisMonth,
     photoTryOnsMonthKey,
+    photoTryOnCredits,
     ...(warnings.length ? { warning: warnings.join(" · ") } : {}),
   });
 }

@@ -15,6 +15,7 @@ type EntitlementProfile = Partial<
     | "freePhotoTryOnsUsed"
     | "photoTryOnsMonthKey"
     | "photoTryOnsThisMonth"
+    | "photoTryOnCredits"
   >
 >;
 
@@ -41,6 +42,13 @@ export function freePhotoTryOnsUsed(profile: EntitlementProfile | null | undefin
   return Math.max(0, Number(profile?.freePhotoTryOnsUsed || 0));
 }
 
+/** Purchased top-up looks (banked; used after the monthly 30). */
+export function photoTryOnCredits(
+  profile: EntitlementProfile | null | undefined
+): number {
+  return Math.max(0, Math.floor(Number(profile?.photoTryOnCredits || 0)));
+}
+
 /** UTC calendar month key used for quota rollover. */
 export function currentPhotoTryOnMonthKey(now = new Date()): string {
   const y = now.getUTCFullYear();
@@ -58,6 +66,7 @@ export function photoTryOnsUsedThisMonth(
   return Math.max(0, Number(profile?.photoTryOnsThisMonth || 0));
 }
 
+/** Included monthly looks still available (not counting top-up credits). */
 export function photoTryOnsRemaining(
   profile: EntitlementProfile | null | undefined,
   now = new Date()
@@ -68,16 +77,24 @@ export function photoTryOnsRemaining(
   );
 }
 
+/** Monthly allowance left + banked top-ups. */
+export function photoTryOnsAvailable(
+  profile: EntitlementProfile | null | undefined,
+  now = new Date()
+): number {
+  return photoTryOnsRemaining(profile, now) + photoTryOnCredits(profile);
+}
+
 export function hasMonthlyPhotoTryOnQuota(
   profile: EntitlementProfile | null | undefined,
   now = new Date()
 ): boolean {
-  return photoTryOnsUsedThisMonth(profile, now) < PAID_PHOTO_TRYONS_PER_MONTH;
+  return photoTryOnsAvailable(profile, now) > 0;
 }
 
 /**
  * Can start another full on-photo dress:
- * - membership under monthly cap, or
+ * - membership with monthly looks or top-up credits left, or
  * - unused free gift (non-members).
  */
 export function canStartPhotoTryOn(

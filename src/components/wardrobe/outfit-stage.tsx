@@ -20,6 +20,8 @@ import {
   canStartPhotoTryOn,
   isMembershipActive,
   PAID_PHOTO_TRYONS_PER_MONTH,
+  photoTryOnCredits,
+  photoTryOnsAvailable,
   photoTryOnsRemaining,
   photoTryOnsUsedThisMonth,
   shouldOfferTrial,
@@ -137,6 +139,8 @@ export function OutfitStage({
   const piecesLeft = Math.max(0, piecesTotal - piecesDone);
   const looksUsedThisMonth = photoTryOnsUsedThisMonth(user);
   const looksLeftThisMonth = photoTryOnsRemaining(user);
+  const topupCredits = photoTryOnCredits(user);
+  const looksAvailable = photoTryOnsAvailable(user);
   const showLookQuota = isMembershipActive(user);
   // Two stages: clothes (~45s) then accessories (~25s) — not per-piece × 18s
   const etaSec = dressing
@@ -234,8 +238,9 @@ export function OutfitStage({
         if (data.code === "quota_exceeded") {
           setError(
             data.error ||
-              `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} full on-photo looks. Piece swaps still work — or wait until next month.`
+              `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} included looks. Buy a top-up to keep dressing — swaps still work.`
           );
+          setNeedsBilling(false);
           setDressing(false);
           return true;
         }
@@ -314,7 +319,9 @@ export function OutfitStage({
         setDressing(false);
         if (isMembershipActive(user)) {
           setError(
-            `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} full on-photo looks. Piece swaps still work — or wait until next month.`
+            looksAvailable <= 0
+              ? `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} included looks. Top up for more on-photo dresses — swaps still work.`
+              : `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} included looks. Piece swaps still work — or wait until next month.`
           );
         } else {
           setTrialOffer("hard");
@@ -733,7 +740,8 @@ export function OutfitStage({
             }
             if (
               typeof apparelData.photoTryOnsThisMonth === "number" ||
-              typeof apparelData.photoTryOnsMonthKey === "string"
+              typeof apparelData.photoTryOnsMonthKey === "string" ||
+              typeof apparelData.photoTryOnCredits === "number"
             ) {
               updateUser({
                 ...(typeof apparelData.photoTryOnsThisMonth === "number"
@@ -741,6 +749,9 @@ export function OutfitStage({
                   : {}),
                 ...(typeof apparelData.photoTryOnsMonthKey === "string"
                   ? { photoTryOnsMonthKey: apparelData.photoTryOnsMonthKey }
+                  : {}),
+                ...(typeof apparelData.photoTryOnCredits === "number"
+                  ? { photoTryOnCredits: apparelData.photoTryOnCredits }
                   : {}),
               });
             }
@@ -1306,16 +1317,28 @@ export function OutfitStage({
             {error && (
               <div className="absolute inset-x-4 top-[4.75rem] z-30 rounded-2xl border border-danger/30 bg-ink/85 px-4 py-3 text-xs text-danger sm:top-[5.25rem]">
                 <p>{error}</p>
-                <button
-                  type="button"
-                  className="mt-2 text-[11px] uppercase tracking-wider text-champagne hover:underline"
-                  onClick={() => {
-                    setError("");
-                    setRetryNonce((n) => n + 1);
-                  }}
-                >
-                  Retry full look
-                </button>
+                <div className="mt-2 flex flex-wrap gap-3">
+                  {(error.toLowerCase().includes("top-up") ||
+                    error.toLowerCase().includes("top up") ||
+                    (showLookQuota && looksAvailable <= 0)) && (
+                    <Link
+                      href="/billing#topup"
+                      className="text-[11px] uppercase tracking-wider text-champagne hover:underline"
+                    >
+                      Buy more looks
+                    </Link>
+                  )}
+                  <button
+                    type="button"
+                    className="text-[11px] uppercase tracking-wider text-champagne hover:underline"
+                    onClick={() => {
+                      setError("");
+                      setRetryNonce((n) => n + 1);
+                    }}
+                  >
+                    Retry full look
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1394,24 +1417,39 @@ export function OutfitStage({
               <span
                 className={cn(
                   "tabular-nums",
-                  looksLeftThisMonth <= 5 ? "text-champagne" : "text-ivory-muted"
+                  looksAvailable <= 5 ? "text-champagne" : "text-ivory-muted"
                 )}
               >
                 {looksUsedThisMonth}/{PAID_PHOTO_TRYONS_PER_MONTH}
               </span>{" "}
-              full on-photo looks used this month
-              {looksLeftThisMonth <= 0
-                ? " — swaps still work"
-                : looksLeftThisMonth <= 5
-                  ? ` · ${looksLeftThisMonth} left`
-                  : ""}
-              {" · "}
-              <Link
-                href="/billing"
-                className="text-champagne/90 underline-offset-2 hover:underline"
-              >
-                Plan
-              </Link>
+              included looks used this month
+              {topupCredits > 0 ? (
+                <span className="text-ivory-muted">
+                  {" "}
+                  · {topupCredits} top-up
+                  {topupCredits === 1 ? "" : "s"} banked
+                </span>
+              ) : null}
+              {looksAvailable <= 0
+                ? " — "
+                : looksAvailable <= 5
+                  ? ` · ${looksAvailable} left · `
+                  : " · "}
+              {looksAvailable <= 0 ? (
+                <Link
+                  href="/billing#topup"
+                  className="text-champagne underline-offset-2 hover:underline"
+                >
+                  Buy more looks
+                </Link>
+              ) : (
+                <Link
+                  href="/billing"
+                  className="text-champagne/90 underline-offset-2 hover:underline"
+                >
+                  Plan
+                </Link>
+              )}
             </p>
           )}
 
