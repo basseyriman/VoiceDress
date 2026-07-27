@@ -47,6 +47,7 @@ export function inferCategoryFromSpeech(
   speech: string
 ): GarmentCategory | undefined {
   const t = speech.toLowerCase();
+  if (/\b(sock|stocking|tights|hosiery)\b/.test(t)) return "accessory";
   if (/\b(shoe|shoes|boot|boots|loafer|sneaker|footwear|kicks)\b/.test(t))
     return "shoes";
   if (/\b(jean|trouser|pant|skirt|short|bottom)\b/.test(t)) return "bottom";

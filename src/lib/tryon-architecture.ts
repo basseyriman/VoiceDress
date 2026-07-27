@@ -7,6 +7,8 @@
  * 3. Shoes / glasses / watch → fal Kontext (or OpenAI if configured).
  */
 
+import { isHosieryOrSocks } from "@/lib/commerce";
+
 export const TRYON_APPAREL_CATEGORIES = [
   "top",
   "dress",
@@ -35,8 +37,12 @@ export function lookPiecesForTryOn<
   const apparel = apparelOrder
     .map((cat) => garments.find((g) => g.category === cat))
     .filter(Boolean) as T[];
-  const shoes = garments.find((g) => g.category === "shoes");
-  const accessories = garments.filter((g) => g.category === "accessory");
+  const shoes = garments.find(
+    (g) => g.category === "shoes" && !isHosieryOrSocks(g)
+  );
+  const accessories = garments.filter(
+    (g) => g.category === "accessory" && !isHosieryOrSocks(g)
+  );
   const isWatch = (g: T) =>
     /watch|wrist|chrono|time/i.test(`${g.name || ""} ${(g.tags || []).join(" ")}`);
   const isEye = (g: T) =>
@@ -74,10 +80,14 @@ export function apparelForTryOn<T extends { category: string }>(garments: T[]) {
   return outer ? [...base, outer] : base;
 }
 
-export function finishingPieces<T extends { category: string }>(garments: T[]) {
-  return garments.filter((g) =>
-    (TRYON_FINISH_CATEGORIES as readonly string[]).includes(g.category)
-  );
+export function finishingPieces<
+  T extends { category: string; name?: string; tags?: string[] },
+>(garments: T[]) {
+  return garments.filter((g) => {
+    if (!isFinishTryOnCategory(g.category)) return false;
+    if (isHosieryOrSocks(g)) return false;
+    return true;
+  });
 }
 
 export function isBodyTryOnCategory(category: string) {

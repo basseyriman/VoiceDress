@@ -63,11 +63,45 @@ export function defaultConnections(): CommerceConnection[] {
   }));
 }
 
+/** Socks / stockings / tights — not footwear for outfit or try-on. */
+export function isHosieryOrSocks(g: {
+  name?: string;
+  tags?: string[];
+}): boolean {
+  const blob = `${g.name || ""} ${(g.tags || []).join(" ")}`.toLowerCase();
+  return /\b(socks?|stockings?|tights|hosiery|no-?show\s*socks?|ankle\s*socks?|crew\s*socks?|trainer\s*socks?)\b/.test(
+    blob
+  );
+}
+
+/** Real shoes/boots — excludes hosiery mis-tagged as shoes. */
+export function isRealFootwear(g: {
+  name?: string;
+  tags?: string[];
+  category?: string;
+}): boolean {
+  if (g.category && g.category !== "shoes") return false;
+  return !isHosieryOrSocks(g);
+}
+
+/** Fix socks wrongly labeled shoes → accessory. */
+export function normalizeGarmentCategory<T extends { name?: string; tags?: string[]; category: Garment["category"] }>(
+  g: T
+): T {
+  if (isHosieryOrSocks(g) && g.category === "shoes") {
+    return { ...g, category: "accessory" };
+  }
+  return g;
+}
+
 /** Heuristic category from product title when LLM is unavailable. */
 export function categorizeFromTitle(title: string): Garment["category"] {
   const t = title.toLowerCase();
   if (/dress|gown/.test(t)) return "dress";
-  if (/shoe|boot|loafer|sneaker|heel|sandal/.test(t)) return "shoes";
+  // Socks before shoes — "no-show socks" must not become footwear
+  if (/sock|stocking|tights|hosiery/.test(t)) return "accessory";
+  if (/shoe|boot|loafer|sneaker|heel|sandal|oxford|derby|brogue|mule|trainer|pump/.test(t))
+    return "shoes";
   if (/jacket|coat|blazer|parka|trench/.test(t)) return "outerwear";
   if (/jean|trouser|pant|skirt|short|chino/.test(t)) return "bottom";
   if (/bag|tote|handbag|clutch/.test(t)) return "bag";

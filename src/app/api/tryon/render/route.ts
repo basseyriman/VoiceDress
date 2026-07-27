@@ -13,6 +13,7 @@ import {
   hasFashnApiKey,
 } from "@/lib/fashn-tryon";
 import { composeApparelCollage } from "@/lib/apparel-collage";
+import { isHosieryOrSocks, isRealFootwear } from "@/lib/commerce";
 
 export const maxDuration = 180;
 
@@ -533,8 +534,12 @@ function orderFinishPieces(
   garments: Piece[],
   includeFaceAccessories: boolean
 ): Piece[] {
-  const shoes = garments.filter((g) => g.category === "shoes").slice(0, 1);
-  const accessories = garments.filter((g) => g.category === "accessory");
+  const shoes = garments
+    .filter((g) => isRealFootwear(g))
+    .slice(0, 1);
+  const accessories = garments.filter(
+    (g) => g.category === "accessory" && !isHosieryOrSocks(g)
+  );
   const eyewear = accessories.filter(isEyewear);
   const watches = accessories.filter(isWatch);
   const other = accessories.filter((g) => !isEyewear(g) && !isWatch(g));

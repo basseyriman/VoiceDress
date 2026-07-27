@@ -1,4 +1,5 @@
 import type { Formality, Garment, WeatherSnapshot } from "@/lib/types";
+import { isHosieryOrSocks } from "./commerce";
 
 export type StylingGuide = {
   /** Short bullets for UI */
@@ -114,7 +115,9 @@ export function buildSpokenSuggestReply(input: {
   const top = g.find((x) => x.category === "top");
   const bottom = g.find((x) => x.category === "bottom");
   const outer = g.find((x) => x.category === "outerwear");
-  const shoes = g.find((x) => x.category === "shoes");
+  const shoes = g.find(
+    (x) => x.category === "shoes" && !isHosieryOrSocks(x)
+  );
   const dress = g.find((x) => x.category === "dress");
   const accessories = g.filter((x) => x.category === "accessory");
 
@@ -284,7 +287,9 @@ export function buildStylingGuide(input: {
   const top = garments.find((g) => g.category === "top");
   const bottom = garments.find((g) => g.category === "bottom");
   const outer = garments.find((g) => g.category === "outerwear");
-  const shoes = garments.find((g) => g.category === "shoes");
+  const shoes = garments.find(
+    (g) => g.category === "shoes" && !isHosieryOrSocks(g)
+  );
   const dress = garments.find((g) => g.category === "dress");
   const eyewear = garments.find(
     (g) =>

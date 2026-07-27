@@ -16,6 +16,7 @@ import {
   blendStyleHints,
   resolvePrimaryStyle,
 } from "./style-options";
+import { isHosieryOrSocks, isRealFootwear } from "./commerce";
 
 export type { OccasionProfile, TasteMemory };
 
@@ -736,10 +737,15 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     ) {
       selected.push(outer);
     }
-    const shoes = pick(byCat("shoes"), selected);
+    const shoes = pick(
+      byCat("shoes").filter((g) => isRealFootwear(g)),
+      selected
+    );
     if (shoes) selected.push(shoes);
 
-    const accessories = byCat("accessory");
+    const accessories = byCat("accessory").filter(
+      (g) => !isHosieryOrSocks(g)
+    );
     const eyewear = pick(
       accessories.filter((g) =>
         /glass|frame|optic|sunglass|spec/i.test(`${g.name} ${g.tags.join(" ")}`)

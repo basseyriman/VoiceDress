@@ -9,6 +9,7 @@ import {
 import {
   categorizeFromTitle,
   colorNameToHex,
+  normalizeGarmentCategory,
 } from "@/lib/commerce";
 import type { CommerceSource, Formality, Garment } from "@/lib/types";
 import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest) {
               type: "text",
               text: `Extract clothing / footwear / accessory items from this receipt, order screenshot, or product photo for a wardrobe app.
 Return every distinct wearable item. Prefer accurate names and brands.
+Category rules: socks, stockings, tights, no-show socks → accessory (NOT shoes). shoes/boots/loafers/sneakers → shoes.
 If it's a product photo of one garment, return one item.
 detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when recognizable.`,
             },
@@ -109,7 +111,7 @@ detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when re
       const storeHint = (item.detectedStore || preferredSource).toLowerCase();
       const source = normalizeSource(storeHint, preferredSource);
       const colors = item.colors.length ? item.colors : ["neutral"];
-      return {
+      return normalizeGarmentCategory({
         id: `ingest_${Date.now()}_${i}`,
         userId,
         name: item.name,
@@ -129,7 +131,7 @@ detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when re
         purchaseDate: now,
         createdAt: now,
         updatedAt: now,
-      };
+      });
     });
 
     return NextResponse.json({

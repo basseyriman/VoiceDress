@@ -12,7 +12,7 @@ import type {
   WeatherSnapshot,
 } from "@/lib/types";
 import { seedWardrobe, WARDROBE_SEED_VERSION } from "@/lib/seed-data";
-import { defaultConnections } from "@/lib/commerce";
+import { defaultConnections, normalizeGarmentCategory } from "@/lib/commerce";
 import {
   applySpokenWeather,
   occasionMeaningfullyChanged,
@@ -322,10 +322,14 @@ export const useAetherStore = create<AetherState>()(
               const next = normalizeGarmentPublicUrl(g.imageUrl || "");
               return next !== g.imageUrl ? { ...g, imageUrl: next } : g;
             });
-            const dirty = repaired.filter(
-              (g, i) => g.imageUrl !== wardrobe[i]?.imageUrl
-            );
-            wardrobe = repaired;
+            const categorized = repaired.map(normalizeGarmentCategory);
+            const dirty = categorized.filter((g, i) => {
+              const prev = wardrobe[i];
+              return (
+                g.imageUrl !== prev?.imageUrl || g.category !== prev?.category
+              );
+            });
+            wardrobe = categorized;
             if (dirty.length) {
               void upsertGarments(uid, dirty).catch(() => undefined);
             }
@@ -765,13 +769,14 @@ export const useAetherStore = create<AetherState>()(
       },
       addGarments: (items) => {
         const user = get().user;
+        const normalized = items.map(normalizeGarmentCategory);
         set((state) => {
           const existingKeys = new Set(
             state.wardrobe.map(
               (g) => `${g.orderId || ""}|${g.name}|${g.brand}`.toLowerCase()
             )
           );
-          const fresh = items.filter((g) => {
+          const fresh = normalized.filter((g) => {
             const key = `${g.orderId || ""}|${g.name}|${g.brand}`.toLowerCase();
             if (existingKeys.has(key) && g.orderId) return false;
             existingKeys.add(key);
@@ -779,10 +784,10 @@ export const useAetherStore = create<AetherState>()(
           });
           return { wardrobe: [...fresh, ...state.wardrobe] };
         });
-        if (isCloudUid(user?.uid) && user && items.length) {
+        if (isCloudUid(user?.uid) && user && normalized.length) {
           void upsertGarments(
             user.uid,
-            items.map((g) => ({ ...g, userId: user.uid }))
+            normalized.map((g) => ({ ...g, userId: user.uid }))
           )
             .then((saved) => {
               // Replace any data-URL versions with Storage URLs
