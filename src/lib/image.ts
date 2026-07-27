@@ -343,8 +343,9 @@ function sampleRegionAvg(
 }
 
 /**
- * Cheap trust check — if shirt/trousers colors clearly don't match, don't
- * claim success or burn more fal credits on shoes/glasses.
+ * Cheap trust check — catch only clear apparel misses (e.g. light trousers
+ * still reading as dark denim). Mid-tone stone/khaki bottoms are often shaded
+ * under jackets; do not false-fail those when they clearly landed.
  */
 export async function verifyApparelLook(
   wornSrc: string,
@@ -375,15 +376,17 @@ export async function verifyApparelLook(
     if (opts?.skipTops && (piece.category === "top" || piece.category === "dress")) {
       continue;
     }
+    const colorBlob = `${(piece.colors || []).join(" ")} ${piece.name || ""}`.toLowerCase();
     const targets = [
       ...(piece.hexColors || []).map(hexToRgb).filter(Boolean),
       ...namedColorHints(piece.colors),
     ] as { r: number; g: number; b: number }[];
     if (!targets.length) continue;
 
+    // Bottoms: sample thigh band — avoid shoes/ankles that pull the average dark
     const region =
       piece.category === "bottom"
-        ? sampleRegionAvg(data, img.width, img.height, 0.35, 0.65, 0.48, 0.68)
+        ? sampleRegionAvg(data, img.width, img.height, 0.32, 0.68, 0.44, 0.58)
         : sampleRegionAvg(data, img.width, img.height, 0.35, 0.65, 0.28, 0.42);
 
     const expectedLight = targets.some(
@@ -392,32 +395,47 @@ export async function verifyApparelLook(
     const expectedDark = targets.some(
       (t) => 0.2126 * t.r + 0.7152 * t.g + 0.0722 * t.b < 70
     );
+    const expectedMidLight =
+      piece.category === "bottom" &&
+      /stone|khaki|beige|sand|tan|camel|cream|taupe|nude|champagne|oat|linen/.test(
+        colorBlob
+      );
 
     let nearest = Infinity;
     for (const t of targets) {
       nearest = Math.min(nearest, colorDistance(region, t));
     }
 
-    if (expectedLight && region.lum < 120) {
+    // Catastrophic only: expected white/ivory stayed near-black
+    if (expectedLight && region.lum < 100) {
       failedIds.push(piece.id);
       reasons.push(`${piece.name || piece.category} stayed dark`);
       continue;
     }
-    if (expectedDark && region.lum > 160) {
+    // Catastrophic only: expected black stayed near-white
+    if (expectedDark && region.lum > 175) {
       failedIds.push(piece.id);
       reasons.push(`${piece.name || piece.category} stayed light`);
       continue;
     }
-    if (
-      piece.category === "bottom" &&
-      (piece.colors || []).some((c) => /stone|khaki|beige|sand|tan/.test(c)) &&
-      region.lum < 85
-    ) {
-      failedIds.push(piece.id);
-      reasons.push(`${piece.name || "trousers"} stayed too dark`);
+    // Stone/khaki trousers: pass if the lower body reads mid-light (they landed)
+    if (expectedMidLight) {
+      if (region.lum < 70) {
+        failedIds.push(piece.id);
+        reasons.push(`${piece.name || "trousers"} stayed too dark`);
+      }
       continue;
     }
-    if (nearest > 110 && !(expectedLight && region.lum > 170)) {
+    // Exact hex match is unreliable under jackets / hallway light — bottoms
+    // only fail on a very large distance AND wrong lightness family.
+    if (piece.category === "bottom") {
+      if (nearest > 160 && expectedLight && region.lum < 130) {
+        failedIds.push(piece.id);
+        reasons.push(`${piece.name || piece.category} color didn’t land`);
+      }
+      continue;
+    }
+    if (nearest > 120 && !(expectedLight && region.lum > 170)) {
       failedIds.push(piece.id);
       reasons.push(`${piece.name || piece.category} color didn’t land`);
     }
