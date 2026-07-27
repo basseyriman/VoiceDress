@@ -174,6 +174,10 @@ export default function BillingPage() {
   const updateUser = useAetherStore((s) => s.updateUser);
   const [loading, setLoading] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const [planNotice, setPlanNotice] = useState<{
+    tone: "ok" | "err";
+    text: string;
+  } | null>(null);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -199,6 +203,26 @@ export default function BillingPage() {
       });
     }
   }, [searchParams, user?.uid, hydrateFromCloud]);
+
+  useEffect(() => {
+    if (!user?.uid || !isMembershipActive(user)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await authFetch("/api/stripe/subscription");
+        const data = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok) return;
+        if (data.planId === "monthly" || data.planId === "yearly") {
+          updateUser({ subscriptionPlan: data.planId });
+        }
+      } catch {
+        // ignore — page still works from cached profile
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.uid, user?.subscriptionStatus, updateUser]);
 
   const checkout = async (planId: string, looks?: number) => {
     setLoading(planId);
@@ -310,6 +334,7 @@ export default function BillingPage() {
 
   const changePlan = async (planId: "monthly" | "yearly") => {
     setLoading(`change_${planId}`);
+    setPlanNotice(null);
     setMessage("");
     try {
       if (typeof window !== "undefined") {
@@ -325,20 +350,27 @@ export default function BillingPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setMessage(data.error || "Couldn’t change plan. Try Manage membership.");
+        const text =
+          data.error ||
+          "Couldn’t change plan. Check your connection and try again.";
+        setPlanNotice({ tone: "err", text });
+        setMessage(text);
         return;
       }
       if (data.planId === "monthly" || data.planId === "yearly") {
         updateUser({ subscriptionPlan: data.planId });
       }
-      setMessage(data.message || "Plan updated.");
+      const text = data.message || "Plan updated.";
+      setPlanNotice({ tone: "ok", text });
+      setMessage(text);
       if (user?.uid) {
         void hydrateFromCloud(user.uid);
       }
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : "Couldn’t change plan."
-      );
+      const text =
+        err instanceof Error ? err.message : "Couldn’t change plan.";
+      setPlanNotice({ tone: "err", text });
+      setMessage(text);
     } finally {
       setLoading(null);
     }
@@ -358,7 +390,6 @@ export default function BillingPage() {
       ? user.freePhotoTryOnsUsed
       : 0;
   const onYearly = user?.subscriptionPlan === "yearly";
-  const canOfferAnnual = member && user?.subscriptionPlan !== "yearly";
   const annualSavings = LIST_PRICE_MONTHLY_GBP * 12 - LIST_PRICE_YEARLY_GBP;
 
   return (
@@ -441,13 +472,110 @@ export default function BillingPage() {
       )}
 
       {message ? (
-        <div className="max-w-xl border-l border-champagne/50 pl-4 text-sm text-ivory">
+        <div
+          className={`max-w-xl rounded-2xl px-4 py-3 text-sm ${
+            planNotice?.tone === "err"
+              ? "border border-red-400/30 bg-red-500/10 text-ivory"
+              : "border border-champagne/30 bg-champagne/10 text-ivory"
+          }`}
+        >
           {message}
         </div>
       ) : null}
 
       {member ? (
         <>
+          <section id="plan" className="scroll-mt-24 max-w-2xl space-y-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+                Plan
+              </p>
+              <h2 className="mt-2 font-display text-3xl text-ivory">
+                {onYearly ? "Annual membership" : "Your plan"}
+              </h2>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div
+                className={`rounded-[1.75rem] border p-6 ${
+                  !onYearly
+                    ? "border-champagne/40 bg-champagne/[0.08]"
+                    : "border-line bg-white/[0.02]"
+                }`}
+              >
+                <p className="text-xs uppercase tracking-[0.2em] text-champagne">
+                  {!onYearly ? "Current" : "Monthly"}
+                </p>
+                <p className="mt-3 font-display text-3xl text-ivory">Monthly</p>
+                <p className="mt-2 font-display text-4xl text-ivory">
+                  £{LIST_PRICE_MONTHLY_GBP}
+                  <span className="text-base text-mist">/month</span>
+                </p>
+                <p className="mt-3 text-sm text-mist">
+                  {PAID_PHOTO_TRYONS_PER_MONTH} looks / month · unlimited voice
+                </p>
+              </div>
+
+              <div
+                className={`rounded-[1.75rem] border p-6 ${
+                  onYearly
+                    ? "border-champagne/40 bg-champagne/[0.08]"
+                    : "border-champagne/25 bg-champagne/[0.04]"
+                }`}
+              >
+                <p className="text-xs uppercase tracking-[0.2em] text-champagne">
+                  {onYearly ? "Current" : `Save £${annualSavings}`}
+                </p>
+                <p className="mt-3 font-display text-3xl text-ivory">Annual</p>
+                <p className="mt-2 font-display text-4xl text-ivory">
+                  £{LIST_PRICE_YEARLY_GBP}
+                  <span className="text-base text-mist">/year</span>
+                </p>
+                <p className="mt-3 text-sm text-mist">
+                  Same membership — about two months free vs monthly.
+                </p>
+                {!onYearly ? (
+                  <Button
+                    className="mt-6 w-full"
+                    disabled={loading === "change_yearly"}
+                    onClick={() => changePlan("yearly")}
+                  >
+                    {loading === "change_yearly"
+                      ? "Switching…"
+                      : `Switch to annual · £${LIST_PRICE_YEARLY_GBP}`}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            {planNotice ? (
+              <p
+                className={`text-sm leading-relaxed ${
+                  planNotice.tone === "err" ? "text-red-300" : "text-champagne"
+                }`}
+              >
+                {planNotice.text}
+              </p>
+            ) : (
+              <p className="text-sm text-mist">
+                {onYearly
+                  ? "You’re on the best rate. Update your card or invoices below."
+                  : "Switch here in VoiceDress — Stripe keeps your trial and prorates when you’re paid."}
+              </p>
+            )}
+
+            <button
+              type="button"
+              disabled={loading === "portal"}
+              onClick={() => openPortal()}
+              className="text-sm text-mist underline-offset-4 transition hover:text-ivory hover:underline disabled:opacity-50"
+            >
+              {loading === "portal"
+                ? "Opening Stripe…"
+                : "Update card or view invoices"}
+            </button>
+          </section>
+
           <section id="topup" className="scroll-mt-24 space-y-5">
             <div className="max-w-xl">
               <p className="text-xs uppercase tracking-[0.28em] text-champagne">
@@ -470,47 +598,6 @@ export default function BillingPage() {
               onBuyCustom={(looks) => checkout(CUSTOM_LOOK_TOPUP_ID, looks)}
               emphasized={topupUrgent}
             />
-          </section>
-
-          <section className="max-w-xl space-y-5 border-t border-line pt-12">
-            <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-                Plan
-              </p>
-              <h2 className="mt-2 font-display text-2xl text-ivory">
-                {onYearly
-                  ? "You’re on annual"
-                  : canOfferAnnual
-                    ? "Save with annual"
-                    : "Manage your membership"}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-mist">
-                {onYearly
-                  ? `£${LIST_PRICE_YEARLY_GBP}/year · update your card or cancel anytime in Stripe.`
-                  : canOfferAnnual
-                    ? `Switch to £${LIST_PRICE_YEARLY_GBP}/year and save £${annualSavings} vs monthly. Stripe prorates the change — no second trial.`
-                    : `Update your card, cancel, or change plan in Stripe. Annual is £${LIST_PRICE_YEARLY_GBP}/year (saves £${annualSavings}).`}
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              {canOfferAnnual ? (
-                <Button
-                  disabled={loading === "change_yearly"}
-                  onClick={() => changePlan("yearly")}
-                >
-                  {loading === "change_yearly"
-                    ? "Switching…"
-                    : `Switch to annual · £${LIST_PRICE_YEARLY_GBP}`}
-                </Button>
-              ) : null}
-              <Button
-                variant={canOfferAnnual ? "outline" : "primary"}
-                disabled={loading === "portal"}
-                onClick={() => openPortal()}
-              >
-                {loading === "portal" ? "Opening…" : "Manage membership"}
-              </Button>
-            </div>
           </section>
 
           <section className="max-w-xl space-y-4 border-t border-line pt-12">

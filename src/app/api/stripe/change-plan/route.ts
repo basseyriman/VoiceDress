@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import type Stripe from "stripe";
 import {
   getStripe,
   STRIPE_PRICE_MONTHLY,
   STRIPE_PRICE_YEARLY,
   planIdFromStripePrice,
+  LIST_PRICE_YEARLY_GBP,
 } from "@/lib/stripe";
 import { requireAuth, isAuthedUser } from "@/lib/api-auth";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
@@ -14,6 +16,58 @@ function isLivePriceId(priceId: string) {
   return (
     priceId.startsWith("price_") &&
     !/voicedress|vestoir|aether/i.test(priceId)
+  );
+}
+
+function planFromSubscription(sub: Stripe.Subscription) {
+  const priceId = sub.items.data[0]?.price?.id;
+  return (
+    planIdFromStripePrice(priceId) ||
+    (sub.metadata?.planId === "yearly" || sub.metadata?.planId === "monthly"
+      ? sub.metadata.planId
+      : null) ||
+    (priceId === STRIPE_PRICE_YEARLY
+      ? "yearly"
+      : priceId === STRIPE_PRICE_MONTHLY
+        ? "monthly"
+        : null)
+  );
+}
+
+async function findLiveSubscription(
+  stripe: Stripe,
+  customerId: string | undefined,
+  subscriptionId: string | undefined
+): Promise<Stripe.Subscription | null> {
+  if (subscriptionId) {
+    try {
+      const sub = await stripe.subscriptions.retrieve(subscriptionId);
+      if (
+        sub.status === "active" ||
+        sub.status === "trialing" ||
+        sub.status === "past_due"
+      ) {
+        return sub;
+      }
+    } catch (err) {
+      console.warn("change-plan: stored subscriptionId retrieve failed", err);
+    }
+  }
+
+  if (!customerId) return null;
+
+  const list = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 10,
+  });
+  return (
+    list.data.find(
+      (s) =>
+        s.status === "active" ||
+        s.status === "trialing" ||
+        s.status === "past_due"
+    ) || null
   );
 }
 
@@ -29,7 +83,7 @@ export async function POST(req: NextRequest) {
   const target = String(body.planId || "") as "monthly" | "yearly";
   if (target !== "monthly" && target !== "yearly") {
     return NextResponse.json(
-      { error: "planId must be monthly or yearly." },
+      { error: "planId must be monthly or yearly.", code: "bad_plan" },
       { status: 400 }
     );
   }
@@ -37,14 +91,17 @@ export async function POST(req: NextRequest) {
   const stripe = getStripe();
   if (!stripe) {
     return NextResponse.json(
-      { error: "Stripe isn’t configured yet." },
+      { error: "Stripe isn’t configured yet.", code: "no_stripe" },
       { status: 503 }
     );
   }
 
   if (!isAdminConfigured()) {
     return NextResponse.json(
-      { error: "Server auth isn’t ready — Firebase Admin required." },
+      {
+        error: "Server auth isn’t ready — Firebase Admin required.",
+        code: "no_admin",
+      },
       { status: 503 }
     );
   }
@@ -55,7 +112,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Set STRIPE_PRICE_ID_MONTHLY / YEARLY to real Stripe Price IDs before changing plans.",
+          "Annual price isn’t linked yet. Set STRIPE_PRICE_ID_YEARLY in Vercel to your Stripe yearly Price ID.",
+        code: "missing_price",
       },
       { status: 503 }
     );
@@ -65,67 +123,81 @@ export async function POST(req: NextRequest) {
   const ref = db.collection("users").doc(auth.uid);
   const snap = await ref.get();
   const data = snap.data() || {};
-  let subscriptionId = data.stripeSubscriptionId as string | undefined;
-  const customerId = data.stripeCustomerId as string | undefined;
+  const storedSubId = data.stripeSubscriptionId as string | undefined;
+  let customerId = data.stripeCustomerId as string | undefined;
 
   try {
-    if (!subscriptionId && customerId) {
-      const list = await stripe.subscriptions.list({
-        customer: customerId,
-        status: "all",
+    // Recover customer from email if Firestore never stored stripeCustomerId
+    if (!customerId && auth.email) {
+      const customers = await stripe.customers.list({
+        email: auth.email,
         limit: 5,
       });
-      const live = list.data.find(
-        (s) =>
-          s.status === "active" ||
-          s.status === "trialing" ||
-          s.status === "past_due"
-      );
-      subscriptionId = live?.id;
+      customerId = customers.data[0]?.id;
+      if (customerId) {
+        await ref.set(
+          {
+            stripeCustomerId: customerId,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
     }
 
-    if (!subscriptionId) {
+    const sub = await findLiveSubscription(stripe, customerId, storedSubId);
+
+    if (!sub) {
       return NextResponse.json(
         {
-          error:
-            "No active Stripe subscription found. Start a plan first, then switch here.",
+          error: customerId
+            ? "We found your Stripe customer but no live subscription. Finish checkout for Monthly or Annual first, then switch here."
+            : "No Stripe subscription on this account yet. Start a plan from Membership, then you can switch to annual.",
+          code: "no_subscription",
         },
         { status: 400 }
       );
     }
 
-    const sub = await stripe.subscriptions.retrieve(subscriptionId);
-    if (
-      sub.status !== "active" &&
-      sub.status !== "trialing" &&
-      sub.status !== "past_due"
-    ) {
-      return NextResponse.json(
-        { error: "Subscription isn’t active — restart from Membership." },
-        { status: 400 }
-      );
-    }
-
     const item = sub.items.data[0];
-    if (!item) {
+    if (!item?.id) {
       return NextResponse.json(
-        { error: "Subscription has no price item to update." },
+        {
+          error: "Subscription has no price item to update.",
+          code: "no_item",
+        },
         { status: 400 }
       );
     }
 
-    const currentPlan = planIdFromStripePrice(item.price.id);
-    if (currentPlan === target) {
+    const currentPlan = planFromSubscription(sub);
+    if (item.price.id === targetPrice || currentPlan === target) {
+      await ref.set(
+        {
+          subscriptionPlan: target,
+          stripeSubscriptionId: sub.id,
+          ...(typeof sub.customer === "string"
+            ? { stripeCustomerId: sub.customer }
+            : {}),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
       return NextResponse.json({
         ok: true,
         planId: target,
-        message: `You’re already on the ${target} plan.`,
+        message:
+          target === "yearly"
+            ? "You’re already on annual."
+            : "You’re already on monthly.",
       });
     }
 
-    const updated = await stripe.subscriptions.update(subscriptionId, {
+    const updated = await stripe.subscriptions.update(sub.id, {
       items: [{ id: item.id, price: targetPrice }],
-      proration_behavior: "create_prorations",
+      // During trial, just change what they’ll pay after — avoid odd prorations.
+      proration_behavior:
+        sub.status === "trialing" ? "none" : "create_prorations",
       metadata: {
         ...sub.metadata,
         planId: target,
@@ -133,8 +205,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const newPriceId = updated.items.data[0]?.price.id;
-    const planId = planIdFromStripePrice(newPriceId) || target;
+    const planId = planFromSubscription(updated) || target;
 
     await ref.set(
       {
@@ -151,14 +222,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       planId,
+      status: updated.status,
       message:
         planId === "yearly"
-          ? "Switched to annual. Stripe will prorate the difference on your next invoice."
-          : "Switched to monthly. Stripe will prorate the difference on your next invoice.",
+          ? updated.status === "trialing"
+            ? `You’re on annual now. Your trial continues — then £${LIST_PRICE_YEARLY_GBP}/year.`
+            : `Switched to annual (£${LIST_PRICE_YEARLY_GBP}/year). Stripe will prorate the difference.`
+          : "Switched to monthly. Stripe will prorate the difference.",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Plan change failed";
     console.error("Stripe change-plan error", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: message, code: "stripe_error" },
+      { status: 500 }
+    );
   }
 }
