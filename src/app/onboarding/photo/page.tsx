@@ -137,13 +137,13 @@ export default function PhotoOnboardingPage() {
         </div>
 
         <div className="flex flex-1 flex-col justify-center pb-16">
-          <p className="text-center text-[11px] font-medium uppercase tracking-[0.28em] text-champagne">
+          <p className="text-[11px] font-medium uppercase tracking-[0.28em] text-champagne">
             Your photo
           </p>
-          <h1 className="mt-3 text-center font-display text-3xl text-ivory sm:text-4xl">
+          <h1 className="mt-3 font-display text-[1.85rem] leading-[1.2] tracking-tight text-ivory sm:text-[2.15rem]">
             One clear look at you
           </h1>
-          <p className="mx-auto mt-3 max-w-md text-center text-sm leading-relaxed text-mist">
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-mist">
             We dress looks onto this photo — take a clear full-body shot, then
             your wardrobe opens.
           </p>
