@@ -17,6 +17,8 @@ type Props = {
   compact?: boolean;
 };
 
+const MAX_BATCH = 20;
+
 export function WardrobeFillPanel({
   returnTo = "/connect",
   compact = false,
@@ -29,6 +31,10 @@ export function WardrobeFillPanel({
 
   const [shopDomain, setShopDomain] = useState("");
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -85,80 +91,153 @@ export function WardrobeFillPanel({
     window.location.href = `/api/commerce/shopify/auth?${params.toString()}`;
   };
 
-  const onIngestFile = async (file?: File) => {
-    if (!file) return;
-    setSyncing(ingestSource);
-    setError("");
-    setToast("");
+  const ingestOnePhoto = async (
+    file: File,
+    source: CommerceSource
+  ): Promise<{ items: Garment[]; error?: string }> => {
+    const prepared = await prepareWardrobeIngestPhoto(file);
+    if (prepared.error || !prepared.dataUrl) {
+      return {
+        items: [],
+        error: prepared.error || `Couldn’t read ${file.name || "that photo"}.`,
+      };
+    }
+    if (prepared.dataUrl.length > 3_500_000) {
+      return {
+        items: [],
+        error: `${file.name || "Photo"} is still too large after compression.`,
+      };
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 90_000);
     try {
-      const prepared = await prepareWardrobeIngestPhoto(file);
-      if (prepared.error || !prepared.dataUrl) {
-        setError(prepared.error || "Couldn’t read that photo.");
-        return;
-      }
-      // ~3MB JSON ceiling — keeps uploads under typical serverless body limits
-      if (prepared.dataUrl.length > 3_500_000) {
-        setError(
-          "That photo is still too large after compression. Try a screenshot or a closer crop."
-        );
-        return;
-      }
-
-      const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 90_000);
-      let res: Response;
-      try {
-        res = await authFetch("/api/commerce/ingest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            imageDataUrl: prepared.dataUrl,
-            source: ingestSource,
-          }),
-        });
-      } finally {
-        window.clearTimeout(timeout);
-      }
-
+      const res = await authFetch("/api/commerce/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          imageDataUrl: prepared.dataUrl,
+          source,
+        }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(
-          res.status === 413
-            ? "Photo too large for upload. Try a smaller screenshot."
-            : res.status === 422
-              ? data.error ||
-                "Couldn’t find clothing in that image. Try a clearer product shot or receipt."
-              : res.status === 401
-                ? "Sign in again, then retry the upload."
-                : data.error || `Upload failed (${res.status}). Try again.`
-        );
-        return;
+        const label = file.name || "photo";
+        if (res.status === 413) {
+          return { items: [], error: `${label}: too large.` };
+        }
+        if (res.status === 422) {
+          return {
+            items: [],
+            error:
+              data.error ||
+              `${label}: no clothing found — try a clearer shot.`,
+          };
+        }
+        if (res.status === 401) {
+          return { items: [], error: "Sign in again, then retry." };
+        }
+        return {
+          items: [],
+          error: data.error || `${label}: upload failed (${res.status}).`,
+        };
       }
       const items = (data.items || []) as Garment[];
       if (!items.length) {
-        setError("No pieces found in that image. Try another photo.");
-        return;
+        return {
+          items: [],
+          error: `${file.name || "Photo"}: no pieces found.`,
+        };
       }
-      addGarments(items);
-      setToast(
-        `Added ${items.length} piece${items.length === 1 ? "" : "s"} to your wardrobe from the upload.`
-      );
+      return { items };
     } catch (err) {
       const aborted =
         err instanceof DOMException && err.name === "AbortError";
-      setError(
-        aborted
-          ? "Upload timed out — check your connection and try a smaller photo."
+      return {
+        items: [],
+        error: aborted
+          ? `${file.name || "Photo"} timed out.`
           : err instanceof Error
             ? err.message
-            : "Upload failed"
-      );
+            : "Upload failed",
+      };
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  };
+
+  const onIngestFiles = async (list?: FileList | null) => {
+    const files = list
+      ? Array.from(list).filter(
+          (f) =>
+            f.type.startsWith("image/") ||
+            /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name)
+        )
+      : [];
+    if (!files.length) return;
+
+    const batch = files.slice(0, MAX_BATCH);
+    const skipped = files.length - batch.length;
+
+    setSyncing(ingestSource);
+    setError("");
+    setToast("");
+    setUploadProgress({ done: 0, total: batch.length });
+
+    let added = 0;
+    let photosOk = 0;
+    const failures: string[] = [];
+
+    try {
+      for (let i = 0; i < batch.length; i++) {
+        setUploadProgress({ done: i, total: batch.length });
+        const result = await ingestOnePhoto(batch[i], ingestSource);
+        if (result.items.length) {
+          addGarments(result.items);
+          added += result.items.length;
+          photosOk += 1;
+        } else if (result.error) {
+          failures.push(result.error);
+        }
+        setUploadProgress({ done: i + 1, total: batch.length });
+      }
+
+      const parts: string[] = [];
+      if (added > 0) {
+        parts.push(
+          `Added ${added} piece${added === 1 ? "" : "s"} from ${photosOk} photo${photosOk === 1 ? "" : "s"}.`
+        );
+      }
+      if (skipped > 0) {
+        parts.push(`Skipped ${skipped} extra (max ${MAX_BATCH} at a time).`);
+      }
+      if (parts.length) setToast(parts.join(" "));
+      if (failures.length) {
+        const shown = failures.slice(0, 3).join(" ");
+        setError(
+          failures.length > 3
+            ? `${shown} (+${failures.length - 3} more)`
+            : shown
+        );
+      } else if (!added) {
+        setError(
+          "No pieces found in those photos. Try clearer product shots or receipts."
+        );
+      }
     } finally {
       setSyncing(null);
+      setUploadProgress(null);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
+
+  const progressLabel =
+    uploadProgress && uploadProgress.total > 1
+      ? `Extracting ${Math.min(uploadProgress.done + 1, uploadProgress.total)} of ${uploadProgress.total}…`
+      : syncing
+        ? "Extracting…"
+        : null;
 
   return (
     <div className={compact ? "space-y-6" : "space-y-8 pb-20"}>
@@ -171,8 +250,8 @@ export function WardrobeFillPanel({
             Fill your wardrobe
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-mist">
-            Sync Shopify orders, or upload a receipt / product photo — we add
-            real pieces to your wardrobe.
+            Sync Shopify orders, or upload receipts / product photos — select
+            several at once to fill your wardrobe faster.
           </p>
         </div>
       )}
@@ -233,7 +312,8 @@ export function WardrobeFillPanel({
           <h2 className="font-display text-2xl text-ivory">Add from photo</h2>
         </div>
         <p className="mt-2 text-sm text-mist">
-          Receipt, order screenshot, or product shot — any store.
+          Select one or many receipts, order screenshots, or product shots —
+          up to {MAX_BATCH} at a time.
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {stores
@@ -256,9 +336,10 @@ export function WardrobeFillPanel({
         <input
           ref={fileRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+          multiple
           className="hidden"
-          onChange={(e) => void onIngestFile(e.target.files?.[0])}
+          onChange={(e) => void onIngestFiles(e.target.files)}
         />
         <Button
           className="mt-4"
@@ -266,8 +347,25 @@ export function WardrobeFillPanel({
           onClick={() => fileRef.current?.click()}
         >
           <Upload className="h-4 w-4" />
-          {syncing ? "Extracting…" : "Upload image"}
+          {progressLabel || "Upload photos"}
         </Button>
+        {uploadProgress && uploadProgress.total > 1 && (
+          <div className="mt-3">
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-champagne transition-all duration-300"
+                style={{
+                  width: `${Math.round(
+                    (uploadProgress.done / uploadProgress.total) * 100
+                  )}%`,
+                }}
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-mist">
+              {uploadProgress.done} of {uploadProgress.total} photos done
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -293,7 +391,7 @@ export function WardrobeFillPanel({
                   }}
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
-                  Upload {store.label} order
+                  Upload {store.label} photos
                 </Button>
                 {conn?.itemCount ? (
                   <p className="mt-3 text-[11px] text-mist">
