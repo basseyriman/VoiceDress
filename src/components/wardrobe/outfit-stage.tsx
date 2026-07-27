@@ -400,7 +400,7 @@ export function OutfitStage({
               const usedFashnMax = stepProvider.includes("fashn");
 
               if (!usedFashnMax) {
-                setStepLabel("Keeping your shirt & trousers…");
+                setStepLabel("Keeping your base layers…");
                 try {
                   dressedUrl = await layerOuterwearPreserveBase(
                     apparelBaseBeforeOuter,

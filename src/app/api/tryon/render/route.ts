@@ -246,7 +246,7 @@ function outerwearLayerPrompt(piece: Piece): string {
     `It must be a ${silhouette}.`,
     "Match the exact color from image 2 (if navy/midnight blue, keep it deep navy — never cream, ivory, camel, beige, or washed-out grey).",
     "Keep the top underneath visible at the neckline/hem where natural. Do not replace the top with the jacket alone.",
-    "Keep pants, shoes, hands, face, and background completely unchanged.",
+    "Keep lower garments, shoes, hands, face, and background completely unchanged.",
     "Photoreal fabric, natural drape, correct proportions for this body.",
   ].join(" ");
 }
@@ -537,6 +537,7 @@ function orderFinishPieces(
   const shoes = garments
     .filter((g) => isRealFootwear(g))
     .slice(0, 1);
+  const bags = garments.filter((g) => g.category === "bag").slice(0, 1);
   const accessories = garments.filter(
     (g) => g.category === "accessory" && !isHosieryOrSocks(g)
   );
@@ -544,10 +545,10 @@ function orderFinishPieces(
   const watches = accessories.filter(isWatch);
   const other = accessories.filter((g) => !isEyewear(g) && !isWatch(g));
   if (!includeFaceAccessories) {
-    // Shoes only — glasses/watch Kontext passes often rewrite the face and crop the body.
-    return shoes;
+    // Shoes (+ bag) — glasses/watch Kontext passes often rewrite the face and crop the body.
+    return [...shoes, ...bags];
   }
-  return [...shoes, ...eyewear, ...watches, ...other];
+  return [...shoes, ...bags, ...eyewear, ...watches, ...other];
 }
 
 export async function POST(req: NextRequest) {

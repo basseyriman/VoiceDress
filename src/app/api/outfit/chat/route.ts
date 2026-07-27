@@ -192,7 +192,13 @@ function fallbackChat(
         /shirt|oxford|blouse/i.test(g.name)
     );
     if (shirt) {
-      return `Yes — tuck the ${shirt.name} neatly into the trousers for a cleaner line, leave a soft break at the waist, and keep the rest of the look as styled.`;
+      const bottom = garments.find((g) => g.category === "bottom");
+      const into = bottom ? `the ${bottom.name}` : "the waistline";
+      return `Yes — tuck the ${shirt.name} neatly into ${into} for a cleaner line, and keep the rest of the look as styled.`;
+    }
+    const dress = garments.find((g) => g.category === "dress");
+    if (dress) {
+      return `Keep the ${dress.name} smooth through the waist — no fighting layers. Adjust shoes or bag if you want a different finish.`;
     }
     return "Tuck the top cleanly for this look — it keeps the silhouette sharp. Untuck only if you want it more casual.";
   }
@@ -209,5 +215,5 @@ function fallbackChat(
 
   if (stylingGuide) return stylingGuide;
   const names = garments.map((g) => g.name).join(", ");
-  return `You’re in ${names}${temp != null ? ` for around ${temp} degrees` : ""}. Tell me what you’d tweak — top, shoes, or accessories — and I’ll adjust from your wardrobe.`;
+  return `You’re in ${names}${temp != null ? ` for around ${temp} degrees` : ""}. Tell me what you’d tweak — top, dress, shoes, bag, or accessories — and I’ll adjust from your wardrobe.`;
 }

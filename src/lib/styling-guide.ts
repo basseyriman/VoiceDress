@@ -26,6 +26,10 @@ function isTrousers(g: Garment) {
   return /trouser|chino|pant|wool/i.test(`${g.name} ${g.tags.join(" ")}`);
 }
 
+function isSkirt(g: Garment) {
+  return /skirt|culotte/i.test(`${g.name} ${g.tags.join(" ")}`);
+}
+
 function isJeans(g: Garment) {
   return /jean|denim/i.test(`${g.name} ${g.tags.join(" ")}`);
 }
@@ -77,6 +81,7 @@ export function listWearPieces(garments: Garment[]): string {
     "bottom",
     "outerwear",
     "shoes",
+    "bag",
   ];
   const names: string[] = [];
   for (const cat of order) {
@@ -119,6 +124,7 @@ export function buildSpokenSuggestReply(input: {
     (x) => x.category === "shoes" && !isHosieryOrSocks(x)
   );
   const dress = g.find((x) => x.category === "dress");
+  const bag = g.find((x) => x.category === "bag");
   const accessories = g.filter((x) => x.category === "accessory");
 
   const weatherBit = input.weather
@@ -133,7 +139,12 @@ export function buildSpokenSuggestReply(input: {
   );
 
   if (dress) {
-    parts.push(`Wear your ${dress.name}${shoes ? ` with your ${shoes.name}` : ""}.`);
+    parts.push(
+      `Wear your ${dress.name}${shoes ? ` with your ${shoes.name}` : ""}${bag ? `, and finish with your ${bag.name}` : ""}.`
+    );
+    if (outer) {
+      parts.push(`Layer your ${outer.name} over it.`);
+    }
   } else {
     if (top && outer) {
       parts.push(
@@ -149,6 +160,9 @@ export function buildSpokenSuggestReply(input: {
     }
     if (shoes) {
       parts.push(`On your feet: your ${shoes.name}.`);
+    }
+    if (bag) {
+      parts.push(`Carry your ${bag.name}.`);
     }
   }
 
@@ -185,7 +199,7 @@ function nameSilhouette(
     luminanceHex(top.hexColors[0] || "#888") > 170 &&
     luminanceHex(bottom.hexColors[0] || "#888") > 150;
   if (dark && formality && ["business", "formal"].includes(formality)) {
-    return "monochromatic night executive";
+    return "monochromatic polished evening";
   }
   if (dark) return "dark continuous evening";
   if (light) return "high-contrast light luxury";
@@ -291,6 +305,7 @@ export function buildStylingGuide(input: {
     (g) => g.category === "shoes" && !isHosieryOrSocks(g)
   );
   const dress = garments.find((g) => g.category === "dress");
+  const bag = garments.find((g) => g.category === "bag");
   const eyewear = garments.find(
     (g) =>
       g.category === "accessory" &&
@@ -314,10 +329,31 @@ export function buildStylingGuide(input: {
         seed
       )
     );
+    if (shoes) {
+      steps.push(
+        pick(
+          [
+            `Pair with your ${shoes.name} — keep hem and footwear intentional.`,
+            `Your ${shoes.name} finish the dress; don’t let length swamp the shoes.`,
+          ],
+          seed + 1
+        )
+      );
+    }
   }
 
   if (top && bottom) {
-    if (isShirt(top) && (isTrousers(bottom) || isJeans(bottom))) {
+    if (isSkirt(bottom)) {
+      steps.push(
+        pick(
+          [
+            `Keep the ${top.name} tucked or half-tucked into the ${bottom.name} for a clean waist.`,
+            `Balance the ${bottom.name} with your ${top.name} — no bulk at the midsection.`,
+          ],
+          seed + 1
+        )
+      );
+    } else if (isShirt(top) && (isTrousers(bottom) || isJeans(bottom))) {
       if (formality === "casual") {
         steps.push(
           pick(
@@ -395,7 +431,7 @@ export function buildStylingGuide(input: {
         pick(
           [
             `One button standing in the ${outer.name}; undo when you sit.`,
-            `Leave the ${outer.name} easy and open — less boardroom, more dinner.`,
+            `Leave the ${outer.name} easy and open — polished, not stiff.`,
           ],
           seed + 3
         )
@@ -424,6 +460,17 @@ export function buildStylingGuide(input: {
           `One flash of the ${watch.name} when you reach for a glass — that’s enough.`,
         ],
         seed + 5
+      )
+    );
+  }
+  if (bag) {
+    steps.push(
+      pick(
+        [
+          `Carry your ${bag.name} — keep it as the quiet finish, not the whole look.`,
+          `Your ${bag.name} completes the silhouette; hold it at the side, relaxed.`,
+        ],
+        seed + 6
       )
     );
   }

@@ -703,17 +703,32 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     if (replacement) selected.push(replacement);
     else selected = currentOutfit;
   } else {
-    const wantDress =
+    const dressPool = byCat("dress");
+    const dress = pick(dressPool, []);
+    const top = pick(byCat("top"), []);
+    const bottom = pick(byCat("bottom"), top ? [top] : []);
+    const dressFriendly =
       profile.preferCategories.includes("dress") ||
-      formalityRank(formality) >= 4;
-    const dress = pick(byCat("dress"), []);
-    if (dress && wantDress && formalityRank(formality) >= 3) {
+      formalityRank(formality) >= 4 ||
+      stylePrefs?.some((s) => /romantic/i.test(s)) ||
+      /wedding|party|brunch|dinner|date|cocktail|gala|black.?tie|ceremony|graduation|church|anniversary|birthday/i.test(
+        `${profile.label} ${input.occasion || ""}`
+      );
+    // Prefer a dress when the wardrobe has one and the occasion fits —
+    // or when separates aren't available. Men with only shirts/trousers still win via scoring.
+    const preferDress =
+      !!dress &&
+      (profile.preferCategories.includes("dress") ||
+        (dressFriendly && formalityRank(formality) >= 2) ||
+        (!top && !bottom) ||
+        (dressFriendly && !bottom));
+
+    if (preferDress && dress) {
       selected = [dress];
     } else {
-      const top = pick(byCat("top"), []);
       if (top) selected.push(top);
-      const bottom = pick(byCat("bottom"), selected);
       if (bottom) selected.push(bottom);
+      if (!selected.length && dress) selected = [dress];
     }
     const outerPool = byCat("outerwear");
     // Mild formal events: prefer a blazer/jacket over a heavy coat
@@ -761,6 +776,14 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       ),
       selected
     );
+    const jewelry = pick(
+      accessories.filter((g) =>
+        /necklace|bracelet|earring|jewelry|jewellery|ring\b/i.test(
+          `${g.name} ${g.tags.join(" ")}`
+        )
+      ),
+      selected
+    );
     const belt = pick(
       accessories.filter((g) =>
         /belt|strap/i.test(`${g.name} ${g.tags.join(" ")}`)
@@ -769,17 +792,40 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     );
     if (eyewear) selected.push(eyewear);
     if (watch && watch.id !== eyewear?.id) selected.push(watch);
+    // Dress / romantic looks: jewelry before belt
+    const wearingDress = selected.some((g) => g.category === "dress");
+    if (
+      jewelry &&
+      jewelry.id !== eyewear?.id &&
+      jewelry.id !== watch?.id &&
+      (wearingDress || formalityRank(formality) >= 2)
+    ) {
+      selected.push(jewelry);
+    }
     if (
       belt &&
+      !wearingDress &&
       belt.id !== eyewear?.id &&
       belt.id !== watch?.id &&
+      belt.id !== jewelry?.id &&
       formalityRank(formality) >= 2
     ) {
       selected.push(belt);
     }
-    if (!eyewear && !watch && !belt) {
+    if (!eyewear && !watch && !belt && !jewelry) {
       const acc = pick(accessories, selected);
       if (acc) selected.push(acc);
+    }
+
+    // Bags when wardrobe has them and occasion warrants (or dress look)
+    const wantBag =
+      profile.preferCategories.includes("bag") ||
+      wearingDress ||
+      formalityRank(formality) >= 2 ||
+      dressFriendly;
+    if (wantBag) {
+      const bag = pick(byCat("bag"), selected);
+      if (bag) selected.push(bag);
     }
   }
 
@@ -1051,7 +1097,7 @@ export function parseVoiceIntent(transcript: string) {
   const spokenWeather = parseSpokenWeather(transcript);
 
   const shoeAsk =
-    /\b(shoe|shoes|boot|boots|loafer|loafers|sneaker|sneakers|footwear|kicks)\b/.test(
+    /\b(shoe|shoes|boot|boots|loafer|loafers|sneaker|sneakers|footwear|kicks|heels?|pumps?|flats?|sandals?|wedges?|mules?|stilettos?)\b/.test(
       t
     );
   const swapAsk =
@@ -1062,10 +1108,10 @@ export function parseVoiceIntent(transcript: string) {
   const shoeSwap =
     shoeAsk &&
     (swapAsk ||
-      /\b(swap|change|different|other|new)\s+(the\s+)?(shoe|shoes|boot|boots)\b/.test(
+      /\b(swap|change|different|other|new)\s+(the\s+)?(shoe|shoes|boot|boots|heels?|pumps?|flats?)\b/.test(
         t
       ) ||
-      /\b(shoe|shoes|boot|boots)\b.*\b(swap|change|different|don't like|dont like)\b/.test(
+      /\b(shoe|shoes|boot|boots|heels?|pumps?|flats?)\b.*\b(swap|change|different|don't like|dont like)\b/.test(
         t
       ));
 

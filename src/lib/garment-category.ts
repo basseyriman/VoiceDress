@@ -34,7 +34,7 @@ export function isRealFootwear(g: Named): boolean {
   if (isHosieryOrSocks(g)) return false;
   if (g.category === "shoes") return true;
   const t = blobOf(g);
-  return /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxfords?|derbys?|brogues?|mules?|pumps?|espadrilles?|chelsea|derby|monk\s*strap|dress\s*shoe)\b/.test(
+  return /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxfords?|derbys?|brogues?|mules?|pumps?|espadrilles?|flats?|ballet\s*flats?|wedges?|stilettos?|slingbacks?|chelsea|derby|monk\s*strap|dress\s*shoe)\b/.test(
     t
   );
 }
@@ -59,13 +59,17 @@ export function inferCategoryFromText(
     return "accessory";
   }
   if (
-    /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxfords?|derbys?|brogues?|mules?|pumps?|espadrilles?|chelsea\s*boots?)\b/.test(
+    /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxfords?|derbys?|brogues?|mules?|pumps?|espadrilles?|flats?|ballet\s*flats?|wedges?|stilettos?|slingbacks?|chelsea\s*boots?)\b/.test(
       t
     )
   ) {
     return "shoes";
   }
-  if (/\b(gown|maxi\s*dress|midi\s*dress|mini\s*dress|\bdress\b)\b/.test(t)) {
+  if (
+    /\b(jumpsuit|romper|playsuit|catsuit|gown|maxi\s*dress|midi\s*dress|mini\s*dress|\bdress\b)\b/.test(
+      t
+    )
+  ) {
     // "shirt dress" is dress; plain "dress shirt" is top — handled below
     if (/\bdress\s*shirt\b|\bdress\s*shoe/.test(t)) {
       /* fall through */
@@ -87,7 +91,7 @@ export function inferCategoryFromText(
   ) {
     return "bottom";
   }
-  if (/\b(bag|tote|handbag|clutch|backpack|crossbody)\b/.test(t)) {
+  if (/\b(bag|tote|handbag|clutch|backpack|crossbody|purse)\b/.test(t)) {
     return "bag";
   }
   if (
@@ -98,11 +102,10 @@ export function inferCategoryFromText(
     return "accessory";
   }
   if (
-    /\b(shirt|tee|t-shirt|polo|blouse|knit|sweater|jumper|hoodie|crewneck|oxford|blouse|tank|vest|cardigan)\b/.test(
+    /\b(shirt|tee|t-shirt|polo|blouse|knit|sweater|jumper|hoodie|crewneck|oxford|tank|vest|cardigan|camisole|bodysuit)\b/.test(
       t
     )
   ) {
-    // Cardigan can be outerwear — prefer outerwear only when also jacket-like; keep as top for light knit
     if (/\b(hoodie|overshirt)\b/.test(t)) return "outerwear";
     return "top";
   }
@@ -217,12 +220,20 @@ export function assertGarmentCategoryGuards(): void {
     { name: "Cognac Leather Loafers", expect: "shoes" },
     { name: "Suede Chelsea Boots", expect: "shoes" },
     { name: "White Leather Sneakers", expect: "shoes" },
+    { name: "Black Stiletto Heels", expect: "shoes" },
+    { name: "Nude Ballet Flats", expect: "shoes" },
+    { name: "Gold Wedge Sandals", expect: "shoes" },
     { name: "Navy Wool Blazer", expect: "outerwear" },
     { name: "Indigo Slim Jeans", expect: "bottom" },
+    { name: "Pleated Midi Skirt", expect: "bottom" },
     { name: "Ivory Ribbed Quarter-Zip", expect: "top" },
+    { name: "Silk Blouse", expect: "top" },
+    { name: "Black Midi Dress", expect: "dress" },
+    { name: "Linen Jumpsuit", expect: "dress" },
     { name: "Gold Rimless Glasses", expect: "accessory" },
     { name: "Leather Belt", expect: "accessory" },
     { name: "Black Tote Bag", expect: "bag" },
+    { name: "Satin Clutch", expect: "bag" },
   ];
 
   for (const c of cases) {

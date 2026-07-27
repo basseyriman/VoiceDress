@@ -101,18 +101,18 @@ Formality: ${formality}
 Weather: ${Math.round(weather.tempC)}°C, ${weather.condition} in ${weather.location}
 ${previousGuide ? `They heard this last time — do NOT repeat it verbatim:\n"${previousGuide}"\n` : ""}
 
-spoken MUST follow this speakable arc (about 4–6 short sentences):
-1) "For [user’s plan]…" + name a silhouette vibe (e.g. monochromatic night executive) + brief weather as context only
-2) "Up top: your [exact top/outerwear names]…"
-3) "Below: your [exact trousers]…"
-4) "On your feet: your [exact shoes]…"
+spoken MUST follow this speakable arc (about 4–6 short sentences). Works for ANY wardrobe — dresses, skirts, trousers, heels, bags:
+1) "For [user’s plan]…" + name a silhouette vibe + brief weather as context only
+2) If a dress/jumpsuit is in the list: "Wear your [exact dress]…" then shoes/bag. Otherwise: "Up top: your [exact top/outerwear]…" and "Below: your [exact bottoms/skirt]…"
+3) "On your feet: your [exact shoes]…" (heels, flats, boots, loafers — whatever is listed)
+4) If a bag is listed: mention it once as the finish
 5) Optional: metal sync if accessories match (gold with gold / silver with silver) using exact accessory names
-6) One short how-to-wear cue (tuck / open blazer / hem break) for THESE pieces only
-Do NOT invent garments. Do NOT dump a weather forecast as the whole answer.
+6) One short how-to-wear cue for THESE pieces only (tuck / open blazer / hem / dress drape)
+Do NOT invent garments. Do NOT assume the wearer is a man or only wears trousers. Do NOT dump a weather forecast as the whole answer.
 
 Also return:
 - steps: 3–5 short UI lines for how to wear
-- tryOnPrompt: factual drape only for image edit (tuck/open coat/hem)`,
+- tryOnPrompt: factual drape only for image edit (tuck/open coat/hem/dress line)`,
     });
 
     if (!output?.steps?.length || !output.spoken) {

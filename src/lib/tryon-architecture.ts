@@ -16,7 +16,7 @@ export const TRYON_APPAREL_CATEGORIES = [
   "outerwear",
 ] as const;
 
-export const TRYON_FINISH_CATEGORIES = ["shoes", "accessory"] as const;
+export const TRYON_FINISH_CATEGORIES = ["shoes", "accessory", "bag"] as const;
 
 /** Max pieces sent in the apparel stage (base + outerwear). */
 export const TRYON_APPAREL_MAX_PIECES = 3;
@@ -40,6 +40,7 @@ export function lookPiecesForTryOn<
   const shoes = garments.find(
     (g) => g.category === "shoes" && !isHosieryOrSocks(g)
   );
+  const bag = garments.find((g) => g.category === "bag");
   const accessories = garments.filter(
     (g) => g.category === "accessory" && !isHosieryOrSocks(g)
   );
@@ -55,6 +56,7 @@ export function lookPiecesForTryOn<
   return [
     ...apparel,
     ...(shoes ? [shoes] : []),
+    ...(bag ? [bag] : []),
     ...eyewear,
     ...watches,
     ...other,

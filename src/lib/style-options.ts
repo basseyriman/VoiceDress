@@ -20,6 +20,11 @@ export const STYLE_LOOKS = [
     label: "Streetwear",
     blurb: "Modern edge. Casual confidence with intention.",
   },
+  {
+    id: "romantic",
+    label: "Romantic",
+    blurb: "Soft polish. Fluid lines, elevated ease, date-night ready.",
+  },
 ] as const;
 
 export type StyleLookId = (typeof STYLE_LOOKS)[number]["id"];

@@ -13,9 +13,10 @@ const filters: (GarmentCategory | "all")[] = [
   "top",
   "bottom",
   "outerwear",
-  "shoes",
-  "accessory",
   "dress",
+  "shoes",
+  "bag",
+  "accessory",
 ];
 
 export default function WardrobePage() {

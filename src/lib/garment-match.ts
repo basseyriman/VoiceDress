@@ -48,15 +48,19 @@ export function inferCategoryFromSpeech(
 ): GarmentCategory | undefined {
   const t = speech.toLowerCase();
   if (/\b(sock|stocking|tights|hosiery)\b/.test(t)) return "accessory";
-  if (/\b(shoe|shoes|boot|boots|loafer|sneaker|footwear|kicks)\b/.test(t))
+  if (/\b(shoe|shoes|boot|boots|loafer|sneaker|footwear|kicks|heel|pump|flat|sandal|wedge|mule|stiletto)\b/.test(t))
     return "shoes";
-  if (/\b(jean|trouser|pant|skirt|short|bottom)\b/.test(t)) return "bottom";
-  if (/\b(shirt|top|blouse|knit|tee|sweater|polo|zip)\b/.test(t)) return "top";
+  if (/\b(jean|trouser|pant|skirt|short|bottom|legging|culotte)\b/.test(t))
+    return "bottom";
+  if (/\b(shirt|top|blouse|knit|tee|sweater|polo|zip|camisole)\b/.test(t))
+    return "top";
   if (/\b(jacket|coat|blazer|outerwear|parka)\b/.test(t)) return "outerwear";
-  if (/\b(dress|gown)\b/.test(t)) return "dress";
-  if (/\b(bag|tote|handbag)\b/.test(t)) return "bag";
+  if (/\b(dress|gown|jumpsuit|romper)\b/.test(t)) return "dress";
+  if (/\b(bag|tote|handbag|clutch|purse)\b/.test(t)) return "bag";
   if (
-    /\b(belt|glass|frame|sunglass|watch|wrist|accessory|scarf|hat)\b/.test(t)
+    /\b(belt|glass|frame|sunglass|watch|wrist|accessory|scarf|hat|necklace|earring|bracelet)\b/.test(
+      t
+    )
   )
     return "accessory";
   return undefined;

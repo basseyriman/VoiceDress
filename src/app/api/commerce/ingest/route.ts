@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
               type: "text",
               text: `Extract clothing / footwear / accessory items from this receipt, order screenshot, or product photo for a wardrobe app.
 Return every distinct wearable item. Prefer accurate names and brands.
-Category rules: socks, stockings, tights, no-show socks → accessory (NOT shoes). shoes/boots/loafers/sneakers → shoes.
+Category rules: socks, stockings, tights, no-show socks → accessory (NOT shoes). shoes/boots/loafers/sneakers/heels/pumps/flats/sandals/wedges → shoes. dresses/jumpsuits/rompers → dress. skirts → bottom. blouses/tops → top. handbags/totes/clutches → bag.
 If it's a product photo of one garment, return one item.
 detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when recognizable.`,
             },

@@ -74,25 +74,25 @@ export function apparelPromptForPiece(
         "Layer this structured hip-length blazer over the existing top.",
         "Keep blazer length — not a long overcoat or trench.",
         colors ? `Match exact color: ${colors}.` : "Keep the exact product color.",
-        "Do not replace the shirt underneath.",
+        "Do not replace the top underneath.",
         "Clean photoreal fabric — no black patches, holes, or glitches.",
       ].join(" ");
     }
     if (/overcoat|trench|coat|parka|duster/.test(name)) {
       return [
         KEEP_FACE,
-        "Layer this full camel/tan overcoat over the existing outfit naturally.",
+        "Layer this full overcoat over the existing outfit naturally.",
         "Smooth continuous coat fabric on both sleeves and body — no black holes, tears, or digital artifacts.",
         colors ? `Exact coat color: ${colors}.` : "Match the product coat color exactly.",
-        "Keep the person's face, trousers, and shoes unchanged.",
-        "Photoreal wool coat drape, clean edges.",
+        "Keep the person's face, lower garments, and shoes unchanged.",
+        "Photoreal coat drape, clean edges.",
       ].join(" ");
     }
     return [
       KEEP_FACE,
       "Layer this outerwear over the existing outfit.",
       colors ? `Match exact color: ${colors}.` : "Keep the exact product color.",
-      "Preserve the person's face, pose, and pants.",
+      "Preserve the person's face, pose, and lower garments.",
       "Clean photoreal fabric — no black patches or glitches.",
     ].join(" ");
   }
@@ -110,9 +110,9 @@ export function apparelPromptForPiece(
   if (piece.category === "bottom") {
     return [
       KEEP_FACE,
-      `Wear these exact trousers/bottoms: ${piece.name || "garment"}.`,
+      `Wear these exact bottoms (trousers, skirt, or shorts): ${piece.name || "garment"}.`,
       colors ? `Exact color: ${colors}.` : "Keep the exact product color.",
-      "Replace the current lower clothing. Keep the top/shirt already on the person.",
+      "Replace the current lower clothing. Keep the top already on the person.",
     ].join(" ");
   }
   if (colors && /white|ivory|cream|stone|khaki|beige/.test(colors.toLowerCase())) {
@@ -143,7 +143,7 @@ export function collageApparelPrompt(
     opts?.stripOuterwear ? STRIP_OUTER : "",
     "The product image is a collage of multiple garments. Dress the person in ALL of them in one change.",
     `Garments: ${labels.join("; ")}.`,
-    "Match each panel’s exact fabric and color. Replace existing shirt and trousers to match the collage.",
+    "Match each panel’s exact fabric and color. Replace existing top and bottoms to match the collage.",
     "Do not invent a jacket unless a jacket panel is in the collage.",
     "Photoreal, clean edges, full-body framing unchanged.",
   ]
@@ -169,6 +169,15 @@ export function finishPromptForPiece(piece: {
       colors ? `Exact color: ${colors}.` : "Match the product color exactly.",
       "Keep the rest of the outfit, face, pose, and framing unchanged.",
       "Full-body crop — head and feet both visible.",
+    ].join(" ");
+  }
+
+  if (piece.category === "bag" || /bag|tote|clutch|handbag|purse|crossbody/.test(blob)) {
+    return [
+      KEEP_FACE,
+      `Add this bag held naturally at the side or on the shoulder: ${label}.`,
+      colors ? `Bag color: ${colors}.` : "Match the product colors.",
+      "Do not change face, clothes, or shoes. Keep framing full-body.",
     ].join(" ");
   }
 

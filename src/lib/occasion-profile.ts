@@ -43,14 +43,22 @@ export function inferOccasionProfile(
   if (o.includes("black tie") || o.includes("black-tie") || o.includes("gala")) {
     formality = "black_tie";
     styleHints.push("quiet luxury", "old money");
-    preferCategories.push("dress", "outerwear", "shoes", "accessory");
+    preferCategories.push("dress", "outerwear", "shoes", "accessory", "bag");
     avoid.push("sneakers", "denim", "hoodies", "jeans");
     notes = "Black-tie / gala — polished and restrained.";
   } else if (o.includes("wedding") || o.includes("reception")) {
-    // Guest look: formal, not tuxedo-only — prefer blazer + tailored pieces
+    // Guest look: formal — dress or tailored separates both valid
     formality = "formal";
     styleHints.push("quiet luxury", "old money");
-    preferCategories.push("outerwear", "top", "bottom", "shoes", "accessory");
+    preferCategories.push(
+      "dress",
+      "outerwear",
+      "top",
+      "bottom",
+      "shoes",
+      "accessory",
+      "bag"
+    );
     avoid.push("sneakers", "denim", "jeans", "hoodies", "knit", "quarter-zip");
     notes = "Wedding guest — tailored, elevated, no casual denim.";
   } else if (
@@ -60,6 +68,7 @@ export function inferOccasionProfile(
   ) {
     formality = "formal";
     styleHints.push("minimal", "quiet luxury");
+    preferCategories.push("dress", "top", "bottom", "shoes", "outerwear");
     avoid.push("bright colors", "loud patterns", "sneakers");
     notes = "Somber, dark, respectful.";
   } else if (
@@ -72,7 +81,7 @@ export function inferOccasionProfile(
   ) {
     formality = "formal";
     styleHints.push("quiet luxury", "old money");
-    preferCategories.push("top", "bottom", "shoes");
+    preferCategories.push("dress", "top", "bottom", "shoes", "bag");
     avoid.push("streetwear", "distressed denim");
     notes = "First impressions — tailored and composed.";
   } else if (
@@ -84,7 +93,7 @@ export function inferOccasionProfile(
   ) {
     formality = "business";
     styleHints.push("quiet luxury", "minimal");
-    preferCategories.push("top", "bottom", "shoes");
+    preferCategories.push("dress", "top", "bottom", "shoes", "bag");
     notes = "Professional day — clean lines.";
   } else if (
     o.includes("birthday") ||
@@ -95,7 +104,7 @@ export function inferOccasionProfile(
       ? "smart_casual"
       : "smart_casual";
     styleHints.push("quiet luxury", "romantic");
-    preferCategories.push("top", "bottom", "shoes", "accessory");
+    preferCategories.push("dress", "top", "bottom", "shoes", "accessory", "bag");
     notes = "Celebratory but wearable — elevated, not costume.";
   } else if (
     o.includes("proper dinner") ||
@@ -104,10 +113,18 @@ export function inferOccasionProfile(
       (o.includes("first") || o.includes("haven't") || o.includes("havent")))
   ) {
     formality = "business";
-    styleHints.push("quiet luxury", "old money");
-    preferCategories.push("top", "bottom", "outerwear", "shoes", "accessory");
+    styleHints.push("quiet luxury", "old money", "romantic");
+    preferCategories.push(
+      "dress",
+      "top",
+      "bottom",
+      "outerwear",
+      "shoes",
+      "accessory",
+      "bag"
+    );
     avoid.push("sneakers", "denim", "jeans");
-    notes = "High-value evening dinner — elevated, monochromatic, intentional.";
+    notes = "High-value evening dinner — elevated, intentional.";
   } else if (
     o.includes("dinner") ||
     o.includes("date") ||
@@ -116,7 +133,8 @@ export function inferOccasionProfile(
     o.includes("lunch")
   ) {
     formality = "smart_casual";
-    styleHints.push("quiet luxury", "old money");
+    styleHints.push("quiet luxury", "old money", "romantic");
+    preferCategories.push("dress", "top", "bottom", "shoes", "accessory", "bag");
     notes = "Social dining — put-together without stiff formality.";
   } else if (
     o.includes("gym") ||
@@ -127,7 +145,7 @@ export function inferOccasionProfile(
     formality = "casual";
     styleHints.push("streetwear", "minimal");
     preferCategories.push("top", "bottom", "shoes");
-    avoid.push("leather dress shoes", "blazer");
+    avoid.push("leather dress shoes", "blazer", "heels");
     notes = "Movement first — breathable and practical.";
   } else if (
     o.includes("travel") ||
@@ -137,7 +155,7 @@ export function inferOccasionProfile(
   ) {
     formality = "smart_casual";
     styleHints.push("minimal", "quiet luxury");
-    preferCategories.push("top", "bottom", "outerwear", "shoes");
+    preferCategories.push("dress", "top", "bottom", "outerwear", "shoes", "bag");
     notes = "Comfort for transit with a polished silhouette.";
   } else if (
     o.includes("party") ||
@@ -150,7 +168,7 @@ export function inferOccasionProfile(
   ) {
     formality = "smart_casual";
     styleHints.push("romantic", "quiet luxury");
-    preferCategories.push("top", "bottom", "shoes", "accessory");
+    preferCategories.push("dress", "top", "bottom", "shoes", "accessory", "bag");
     notes = "Evening presence — intentional finishing pieces.";
   } else if (
     o.includes("church") ||
@@ -159,6 +177,7 @@ export function inferOccasionProfile(
   ) {
     formality = "formal";
     styleHints.push("quiet luxury", "old money");
+    preferCategories.push("dress", "top", "bottom", "shoes", "bag", "accessory");
     notes = "Ceremonial — respectful and polished.";
   } else if (
     o.includes("beach") ||
@@ -168,6 +187,7 @@ export function inferOccasionProfile(
   ) {
     formality = "casual";
     styleHints.push("minimal", "romantic");
+    preferCategories.push("dress", "top", "bottom", "shoes", "bag");
     notes = "Relaxed setting — light fabrics and ease.";
   }
 
