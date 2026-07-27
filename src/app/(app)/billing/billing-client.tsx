@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { PLANS } from "@/lib/stripe";
 import { authFetch } from "@/lib/auth-fetch";
 import { useAetherStore } from "@/store/aether-store";
+import {
+  PAID_PHOTO_TRYONS_PER_MONTH,
+  photoTryOnsUsedThisMonth,
+} from "@/lib/entitlement";
 
 export default function BillingPage() {
   const user = useAetherStore((s) => s.user);
@@ -116,7 +120,7 @@ export default function BillingPage() {
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
           One on-photo look is free. Then £19/month or £149/year — both include a
-          7-day trial. Status:{" "}
+          7-day trial and 30 full on-photo looks per month. Status:{" "}
           <span className="capitalize text-champagne">{statusLabel}</span>
           {user?.trialEndsAt && user.subscriptionStatus === "trialing" ? (
             <span className="text-mist">
@@ -133,6 +137,15 @@ export default function BillingPage() {
             <span className="text-mist">
               {" "}
               · free looks used {user.freePhotoTryOnsUsed}/1
+            </span>
+          ) : null}
+          {user &&
+          (user.subscriptionStatus === "active" ||
+            user.subscriptionStatus === "trialing") ? (
+            <span className="text-mist">
+              {" "}
+              · looks this month {photoTryOnsUsedThisMonth(user)}/
+              {PAID_PHOTO_TRYONS_PER_MONTH}
             </span>
           ) : null}
         </p>

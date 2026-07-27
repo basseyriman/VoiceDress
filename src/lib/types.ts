@@ -99,6 +99,10 @@ export interface UserProfile {
    * First one is free (aha moment); then we offer the 7-day trial.
    */
   freePhotoTryOnsUsed?: number;
+  /** Calendar month key (YYYY-MM) for the paid/trial look counter. */
+  photoTryOnsMonthKey?: string;
+  /** Full on-photo looks used in photoTryOnsMonthKey (swaps excluded). */
+  photoTryOnsThisMonth?: number;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   connectedStores: CommerceSource[];

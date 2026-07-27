@@ -3,8 +3,12 @@ import { getAdminAuth, getAdminDb, isAdminConfigured } from "@/lib/firebase-admi
 import type { UserProfile } from "@/lib/types";
 import {
   FREE_PHOTO_TRYONS,
+  PAID_PHOTO_TRYONS_PER_MONTH,
+  currentPhotoTryOnMonthKey,
   freePhotoTryOnsUsed,
+  hasMonthlyPhotoTryOnQuota,
   isMembershipActive,
+  photoTryOnsUsedThisMonth,
 } from "@/lib/entitlement";
 
 export type AuthedUser = {
@@ -136,14 +140,23 @@ export type TryOnAccess = AuthedUser & {
   consumedFreeTryOn?: boolean;
 };
 
+function isApparelTryOnStage(stage: string) {
+  return (
+    stage === "apparel" ||
+    stage === "auto" ||
+    stage === "collage" ||
+    stage === "base"
+  );
+}
+
 /**
- * On-photo try-on gate: membership OR one unused free dress (aha moment).
- * Does not consume the free credit — call `consumeFreePhotoTryOn` after a
- * successful apparel response so failed dresses don't burn the gift.
+ * On-photo try-on gate: membership (under monthly full-look cap) OR one unused
+ * free dress. Single-piece apparel swaps skip the monthly cap.
+ * Does not consume credits — call consume helpers after a successful apparel dress.
  */
 export async function requireTryOnAccess(
   req: NextRequest,
-  opts?: { stage?: string }
+  opts?: { stage?: string; garmentCount?: number }
 ): Promise<TryOnAccess | NextResponse> {
   const auth = await requireAuth(req);
   if (!isAuthedUser(auth)) return auth;
@@ -162,21 +175,34 @@ export async function requireTryOnAccess(
   if (isCompedAccount(auth)) return auth;
 
   const profile = await loadUserProfileAdmin(auth.uid);
-  if (isEntitled(profile, auth)) return auth;
-
-  const used = freePhotoTryOnsUsed(profile);
   const stage = (opts?.stage || "auto").toLowerCase();
-  const isApparelStage =
-    stage === "apparel" ||
-    stage === "auto" ||
-    stage === "collage" ||
-    stage === "base";
+  const isApparelStage = isApparelTryOnStage(stage);
+  const garmentCount = Math.max(0, Number(opts?.garmentCount || 0));
+  // Full looks (2+ garments) burn the monthly quota; surgical swaps do not.
+  const countsTowardMonthlyQuota = isApparelStage && garmentCount >= 2;
+
+  if (isEntitled(profile, auth)) {
+    if (countsTowardMonthlyQuota && !hasMonthlyPhotoTryOnQuota(profile)) {
+      return NextResponse.json(
+        {
+          error:
+            "You’ve used this month’s 30 full on-photo looks. Piece swaps still work — or wait until next month.",
+          code: "quota_exceeded",
+          used: photoTryOnsUsedThisMonth(profile),
+          limit: PAID_PHOTO_TRYONS_PER_MONTH,
+        },
+        { status: 402 }
+      );
+    }
+    return auth;
+  }
 
   // Finish / style after the free apparel dress must still run
   if (!isApparelStage) {
     return auth;
   }
 
+  const used = freePhotoTryOnsUsed(profile);
   if (used >= FREE_PHOTO_TRYONS) {
     return NextResponse.json(
       {
@@ -217,4 +243,44 @@ export async function consumeFreePhotoTryOn(
     { merge: true }
   );
   return { consumed: true, used: next };
+}
+
+/**
+ * Increment monthly full-look counter for trial/paid members after a successful
+ * multi-garment apparel dress. No-op for comps, non-members, or month already full.
+ */
+export async function consumeMonthlyPhotoTryOn(
+  uid: string,
+  opts?: { email?: string | null }
+): Promise<{ consumed: boolean; used: number; monthKey: string }> {
+  const monthKey = currentPhotoTryOnMonthKey();
+  const db = getAdminDb();
+  if (!db) return { consumed: false, used: 0, monthKey };
+
+  if (isCompedAccount({ uid, email: opts?.email })) {
+    return { consumed: false, used: 0, monthKey };
+  }
+
+  const ref = db.collection("users").doc(uid);
+  const snap = await ref.get();
+  const profile = (snap.data() || {}) as Partial<UserProfile>;
+  if (!isEntitled(profile, { uid, email: opts?.email })) {
+    return { consumed: false, used: 0, monthKey };
+  }
+
+  const used = photoTryOnsUsedThisMonth(profile);
+  if (used >= PAID_PHOTO_TRYONS_PER_MONTH) {
+    return { consumed: false, used, monthKey };
+  }
+
+  const next = used + 1;
+  await ref.set(
+    {
+      photoTryOnsMonthKey: monthKey,
+      photoTryOnsThisMonth: next,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+  return { consumed: true, used: next, monthKey };
 }

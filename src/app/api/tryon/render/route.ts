@@ -4,7 +4,7 @@ import {
   hasOpenAIImageKey,
   openaiFinishEdit,
 } from "@/lib/openai-finish";
-import { isAuthedUser, requireTryOnAccess, consumeFreePhotoTryOn } from "@/lib/api-auth";
+import { isAuthedUser, requireTryOnAccess, consumeFreePhotoTryOn, consumeMonthlyPhotoTryOn } from "@/lib/api-auth";
 import {
   apparelPromptForPiece,
   collageApparelPrompt,
@@ -388,9 +388,10 @@ async function applyFinishPiece(opts: {
   piece: Piece;
 }): Promise<TryResult & { provider?: string; needsBilling?: boolean }> {
   const { falKey, personImage, productImage, piece } = opts;
+  // Cost model: clothes on FASHN; finish (shoes/watch/bag/glasses) on Kontext.
+  // Override with TRYON_FINISH_PROVIDER=fashn or openai only if you accept the bill.
   const prefer =
-    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() ||
-    (hasFashnApiKey() ? "fashn" : "kontext");
+    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() || "kontext";
 
   const tryFashnMax = async (): Promise<
     (TryResult & { provider?: string; needsBilling?: boolean }) | null
@@ -503,18 +504,6 @@ async function applyFinishPiece(opts: {
     return edited;
   };
 
-  // Eyewear: Kontext with product image matches frames better than Max
-  // (Max often invents neon/lime lenses and cartoonizes the face).
-  if (isEyewear(piece) && falKey && productImage) {
-    const eye = await tryKontext();
-    if (eye.ok) return eye;
-    const maxResult = await tryFashnMax();
-    if (maxResult?.ok) return maxResult;
-    if (maxResult?.needsBilling) return maxResult;
-    return eye;
-  }
-
-  // Default with FASHN_API_KEY: Try-On Max for shoes/glasses/watch.
   if (prefer === "fashn" || prefer === "fashn-max" || prefer === "tryon-max") {
     const maxResult = await tryFashnMax();
     if (maxResult?.ok) return maxResult;
@@ -577,8 +566,10 @@ function orderFinishPieces(
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  const garmentsPreview = Array.isArray(body.garments) ? body.garments : [];
   const auth = await requireTryOnAccess(req, {
     stage: typeof body.stage === "string" ? body.stage : "auto",
+    garmentCount: garmentsPreview.length,
   });
   if (!isAuthedUser(auth)) return auth;
 
@@ -985,18 +976,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Burn the free gift only after a successful apparel dress
+  // Burn free gift / monthly full-look quota after a successful apparel dress
   const isApparelStage =
     stage === "apparel" ||
     stage === "auto" ||
     stage === "collage" ||
     stage === "base";
+  let photoTryOnsThisMonth: number | undefined;
+  let photoTryOnsMonthKey: string | undefined;
   if (isApparelStage && steps.length > 0) {
     try {
       const burn = await consumeFreePhotoTryOn(auth.uid);
       consumedFreeTryOn = burn.consumed;
     } catch {
       // don't fail the dress if counter write fails
+    }
+    // Full looks only (2+ garments) — surgical swaps stay free of the monthly cap
+    if (garments.length >= 2) {
+      try {
+        const monthly = await consumeMonthlyPhotoTryOn(auth.uid, {
+          email: auth.email,
+        });
+        if (monthly.consumed || monthly.used > 0) {
+          photoTryOnsThisMonth = monthly.used;
+          photoTryOnsMonthKey = monthly.monthKey;
+        }
+      } catch {
+        // don't fail the dress if counter write fails
+      }
     }
   }
 
@@ -1010,6 +1017,8 @@ export async function POST(req: NextRequest) {
       runApparel && apparelBaseUrl !== current ? apparelBaseUrl : undefined,
     steps,
     consumedFreeTryOn: consumedFreeTryOn || undefined,
+    photoTryOnsThisMonth,
+    photoTryOnsMonthKey,
     ...(warnings.length ? { warning: warnings.join(" · ") } : {}),
   });
 }
@@ -1020,11 +1029,9 @@ export async function GET() {
     fashnMax: hasFashnApiKey(),
     falFallback: Boolean(process.env.FAL_KEY?.trim()),
     openaiImage: hasOpenAIImageKey(),
-    finishProvider:
-      process.env.TRYON_FINISH_PROVIDER?.trim() ||
-      (hasFashnApiKey() ? "fashn" : "kontext"),
+    finishProvider: process.env.TRYON_FINISH_PROVIDER?.trim() || "kontext",
     provider: hasFashnApiKey()
-      ? "fashn tryon-max (clothes + accessories)"
+      ? "fashn tryon-max (clothes); kontext finish"
       : "fal-fashn v1.6 fallback",
   });
 }

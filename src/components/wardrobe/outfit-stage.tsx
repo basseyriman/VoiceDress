@@ -18,6 +18,8 @@ import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
 import {
   canStartPhotoTryOn,
+  isMembershipActive,
+  PAID_PHOTO_TRYONS_PER_MONTH,
   shouldOfferTrial,
 } from "@/lib/entitlement";
 import Link from "next/link";
@@ -183,14 +185,6 @@ export function OutfitStage({
     let cancelled = false;
 
     (async () => {
-      // Hard gate before spending try-on credits — free gift already used
-      if (!canStartPhotoTryOn(user)) {
-        setWornUrl(displayAvatar);
-        setDressing(false);
-        setTrialOffer("hard");
-        return;
-      }
-
       const toPayload = (piece: (typeof lookPieces)[number]) => ({
         id: piece.id,
         imageUrl: piece.imageUrl,
@@ -224,6 +218,14 @@ export function OutfitStage({
         if (data.needsKey) {
           setNeedsKey(true);
           setKeyConfigured(false);
+          setDressing(false);
+          return true;
+        }
+        if (data.code === "quota_exceeded") {
+          setError(
+            data.error ||
+              `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} full on-photo looks. Piece swaps still work — or wait until next month.`
+          );
           setDressing(false);
           return true;
         }
@@ -288,6 +290,27 @@ export function OutfitStage({
         Math.abs(nextIds.length - prevIds.length) <= 1
           ? lookPieces.find((g) => g.id === addedIds[0]) || null
           : null;
+
+      // Full looks need monthly quota / free gift; surgical swaps stay allowed on membership.
+      if (replacePieceOnly && wornUrlRef.current) {
+        if (!isMembershipActive(user) && !canStartPhotoTryOn(user)) {
+          setWornUrl(displayAvatar);
+          setDressing(false);
+          setTrialOffer("hard");
+          return;
+        }
+      } else if (!canStartPhotoTryOn(user)) {
+        setWornUrl(displayAvatar);
+        setDressing(false);
+        if (isMembershipActive(user)) {
+          setError(
+            `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} full on-photo looks. Piece swaps still work — or wait until next month.`
+          );
+        } else {
+          setTrialOffer("hard");
+        }
+        return;
+      }
 
       // —— Single-piece swap on the already-dressed photo (saves credits) ——
       if (replacePieceOnly && wornUrlRef.current) {
@@ -691,6 +714,19 @@ export function OutfitStage({
                   1,
                   (user?.freePhotoTryOnsUsed || 0) + 1
                 ),
+              });
+            }
+            if (
+              typeof apparelData.photoTryOnsThisMonth === "number" ||
+              typeof apparelData.photoTryOnsMonthKey === "string"
+            ) {
+              updateUser({
+                ...(typeof apparelData.photoTryOnsThisMonth === "number"
+                  ? { photoTryOnsThisMonth: apparelData.photoTryOnsThisMonth }
+                  : {}),
+                ...(typeof apparelData.photoTryOnsMonthKey === "string"
+                  ? { photoTryOnsMonthKey: apparelData.photoTryOnsMonthKey }
+                  : {}),
               });
             }
 

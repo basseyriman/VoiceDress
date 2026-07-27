@@ -40,17 +40,17 @@ function sleep(ms: number) {
 }
 
 function generationMode(): "fast" | "balanced" | "quality" {
-  // Premium default: quality. Override with FASHN_GENERATION_MODE=balanced to save credits.
-  const m = (process.env.FASHN_GENERATION_MODE || "quality").toLowerCase();
+  // Cost-aware default: balanced. Override with FASHN_GENERATION_MODE=quality for premium.
+  const m = (process.env.FASHN_GENERATION_MODE || "balanced").toLowerCase();
   if (m === "fast" || m === "quality" || m === "balanced") return m;
-  return "quality";
+  return "balanced";
 }
 
 function resolution(): "1k" | "2k" | "4k" {
-  // Premium default: 2k. Override with FASHN_RESOLUTION=1k to save credits.
-  const r = (process.env.FASHN_RESOLUTION || "2k").toLowerCase();
+  // Cost-aware default: 1k (fine for phone try-on). Override with FASHN_RESOLUTION=2k.
+  const r = (process.env.FASHN_RESOLUTION || "1k").toLowerCase();
   if (r === "2k" || r === "4k" || r === "1k") return r;
-  return "2k";
+  return "1k";
 }
 
 const KEEP_FACE =

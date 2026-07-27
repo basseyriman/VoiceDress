@@ -90,6 +90,8 @@ export async function saveUserProfile(
     "subscriptionStatus",
     "trialEndsAt",
     "freePhotoTryOnsUsed",
+    "photoTryOnsMonthKey",
+    "photoTryOnsThisMonth",
     "stripeCustomerId",
     "connectedStores",
     "voiceEnabled",
@@ -295,6 +297,7 @@ export async function bootstrapUserCloud(input: {
     // No trial until after the free on-photo aha moment
     subscriptionStatus: "none",
     freePhotoTryOnsUsed: 0,
+    photoTryOnsThisMonth: 0,
     connectedStores: [],
     voiceEnabled: true,
     createdAt: now,

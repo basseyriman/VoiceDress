@@ -22,14 +22,15 @@ export const PLANS = [
     name: "Monthly",
     price: LIST_PRICE_MONTHLY_GBP,
     interval: "month" as const,
-    description: "Unlimited voice dressing — one look, dressed on your photo.",
+    description:
+      "30 full on-photo looks each month — plus unlimited voice styling & piece swaps.",
     badge: null as string | null,
     features: [
       "7-day free trial",
       "Speak the occasion → best look from your wardrobe",
-      "Full-look try-on on your photo",
+      "30 full on-photo looks / month",
+      "Unlimited voice styling & piece swaps",
       "Weather-aware suggestions",
-      "Swap any piece by voice or tap",
       "Shopify sync + add from order photo",
     ],
   },
@@ -42,7 +43,7 @@ export const PLANS = [
     badge: "Save £79",
     features: [
       "7-day free trial",
-      "Everything in Monthly",
+      "Everything in Monthly (30 looks / month)",
       "Priority try-on when queues are busy",
       "Early access to new dressing features",
     ],

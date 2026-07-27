@@ -96,12 +96,12 @@ export function TrialOfferModal({ open, onClose, mode = "soft" }: Props) {
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-mist">
           {mode === "hard"
-            ? "You’ve used your free on-photo look. Unlock unlimited voice looks and try-ons with a 7-day trial — cancel anytime."
+            ? "You’ve used your free on-photo look. Unlock 30 full looks a month plus unlimited voice swaps with a 7-day trial — cancel anytime."
             : "That was your free on-photo look. Keep swapping pieces and dressing for every occasion with a 7-day free trial."}
         </p>
         <ul className="mt-4 space-y-1.5 text-xs text-mist">
-          <li>· Unlimited on-photo try-ons</li>
-          <li>· Voice looks for any occasion</li>
+          <li>· 30 full on-photo looks / month</li>
+          <li>· Unlimited voice styling & piece swaps</li>
           <li>· Card required for trial · cancel before day 8</li>
         </ul>
         {message && (
