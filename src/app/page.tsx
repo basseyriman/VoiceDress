@@ -65,11 +65,11 @@ export default function LandingPage() {
             {/* Quiet couture mark — brand name carries the luxury */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/logo.svg?v=13"
+              src="/logo.svg?v=14"
               alt=""
               width={36}
-              height={26}
-              className="h-7 w-auto opacity-90"
+              height={36}
+              className="h-8 w-auto"
             />
             <p className="font-display text-xl font-medium tracking-[0.16em] text-ivory sm:text-2xl">
               Voice<span className="text-champagne">Dress</span>

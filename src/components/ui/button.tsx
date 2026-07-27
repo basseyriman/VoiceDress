@@ -37,23 +37,52 @@ export function Button({
   );
 }
 
-export function Logo({ className }: { className?: string }) {
+export function Logo({
+  className,
+  variant = "default",
+}: {
+  className?: string;
+  /** Larger lockup for auth / landing hero */
+  variant?: "default" | "hero";
+}) {
+  const hero = variant === "hero";
+
   return (
     <Link
       href="/"
-      className={cn("group inline-flex items-center gap-2.5", className)}
+      className={cn(
+        "group inline-flex items-center",
+        hero ? "gap-3.5" : "gap-2.5",
+        className
+      )}
       aria-label="VoiceDress home"
     >
-      {/* Quiet couture mark — wordmark leads the luxury */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/logo.svg?v=13"
-        alt=""
-        width={28}
-        height={20}
-        className="h-[1.15rem] w-auto shrink-0 opacity-90 transition duration-300 group-hover:opacity-100"
-      />
-      <span className="font-display text-[1.45rem] font-medium leading-none tracking-[0.12em] text-ivory">
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center rounded-[0.85rem] border border-champagne/25 bg-[#121110] shadow-[inset_0_1px_0_rgba(245,240,232,0.06)]",
+          hero ? "h-12 w-12" : "h-9 w-9"
+        )}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/logo.svg?v=14"
+          alt=""
+          width={hero ? 32 : 26}
+          height={hero ? 32 : 26}
+          className={cn(
+            "w-auto",
+            hero ? "h-7" : "h-[1.35rem]"
+          )}
+        />
+      </span>
+      <span
+        className={cn(
+          "font-display font-medium leading-none text-ivory",
+          hero
+            ? "text-[2rem] tracking-[0.14em] sm:text-[2.25rem]"
+            : "text-[1.45rem] tracking-[0.12em]"
+        )}
+      >
         Voice
         <span className="text-champagne">Dress</span>
       </span>
