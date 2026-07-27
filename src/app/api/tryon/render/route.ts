@@ -203,7 +203,7 @@ const KEEP_FRAMING =
   "CRITICAL FRAMING: Keep the EXACT same full-body camera distance and crop as image 1. Head and both feet must stay fully visible. Do not zoom in, do not crop to waist-up, do not change aspect ratio.";
 
 function isBlazerPiece(piece: Piece) {
-  return /blazer|sport coat|suit jacket/i.test(
+  return /blazer|sport coat|suit jacket|double-breast|\bsuit\b/i.test(
     `${piece.name || ""} ${(piece.tags || []).join(" ")}`
   );
 }
@@ -221,7 +221,7 @@ function shoeGlassesPrompt(piece: Piece): string {
       KEEP_YOU,
       KEEP_FRAMING,
       `Change ONLY the footwear below the ankles — replace BOTH shoes with image 2 (${look}).`,
-      "Match tan/suede color from image 2 exactly. Keep jeans and everything from the knees up completely unchanged.",
+      "Match shoe color from image 2 exactly. Keep trousers/pants and everything from the knees up completely unchanged — do not invent denim or change pant color.",
       "Do not alter face, torso, or pant legs above the shin.",
     ].join(" ");
   }
@@ -229,8 +229,9 @@ function shoeGlassesPrompt(piece: Piece): string {
     KEEP_YOU,
     KEEP_FRAMING,
     `Place ONLY the glasses from image 2 (${look}) on the person's existing face.`,
+    "Match frame shape and lens tint from image 2 exactly — never invent neon, lime, or green lenses unless image 2 has them.",
     "Do not redesign or regenerate the face. Same eyes, nose, mouth, skin. Only add thin frames.",
-    "Do not recolor or restyle clothes, shoes, or background — keep their exact colors.",
+    "Do not recolor or restyle clothes, shoes, or background — keep their exact colors. Do not change trousers to jeans.",
   ].join(" ");
 }
 
@@ -251,8 +252,9 @@ function outerwearLayerPrompt(piece: Piece): string {
   return [
     KEEP_YOU,
     KEEP_FRAMING,
-    `Layer ONLY the outerwear from image 2 (${look}) over the person's existing top.`,
+    `Layer ONLY the outerwear jacket from image 2 (${look}) over the person's existing top.`,
     `It must be a ${silhouette}.`,
+    "If image 2 shows a full suit, use ONLY the jacket — do NOT replace the person's existing trousers with suit pants or jeans.",
     "Match the exact color from image 2 (if navy/midnight blue, keep it deep navy — never cream, ivory, camel, beige, or washed-out grey).",
     "Keep the top underneath visible at the neckline/hem where natural. Do not replace the top with the jacket alone.",
     "Keep lower garments, shoes, hands, face, and background completely unchanged.",
@@ -500,6 +502,17 @@ async function applyFinishPiece(opts: {
     }
     return edited;
   };
+
+  // Eyewear: Kontext with product image matches frames better than Max
+  // (Max often invents neon/lime lenses and cartoonizes the face).
+  if (isEyewear(piece) && falKey && productImage) {
+    const eye = await tryKontext();
+    if (eye.ok) return eye;
+    const maxResult = await tryFashnMax();
+    if (maxResult?.ok) return maxResult;
+    if (maxResult?.needsBilling) return maxResult;
+    return eye;
+  }
 
   // Default with FASHN_API_KEY: Try-On Max for shoes/glasses/watch.
   if (prefer === "fashn" || prefer === "fashn-max" || prefer === "tryon-max") {
@@ -777,22 +790,10 @@ export async function POST(req: NextRequest) {
         apparelBaseUrl = current;
       }
 
-      // Prefer FASHN Try-On Max for all apparel including jackets.
-      let result = await applyApparelPiece({
-        falKey: falKey || "",
-        modelImage: current,
-        garmentImage,
-        piece: g,
-        stripOuterwear: shouldStrip && g.category !== "outerwear",
-      });
-
-      // Outerwear only: if Max/fal failed and we still have fal, try Kontext layer
-      if (
-        !result.ok &&
-        g.category === "outerwear" &&
-        falKey &&
-        !result.needsBilling
-      ) {
+      // Prefer Kontext for outerwear — FASHN "tops" mode often replaces
+      // trousers with suit pants from a full-suit product shot.
+      let result: TryResult & { provider?: string; needsBilling?: boolean };
+      if (g.category === "outerwear" && falKey) {
         const kontext = await kontextOuterwearLayer({
           falKey,
           personImage: current,
@@ -801,6 +802,40 @@ export async function POST(req: NextRequest) {
         });
         if (kontext.ok) {
           result = { ...kontext, provider: "kontext-outerwear" };
+        } else {
+          result = await applyApparelPiece({
+            falKey: falKey || "",
+            modelImage: current,
+            garmentImage,
+            piece: g,
+            stripOuterwear: false,
+          });
+        }
+      } else {
+        result = await applyApparelPiece({
+          falKey: falKey || "",
+          modelImage: current,
+          garmentImage,
+          piece: g,
+          stripOuterwear: shouldStrip && g.category !== "outerwear",
+        });
+
+        // Outerwear only: if Max/fal failed and we still have fal, try Kontext layer
+        if (
+          !result.ok &&
+          g.category === "outerwear" &&
+          falKey &&
+          !result.needsBilling
+        ) {
+          const kontext = await kontextOuterwearLayer({
+            falKey,
+            personImage: current,
+            productImage: garmentImage,
+            piece: g,
+          });
+          if (kontext.ok) {
+            result = { ...kontext, provider: "kontext-outerwear" };
+          }
         }
       }
 

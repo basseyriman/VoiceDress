@@ -1,10 +1,10 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Apparel (top+bottom collage in one FASHN call when possible; outerwear second).
- *    Falls back to per-piece if collage fails. Strips leftover jackets when look has none.
- * 2. Outerwear soft-fallback → fal Kontext layer + client color composite.
- * 3. Shoes / glasses / watch → fal Kontext (or OpenAI if configured).
+ * 1. Apparel — top+bottom collage + outerwear in one client request.
+ *    Outerwear prefers Kontext jacket-layer (suits must not replace trousers);
+ *    client always restores lower body from the pre-jacket frame.
+ * 2. Finish — shoes/watch/bag/glasses in one request; client locks trousers + face.
  */
 
 import { isHosieryOrSocks } from "@/lib/commerce";

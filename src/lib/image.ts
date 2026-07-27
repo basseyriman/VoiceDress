@@ -252,19 +252,19 @@ export async function lockFaceIdentity(
   mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   mctx.fill();
 
-  // Soft: narrow eye band so sunglass/optic frames from the try-on can show,
-  // without giving the AI a wide strip to re-cartoonize the face.
+  // Soft: very narrow eye slit so frames can remain without a wide
+  // AI skin band that reads as cartoon around the eyes.
   if (strength === "soft") {
     mctx.globalCompositeOperation = "destination-out";
-    const eyeY = h * 0.128;
-    const eyeH = h * 0.04;
+    const eyeY = h * 0.122;
+    const eyeH = h * 0.028;
     const eyeGrad = mctx.createLinearGradient(0, eyeY, 0, eyeY + eyeH);
     eyeGrad.addColorStop(0, "rgba(0,0,0,0)");
-    eyeGrad.addColorStop(0.3, "rgba(0,0,0,0.55)");
-    eyeGrad.addColorStop(0.7, "rgba(0,0,0,0.55)");
+    eyeGrad.addColorStop(0.35, "rgba(0,0,0,0.42)");
+    eyeGrad.addColorStop(0.65, "rgba(0,0,0,0.42)");
     eyeGrad.addColorStop(1, "rgba(0,0,0,0)");
     mctx.fillStyle = eyeGrad;
-    mctx.fillRect(w * 0.3, eyeY, w * 0.4, eyeH);
+    mctx.fillRect(w * 0.32, eyeY, w * 0.36, eyeH);
     mctx.globalCompositeOperation = "source-over";
   }
 
@@ -498,6 +498,68 @@ export async function layerOuterwearPreserveBase(
   }
 
   ctx.putImageData(baseData, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.97);
+}
+
+/**
+ * Copy the trouser/skirt band from a trusted base frame onto a later AI result.
+ * Stops outerwear (e.g. full-suit product shots) and accessory passes from
+ * inventing denim or recoloring bottoms. Leaves torso (jacket) and feet free.
+ */
+export async function preserveLowerBodyFromBase(
+  baseSrc: string,
+  dressedSrc: string,
+  opts?: { yStart?: number; yEnd?: number }
+): Promise<string> {
+  const [base, dressed] = await Promise.all([
+    loadHtmlImage(baseSrc),
+    loadHtmlImage(dressedSrc),
+  ]);
+  const w = dressed.width;
+  const h = dressed.height;
+  if (w < 8 || h < 8) return dressedSrc;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dressedSrc;
+
+  const baseCanvas = document.createElement("canvas");
+  baseCanvas.width = w;
+  baseCanvas.height = h;
+  const bctx = baseCanvas.getContext("2d");
+  if (!bctx) return dressedSrc;
+
+  ctx.drawImage(dressed, 0, 0, w, h);
+  bctx.drawImage(base, 0, 0, w, h);
+  const out = ctx.getImageData(0, 0, w, h);
+  const src = bctx.getImageData(0, 0, w, h);
+
+  const y0 = Math.floor(h * (opts?.yStart ?? 0.46));
+  const y1 = Math.floor(h * (opts?.yEnd ?? 0.86));
+  const x0 = Math.floor(w * 0.1);
+  const x1 = Math.floor(w * 0.9);
+  // Soft blend at top/bottom edges so jacket hem and shoe tops don't hard-cut
+  const feather = Math.max(4, Math.floor(h * 0.03));
+
+  for (let y = y0; y < y1; y++) {
+    let edge = 1;
+    if (y - y0 < feather) edge = (y - y0) / feather;
+    else if (y1 - y < feather) edge = (y1 - y) / feather;
+    for (let x = x0; x < x1; x++) {
+      const i = (y * w + x) * 4;
+      out.data[i] = Math.round(out.data[i] * (1 - edge) + src.data[i] * edge);
+      out.data[i + 1] = Math.round(
+        out.data[i + 1] * (1 - edge) + src.data[i + 1] * edge
+      );
+      out.data[i + 2] = Math.round(
+        out.data[i + 2] * (1 - edge) + src.data[i + 2] * edge
+      );
+    }
+  }
+
+  ctx.putImageData(out, 0, 0);
   return canvas.toDataURL("image/jpeg", 0.97);
 }
 

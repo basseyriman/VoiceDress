@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
@@ -352,23 +352,25 @@ export function OutfitStage({
 
             let dressedUrl = apparelData.imageUrl as string;
             if (piece.category === "outerwear") {
-              const stepProvider =
-                Array.isArray(apparelData.steps) && apparelData.steps[0]
-                  ? String(apparelData.steps[0].provider || "")
-                  : "";
-              if (!stepProvider.includes("fashn")) {
-                try {
-                  dressedUrl = await layerOuterwearPreserveBase(
-                    baseWorn,
-                    apparelData.imageUrl,
-                    {
-                      hexColors: piece.hexColors,
-                      colors: piece.colors,
-                    }
-                  );
-                } catch {
-                  dressedUrl = apparelData.imageUrl;
-                }
+              try {
+                dressedUrl = await layerOuterwearPreserveBase(
+                  baseWorn,
+                  apparelData.imageUrl,
+                  {
+                    hexColors: piece.hexColors,
+                    colors: piece.colors,
+                  }
+                );
+              } catch {
+                dressedUrl = apparelData.imageUrl;
+              }
+              try {
+                dressedUrl = await preserveLowerBodyFromBase(
+                  baseWorn,
+                  dressedUrl
+                );
+              } catch {
+                // keep coat composite
               }
             }
 
@@ -456,6 +458,9 @@ export function OutfitStage({
             try {
               const before = current;
               current = await stabilizeTryOnColors(before, finishData.imageUrl);
+              if (piece.category !== "shoes") {
+                current = await preserveLowerBodyFromBase(before, current);
+              }
               current = await lockFaceIdentity(
                 identityPhoto,
                 current,
@@ -555,7 +560,7 @@ export function OutfitStage({
           if (step.name) appliedNames.add(step.name);
         };
 
-        // 1) Base clothes in one call (top+bottom collage = 1 credit). Outerwear second.
+        // 1) All clothes in one request (top+bottom collage, then jacket). Accessories next.
         if (apparelPieces.length) {
           setDonePieceIds([]);
           setProgress(8);
@@ -566,18 +571,22 @@ export function OutfitStage({
           const outerPiece = apparelPieces.find(
             (p) => p.category === "outerwear"
           );
+          const allApparel = [
+            ...baseApparel,
+            ...(outerPiece ? [outerPiece] : []),
+          ];
 
           let apparelBaseBeforeOuter = current;
 
-          if (baseApparel.length) {
+          if (allApparel.length) {
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
-            setActivePieceId(baseApparel[0].id);
-            setApplyingPieceIds(baseApparel.map((p) => p.id));
+            setActivePieceId(allApparel[0].id);
+            setApplyingPieceIds(allApparel.map((p) => p.id));
             setStepLabel(
-              baseApparel.length > 1
-                ? `Dressing ${baseApparel.map((p) => p.name).join(" + ")}…`
-                : `Dressing ${baseApparel[0].name}…`
+              allApparel.length > 1
+                ? `Dressing ${allApparel.map((p) => p.name).join(" + ")}…`
+                : `Dressing ${allApparel[0].name}…`
             );
             setProgress(12);
 
@@ -588,9 +597,9 @@ export function OutfitStage({
               body: JSON.stringify({
                 personImage: current,
                 stage: "apparel",
-                maxPieces: baseApparel.length,
+                maxPieces: allApparel.length,
                 stripOuterwear: !outerPiece,
-                garments: baseApparel.map(toPayload),
+                garments: allApparel.map(toPayload),
               }),
             });
 
@@ -600,7 +609,7 @@ export function OutfitStage({
             if (failOrBilling(apparelData, apparelRes.status)) return;
 
             if (!apparelData.ok || !apparelData.imageUrl) {
-              const failedName = baseApparel[0]?.name || "clothes";
+              const failedName = allApparel[0]?.name || "clothes";
               const detail =
                 typeof apparelData.detail === "string"
                   ? apparelData.detail.slice(0, 180)
@@ -610,13 +619,55 @@ export function OutfitStage({
                   .filter(Boolean)
                   .join(" — ")
               );
-              setMissingIds(baseApparel.map((p) => p.id));
+              setMissingIds(allApparel.map((p) => p.id));
               setDressing(false);
               setActivePieceId(null);
               return;
             }
 
             let dressedUrl = apparelData.imageUrl as string;
+            const trustedBase =
+              typeof apparelData.apparelBaseUrl === "string" &&
+              apparelData.apparelBaseUrl
+                ? apparelData.apparelBaseUrl
+                : apparelBaseBeforeOuter;
+
+            if (outerPiece) {
+              setStepLabel("Keeping your trousers…");
+              try {
+                dressedUrl = await layerOuterwearPreserveBase(
+                  trustedBase,
+                  dressedUrl,
+                  {
+                    hexColors: outerPiece.hexColors,
+                    colors: outerPiece.colors,
+                  }
+                );
+              } catch {
+                // keep FASHN/Kontext result
+              }
+              try {
+                dressedUrl = await preserveLowerBodyFromBase(
+                  trustedBase,
+                  dressedUrl
+                );
+              } catch {
+                // keep coat composite
+              }
+            }
+
+            if (await hasTryOnArtifacts(dressedUrl)) {
+              if (outerPiece && trustedBase !== apparelBaseBeforeOuter) {
+                setNotice(
+                  `${outerPiece.name || "Coat"} came out glitched — left it off.`
+                );
+                setMissingIds((ids) =>
+                  ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
+                );
+                dressedUrl = trustedBase;
+              }
+            }
+
             try {
               current = await lockFaceIdentity(
                 identityPhoto,
@@ -631,7 +682,7 @@ export function OutfitStage({
             setWornUrl(current);
             setKeyConfigured(true);
             setApplyingPieceIds([]);
-            apparelBaseBeforeOuter = current;
+            apparelBaseBeforeOuter = trustedBase;
 
             if (apparelData.consumedFreeTryOn) {
               consumedFreeThisRun = true;
@@ -650,7 +701,16 @@ export function OutfitStage({
                     .filter(Boolean)
                 : []
             );
-            for (const piece of baseApparel) {
+            for (const piece of allApparel) {
+              if (
+                outerPiece &&
+                piece.id === outerPiece.id &&
+                dressedUrl === trustedBase &&
+                apparelData.imageUrl !== trustedBase
+              ) {
+                // outerwear dropped due to artifacts
+                continue;
+              }
               if (stepIds.size === 0 || stepIds.has(piece.id)) {
                 markApplied({ id: piece.id, name: piece.name });
                 setDonePieceIds((ids) =>
@@ -659,97 +719,6 @@ export function OutfitStage({
               } else {
                 setMissingIds((ids) =>
                   ids.includes(piece.id) ? ids : [...ids, piece.id]
-                );
-              }
-            }
-            setProgress(outerPiece ? 42 : 55);
-          }
-
-          if (outerPiece) {
-            if (cancelled || myId !== requestId.current || ac.signal.aborted)
-              return;
-            setActivePieceId(outerPiece.id);
-            setStepLabel(`Dressing ${outerPiece.name}…`);
-            setProgress(48);
-
-            const apparelRes = await authFetch("/api/tryon/render", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: ac.signal,
-              body: JSON.stringify({
-                personImage: current,
-                stage: "apparel",
-                maxPieces: 1,
-                garments: [toPayload(outerPiece)],
-              }),
-            });
-
-            const apparelData = await apparelRes.json();
-            if (cancelled || myId !== requestId.current || ac.signal.aborted)
-              return;
-            if (failOrBilling(apparelData, apparelRes.status)) return;
-
-            if (!apparelData.ok || !apparelData.imageUrl) {
-              setNotice(
-                `${outerPiece.name || "Outerwear"} didn’t land — continuing…`
-              );
-              setMissingIds((ids) =>
-                ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
-              );
-            } else {
-              let dressedUrl = apparelData.imageUrl as string;
-              const stepProvider =
-                Array.isArray(apparelData.steps) && apparelData.steps[0]
-                  ? String(apparelData.steps[0].provider || "")
-                  : "";
-              const usedFashnMax = stepProvider.includes("fashn");
-
-              if (!usedFashnMax) {
-                setStepLabel("Keeping your base layers…");
-                try {
-                  dressedUrl = await layerOuterwearPreserveBase(
-                    apparelBaseBeforeOuter,
-                    apparelData.imageUrl,
-                    {
-                      hexColors: outerPiece.hexColors,
-                      colors: outerPiece.colors,
-                    }
-                  );
-                } catch {
-                  dressedUrl = apparelData.imageUrl;
-                }
-              }
-
-              if (await hasTryOnArtifacts(dressedUrl)) {
-                setNotice(
-                  `${outerPiece.name || "Coat"} came out glitched — left it off. Tap to retry.`
-                );
-                setMissingIds((ids) =>
-                  ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
-                );
-                setWornUrl(apparelBaseBeforeOuter);
-                current = apparelBaseBeforeOuter;
-              } else {
-                try {
-                  current = await lockFaceIdentity(
-                    identityPhoto,
-                    dressedUrl,
-                    "strong"
-                  );
-                } catch {
-                  current = dressedUrl;
-                }
-                if (
-                  cancelled ||
-                  myId !== requestId.current ||
-                  ac.signal.aborted
-                )
-                  return;
-                setWornUrl(current);
-                setKeyConfigured(true);
-                markApplied({ id: outerPiece.id, name: outerPiece.name });
-                setDonePieceIds((ids) =>
-                  ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
                 );
               }
             }
@@ -884,12 +853,24 @@ export function OutfitStage({
             } catch {
               current = finishData.imageUrl;
             }
+            // Accessory passes sometimes invent jeans — restore trousers from
+            // the dressed clothes frame; leave feet free for shoes.
             try {
-              // Strong face restore after the whole accessory pass
+              current = await preserveLowerBodyFromBase(beforeFinish, current);
+            } catch {
+              // keep color-stabilized frame
+            }
+            const hasEyewear = finishQueue.some((p) =>
+              /glass|frame|optic|sunglass|spec/i.test(
+                `${p.name || ""} ${(p.tags || []).join(" ")}`
+              )
+            );
+            try {
+              // Soft after glasses so frames stay; strong otherwise for real skin
               current = await lockFaceIdentity(
                 identityPhoto,
                 current,
-                "strong"
+                hasEyewear ? "soft" : "strong"
               );
             } catch {
               // keep color-stabilized frame
@@ -944,9 +925,18 @@ export function OutfitStage({
         } catch {
           // keep current
         }
+        const lookHasEyewear = lookPieces.some((p) =>
+          /glass|frame|optic|sunglass|spec/i.test(
+            `${p.name || ""} ${(p.tags || []).join(" ")}`
+          )
+        );
         try {
-          // Always strong at the end — soft eye bands leave AI skin that reads as cartoon
-          current = await lockFaceIdentity(identityPhoto, current, "strong");
+          // Soft keeps sunglass frames; strong buries cartoon AI skin when no eyewear
+          current = await lockFaceIdentity(
+            identityPhoto,
+            current,
+            lookHasEyewear ? "soft" : "strong"
+          );
         } catch {
           // keep current
         }

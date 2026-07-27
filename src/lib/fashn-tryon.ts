@@ -73,13 +73,16 @@ export function apparelPromptForPiece(
   const colors = (piece.colors || []).join(", ");
   const strip = opts?.stripOuterwear ? STRIP_OUTER : "";
   if (piece.category === "outerwear") {
-    if (/blazer|sport coat|suit jacket/.test(name)) {
+    const jacketOnly =
+      "JACKET/COAT ONLY — if the product shows a full suit, use ONLY the jacket. Do NOT replace the trousers already on the person with suit pants or jeans.";
+    if (/blazer|sport coat|suit jacket|double-breast|suit\b/.test(name)) {
       return [
         KEEP_FACE,
-        "Layer this structured hip-length blazer over the existing top.",
+        "Layer this structured hip-length blazer/suit jacket over the existing top.",
+        jacketOnly,
         "Keep blazer length — not a long overcoat or trench.",
         colors ? `Match exact color: ${colors}.` : "Keep the exact product color.",
-        "Do not replace the top underneath.",
+        "Do not replace the top underneath or the bottoms already worn.",
         "Clean photoreal fabric — no black patches, holes, or glitches.",
       ].join(" ");
     }
@@ -87,6 +90,7 @@ export function apparelPromptForPiece(
       return [
         KEEP_FACE,
         "Layer this full overcoat over the existing outfit naturally.",
+        jacketOnly,
         "Smooth continuous coat fabric on both sleeves and body — no black holes, tears, or digital artifacts.",
         colors ? `Exact coat color: ${colors}.` : "Match the product coat color exactly.",
         "Keep the person's face, lower garments, and shoes unchanged.",
@@ -96,6 +100,7 @@ export function apparelPromptForPiece(
     return [
       KEEP_FACE,
       "Layer this outerwear over the existing outfit.",
+      jacketOnly,
       colors ? `Match exact color: ${colors}.` : "Keep the exact product color.",
       "Preserve the person's face, pose, and lower garments.",
       "Clean photoreal fabric — no black patches or glitches.",
@@ -167,13 +172,17 @@ export function finishPromptForPiece(piece: {
   const colors = (piece.colors || []).join(", ");
   const blob = `${piece.name || ""} ${(piece.tags || []).join(" ")}`.toLowerCase();
 
+  const keepClothes =
+    "Do NOT change trousers, jeans, jacket, sweater, shirt, or their colors. Do not invent denim. Keep the exact clothes already on the person.";
+
   if (piece.category === "shoes") {
     return [
       KEEP_FACE,
       `Replace BOTH shoes with these: ${label}.`,
-      colors ? `Exact color: ${colors}.` : "Match the product color exactly.",
-      "Keep the rest of the outfit, face, pose, and framing unchanged.",
-      "Full-body crop — head and feet both visible.",
+      colors ? `Exact shoe color: ${colors}.` : "Match the product shoe color exactly.",
+      "Change ONLY footwear below the ankles.",
+      keepClothes,
+      "Keep face, pose, and framing unchanged. Full-body crop — head and feet both visible.",
     ].join(" ");
   }
 
@@ -182,16 +191,21 @@ export function finishPromptForPiece(piece: {
       KEEP_FACE,
       `Add this bag held naturally at the side or on the shoulder: ${label}.`,
       colors ? `Bag color: ${colors}.` : "Match the product colors.",
-      "Do not change face, clothes, or shoes. Keep framing full-body.",
+      keepClothes,
+      "Do not change face or shoes. Keep framing full-body.",
     ].join(" ");
   }
 
   if (/glass|frame|optic|sunglass|spec/.test(blob)) {
     return [
       KEEP_FACE,
-      `Place these eyeglasses on the person: ${label}.`,
-      "Thin realistic frames on the existing face — do not redesign, beautify, or cartoon the face.",
-      "Keep clothes, pose, and framing unchanged.",
+      `Place ONLY these eyeglasses from the product on the person: ${label}.`,
+      colors
+        ? `Exact frame/lens colors: ${colors} — never invent neon, lime, green, or blue tints unless those colors are in the product.`
+        : "Match the product frame and lens tint exactly — never invent neon/lime/green lenses.",
+      "Thin realistic frames on the EXISTING face — do not redesign, beautify, smooth, or cartoon the face.",
+      keepClothes,
+      "Keep pose and framing unchanged.",
     ].join(" ");
   }
 
@@ -200,7 +214,9 @@ export function finishPromptForPiece(piece: {
       KEEP_FACE,
       `Add this wristwatch on the most visible wrist: ${label}.`,
       colors ? `Watch colors: ${colors}.` : "Match the product colors.",
-      "Small natural watch size. Do not change face, clothes, or shoes.",
+      "Small natural watch size.",
+      keepClothes,
+      "Do not change face or shoes.",
     ].join(" ");
   }
 
