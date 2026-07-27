@@ -575,6 +575,8 @@ export interface SuggestInput {
   /** Penalty applied to demoteIds (default -6). Use a larger negative when the occasion changes. */
   demotePenalty?: number;
   swapCategory?: Garment["category"];
+  /** When set with swapCategory, remove this exact piece (not every item in the category). */
+  replaceGarmentId?: string;
   currentOutfit?: Garment[];
   forceGarmentId?: string;
   profile?: OccasionProfile;
@@ -686,13 +688,26 @@ export function suggestOutfit(input: SuggestInput): Outfit {
   if (input.forceGarmentId && currentOutfit?.length) {
     const forced = wardrobe.find((g) => g.id === input.forceGarmentId);
     if (forced) {
-      selected = currentOutfit.filter((g) => g.category !== forced.category);
-      selected.push(forced);
+      // Replace only one piece of that category (keep other accessories)
+      const replaceId =
+        input.replaceGarmentId ||
+        input.demoteIds?.[0] ||
+        currentOutfit.find((g) => g.category === forced.category)?.id;
+      selected = replaceId
+        ? currentOutfit.filter((g) => g.id !== replaceId)
+        : currentOutfit.filter((g) => g.category !== forced.category);
+      if (!selected.some((g) => g.id === forced.id)) selected.push(forced);
     } else {
       selected = [...currentOutfit];
     }
   } else if (input.swapCategory && currentOutfit?.length) {
-    selected = currentOutfit.filter((g) => g.category !== input.swapCategory);
+    const replaceId =
+      input.replaceGarmentId ||
+      input.demoteIds?.[0] ||
+      currentOutfit.find((g) => g.category === input.swapCategory)?.id;
+    selected = replaceId
+      ? currentOutfit.filter((g) => g.id !== replaceId)
+      : currentOutfit.filter((g) => g.category !== input.swapCategory);
     const swapPool =
       input.swapCategory === "shoes"
         ? byCat("shoes").filter((g) => isRealFootwear(g))
@@ -830,10 +845,13 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     }
   }
 
-  // Final live guard: every look gets real shoes when the wardrobe has them
-  selected = ensureLookHasFootwear(selected, wardrobe, (pool, already) =>
-    pick(pool, already)
-  );
+  // Final live guard: every look gets real shoes when the wardrobe has them.
+  // Never run this on surgical swaps — it was rewriting shoes mid-swap.
+  if (!input.swapCategory && !input.forceGarmentId && !input.replaceGarmentId) {
+    selected = ensureLookHasFootwear(selected, wardrobe, (pool, already) =>
+      pick(pool, already)
+    );
+  }
 
   const colors = selected.flatMap((g) => g.hexColors);
   const name = `${style.charAt(0).toUpperCase() + style.slice(1)} for ${profile.label}`;

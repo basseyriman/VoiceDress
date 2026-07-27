@@ -32,6 +32,7 @@ import {
   phraseOccasionFromSpeech,
 } from "@/lib/styling-guide";
 import { matchGarmentFromSpeech, parseSwapSpeech } from "@/lib/garment-match";
+import { surgicalPickGarment, surgicalSwapLook } from "@/lib/surgical-swap";
 import {
   AVATAR_IDB_REF,
   clearAvatarBlob,
@@ -643,187 +644,43 @@ export const useAetherStore = create<AetherState>()(
         const { wardrobe, weather, currentOutfit, user, taste } = get();
         if (!weather || !wardrobe.length) return null;
         const stylePrefs = user?.stylePrefs;
-        const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
 
-        // Prefer "change X to Y" parsing so we match the TARGET, not the worn piece
-        const swapSpeech = garmentQuery
-          ? parseSwapSpeech(garmentQuery)
-          : { isSwap: false as const };
-        const targetQuery =
-          (swapSpeech.isSwap && swapSpeech.targetQuery) ||
-          garmentQuery ||
-          undefined;
-        const sourceQ =
-          sourceQuery ||
-          (swapSpeech.isSwap ? swapSpeech.sourceQuery : undefined) ||
-          undefined;
-        const resolvedCategory =
-          (swapSpeech.isSwap && swapSpeech.category) || category;
-
-        let forceGarmentId: string | undefined;
-        if (targetQuery) {
-          const named = matchGarmentFromSpeech(
-            targetQuery,
+        // No current look → build a fresh one
+        if (!currentOutfit?.garments?.length) {
+          const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
+          const outfit = suggestOutfit({
             wardrobe,
-            resolvedCategory
-          );
-          // Never force the piece already on them (source matched as target)
-          if (
-            named &&
-            !currentOutfit?.garments?.some((g) => g.id === named.id)
-          ) {
-            forceGarmentId = named.id;
-          } else if (named && sourceQ) {
-            // Target phrase accidentally matched the worn piece — try again
-            // excluding current look
-            const alt = matchGarmentFromSpeech(
-              targetQuery,
-              wardrobe.filter(
-                (g) => !currentOutfit?.garments?.some((c) => c.id === g.id)
-              ),
-              resolvedCategory
-            );
-            if (alt) forceGarmentId = alt.id;
-          } else if (!named) {
-            const anyCat = matchGarmentFromSpeech(targetQuery, wardrobe);
-            if (
-              anyCat &&
-              !currentOutfit?.garments?.some((g) => g.id === anyCat.id)
-            ) {
-              forceGarmentId = anyCat.id;
-            }
-          }
+            weather,
+            occasion: occasion || "today",
+            style: primaryStyle,
+            stylePrefs,
+            taste,
+          });
+          const nextTaste: TasteMemory = {
+            ...taste,
+            preferredStyle: stylePrefs?.[0] || outfit.style,
+            recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
+          };
+          set({ currentOutfit: outfit, taste: nextTaste });
+          persistOutfitAndTaste(user?.uid, outfit, nextTaste);
+          return outfit;
         }
 
-        // Surgical swap: keep every other piece id identical so try-on
-        // only re-dresses this one item (esp. when 2 accessories are on).
-        if (currentOutfit?.garments?.length) {
-          const currentGarments = currentOutfit.garments;
-
-          let replaceId: string | undefined;
-          if (sourceQ) {
-            replaceId =
-              matchGarmentFromSpeech(sourceQ, currentGarments, resolvedCategory)
-                ?.id ||
-              matchGarmentFromSpeech(sourceQ, currentGarments)?.id;
-          }
-          if (!replaceId) {
-            replaceId = currentGarments.find(
-              (g) => g.category === resolvedCategory
-            )?.id;
-          }
-          if (resolvedCategory === "accessory") {
-            const accessories = currentGarments.filter(
-              (g) => g.category === "accessory"
-            );
-            const q = `${sourceQ || ""} ${targetQuery || ""}`;
-            if (/glass|sunglass|optic|frame/i.test(q)) {
-              replaceId =
-                accessories.find((g) =>
-                  /glass|sunglass|optic|frame/i.test(
-                    `${g.name} ${(g.tags || []).join(" ")}`
-                  )
-                )?.id || replaceId;
-            } else if (/watch|wrist|chrono/i.test(q)) {
-              replaceId =
-                accessories.find((g) =>
-                  /watch|wrist|chrono/i.test(
-                    `${g.name} ${(g.tags || []).join(" ")}`
-                  )
-                )?.id || replaceId;
-            } else if (accessories.length > 1 && !sourceQ) {
-              replaceId = accessories[0]?.id || replaceId;
-            }
-          }
-
-          let nextPiece =
-            (forceGarmentId &&
-              wardrobe.find((g) => g.id === forceGarmentId)) ||
-            undefined;
-          if (!nextPiece) {
-            const pool = wardrobe.filter(
-              (g) =>
-                g.category === resolvedCategory &&
-                !currentGarments.some((c) => c.id === g.id)
-            );
-            // Prefer scored pick via suggestOutfit when available
-            const suggested = suggestOutfit({
-              wardrobe,
-              weather,
-              occasion: occasion || currentOutfit.occasion || "today",
-              style: primaryStyle,
-              stylePrefs,
-              swapCategory: forceGarmentId ? undefined : resolvedCategory,
-              forceGarmentId,
-              currentOutfit: currentGarments,
-              taste,
-              demoteIds: replaceId ? [replaceId] : undefined,
-              demotePenalty: -10,
-            });
-            const picked = suggested.garments?.find(
-              (g) =>
-                g.category === resolvedCategory &&
-                !currentGarments.some((c) => c.id === g.id)
-            );
-            nextPiece = picked || pool[0];
-          }
-
-          if (nextPiece && replaceId && nextPiece.id !== replaceId) {
-            const nextGarments = [
-              ...currentGarments.filter((g) => g.id !== replaceId),
-              nextPiece,
-            ];
-            const order = [
-              "top",
-              "dress",
-              "bottom",
-              "outerwear",
-              "shoes",
-              "accessory",
-            ] as const;
-            nextGarments.sort(
-              (a, b) =>
-                order.indexOf(a.category as (typeof order)[number]) -
-                order.indexOf(b.category as (typeof order)[number])
-            );
-            const outfit = {
-              ...currentOutfit,
-              id: `outfit_${Date.now()}`,
-              garmentIds: nextGarments.map((g) => g.id),
-              garments: nextGarments,
-              createdAt: new Date().toISOString(),
-            };
-            const nextTaste: TasteMemory = {
-              ...taste,
-              preferredStyle: stylePrefs?.[0] || outfit.style,
-              recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(
-                0,
-                20
-              ),
-            };
-            set({ currentOutfit: outfit, taste: nextTaste });
-            persistOutfitAndTaste(user?.uid, outfit, nextTaste);
-            return outfit;
-          }
-        }
-
-        // Soft demote only — don't permanently blacklist on a casual swap.
-        const rejectedFromCurrent =
-          currentOutfit?.garments?.find((g) => g.category === resolvedCategory)
-            ?.id;
-        const outfit = suggestOutfit({
+        // ALWAYS surgical when a look is on — never rebuild the whole outfit
+        const outfit = surgicalSwapLook({
           wardrobe,
           weather,
-          occasion: occasion || currentOutfit?.occasion || "today",
-          style: primaryStyle,
+          currentOutfit,
+          category,
+          style,
           stylePrefs,
-          swapCategory: forceGarmentId ? undefined : resolvedCategory,
-          forceGarmentId,
-          currentOutfit: currentOutfit?.garments,
+          occasion,
+          garmentQuery,
+          sourceQuery,
           taste,
-          demoteIds: rejectedFromCurrent ? [rejectedFromCurrent] : undefined,
-          demotePenalty: -10,
         });
+        if (!outfit || outfit === currentOutfit) return currentOutfit;
+
         const nextTaste: TasteMemory = {
           ...taste,
           preferredStyle: stylePrefs?.[0] || outfit.style,
@@ -834,66 +691,14 @@ export const useAetherStore = create<AetherState>()(
         return outfit;
       },
       pickGarmentById: (garmentId) => {
-        const { wardrobe, weather, currentOutfit, taste, user } = get();
-        if (!weather || !currentOutfit?.garments || !wardrobe.length) return null;
+        const { wardrobe, currentOutfit, taste, user } = get();
+        if (!currentOutfit?.garments || !wardrobe.length) return null;
         const piece = wardrobe.find((g) => g.id === garmentId);
         if (!piece) return null;
 
-        // Surgical: replace only the matching category/id, keep every other piece
-        const replaceId =
-          currentOutfit.garments.find((g) => g.id === garmentId)?.id ||
-          currentOutfit.garments.find((g) => g.category === piece.category)?.id;
-        if (replaceId === piece.id) {
-          // Already wearing it — no-op (avoid full re-dress)
-          return currentOutfit;
-        }
-        if (replaceId) {
-          const nextGarments = [
-            ...currentOutfit.garments.filter((g) => g.id !== replaceId),
-            piece,
-          ];
-          const order = [
-            "top",
-            "dress",
-            "bottom",
-            "outerwear",
-            "shoes",
-            "accessory",
-          ] as const;
-          nextGarments.sort(
-            (a, b) =>
-              order.indexOf(a.category as (typeof order)[number]) -
-              order.indexOf(b.category as (typeof order)[number])
-          );
-          const outfit = {
-            ...currentOutfit,
-            id: `outfit_${Date.now()}`,
-            garmentIds: nextGarments.map((g) => g.id),
-            garments: nextGarments,
-            createdAt: new Date().toISOString(),
-          };
-          const nextTaste: TasteMemory = {
-            ...taste,
-            preferredStyle: user?.stylePrefs?.[0] || outfit.style,
-            recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
-          };
-          set({ currentOutfit: outfit, taste: nextTaste });
-          persistOutfitAndTaste(user?.uid, outfit, nextTaste);
-          return outfit;
-        }
+        const outfit = surgicalPickGarment(currentOutfit, piece);
+        if (outfit === currentOutfit) return currentOutfit;
 
-        const outfit = suggestOutfit({
-          wardrobe,
-          weather,
-          occasion: currentOutfit.occasion,
-          style: resolvePrimaryStyle(user?.stylePrefs, currentOutfit.style),
-          stylePrefs: user?.stylePrefs,
-          forceGarmentId: garmentId,
-          currentOutfit: currentOutfit.garments,
-          taste,
-          demoteIds: replaceId ? [replaceId] : undefined,
-          demotePenalty: -8,
-        });
         const nextTaste: TasteMemory = {
           ...taste,
           preferredStyle: user?.stylePrefs?.[0] || outfit.style,

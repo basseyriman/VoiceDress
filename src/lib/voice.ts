@@ -8,6 +8,10 @@ import {
   parseVoiceIntent,
   shouldPreferOutfitChat,
 } from "@/lib/outfit-engine";
+import {
+  inferCategoryFromSpeech,
+  parseSwapSpeech,
+} from "@/lib/garment-match";
 import type { Garment } from "@/lib/types";
 
 export type SpeakFn = (text: string) => void;
@@ -114,7 +118,7 @@ export async function handleVoiceCommandAsync(
   const genAtStart = getSpeakGeneration();
   const ctx = actions.getContext?.() || {};
   const hasLook = Array.isArray(ctx.outfit) && ctx.outfit.length > 0;
-  // "Change the sweater to a t-shirt" must swap one piece — never chat/re-suggest
+  // Any piece-swap speech while a look is on — never rebuild a new outfit
   const clearSwap = isClearPieceSwap(transcript);
   const chatting =
     !clearSwap &&
@@ -130,13 +134,29 @@ export async function handleVoiceCommandAsync(
     return { reply, ...meta };
   };
 
-  // Explicit piece swaps take the surgical keyword path
-  if (clearSwap && hasLook) {
+  // Explicit piece swaps take the surgical keyword path — always
+  if (hasLook && clearSwap) {
     const parsed = parseVoiceIntent(transcript);
     if (parsed.intent === "swap_item") {
       const reply = await applyLocalIntent(parsed, actions);
       return finish(reply, { source: "keyword-swap" as const, parsed });
     }
+    // Parser missed swap_item — still swap surgically from speech
+    const swap = parseSwapSpeech(transcript);
+    const cat = (swap.category ||
+      inferCategoryFromSpeech(transcript) ||
+      "top") as Garment["category"];
+    actions.swapFromVoice(
+      cat,
+      undefined,
+      undefined,
+      swap.targetQuery || transcript,
+      swap.sourceQuery
+    );
+    return finish(`Swapping your ${cat} from the wardrobe.`, {
+      source: "keyword-swap" as const,
+      swap,
+    });
   }
 
   // Follow-ups about the suggested look → stylist chat (not weather dump / not re-suggest)
@@ -177,19 +197,41 @@ export async function handleVoiceCommandAsync(
     }
     const data = await res.json();
     let llmActions = Array.isArray(data.actions) ? data.actions : [];
-    // Hard guard: piece-swap speech must never trigger a full new look
-    if (hasLook && clearSwap) {
-      llmActions = llmActions.filter(
-        (a: { tool?: string }) => a?.tool !== "suggest_look"
-      );
+    // Hard guard: while a look is on, never accept suggest_look for swap-like speech
+    if (hasLook) {
+      const wantsNewOccasion =
+        /\b(dress me|new look|new outfit|start over|for (dinner|drinks|wedding|meeting|travel|work))\b/i.test(
+          transcript
+        ) && !clearSwap;
+      if (!wantsNewOccasion) {
+        llmActions = llmActions.filter(
+          (a: { tool?: string }) => a?.tool !== "suggest_look"
+        );
+      }
       if (
+        clearSwap &&
         !llmActions.some(
           (a: { tool?: string }) =>
             a?.tool === "swap_piece" || a?.tool === "pick_garment"
         )
       ) {
         const parsed = parseVoiceIntent(transcript);
-        const reply = await applyLocalIntent(parsed, actions);
+        const reply = await applyLocalIntent(
+          parsed.intent === "swap_item"
+            ? parsed
+            : {
+                ...parsed,
+                intent: "swap_item" as const,
+                entities: {
+                  ...parsed.entities,
+                  item:
+                    parsed.entities.item ||
+                    inferCategoryFromSpeech(transcript) ||
+                    "top",
+                },
+              },
+          actions
+        );
         return finish(reply, { source: "keyword-swap" as const, parsed });
       }
     }

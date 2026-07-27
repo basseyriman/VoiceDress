@@ -260,14 +260,16 @@ export function OutfitStage({
       const prevIds = lookIdsRef.current;
       const addedIds = nextIds.filter((id) => !prevIds.includes(id));
       const removedIds = prevIds.filter((id) => !nextIds.includes(id));
+      // Full re-dress only on retry, or when we don't yet have a dressed photo.
+      // Never use empty lookIdsRef alone — that forced every swap to start over.
+      const hasDressedPhoto = Boolean(
+        wornUrlRef.current && wornUrlRef.current !== displayAvatar
+      );
       const forceFull =
-        retryNonce !== lastRetryNonceRef.current ||
-        !wornUrlRef.current ||
-        prevIds.length === 0;
+        retryNonce !== lastRetryNonceRef.current || !hasDressedPhoto;
       lastRetryNonceRef.current = retryNonce;
 
       // Same pieces already on the photo — don't restart a full dress
-      // (outfit object can change id/metadata without changing garments)
       if (
         !forceFull &&
         addedIds.length === 0 &&
@@ -280,6 +282,7 @@ export function OutfitStage({
 
       const replacePieceOnly =
         !forceFull &&
+        hasDressedPhoto &&
         addedIds.length === 1 &&
         removedIds.length <= 1 &&
         Math.abs(nextIds.length - prevIds.length) <= 1
