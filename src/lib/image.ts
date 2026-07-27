@@ -830,11 +830,51 @@ export async function keepUpperBlendLower(
 }
 
 /**
+ * Hard feet composite — dress/clothes above the seam stay pixel-identical;
+ * only the foot band comes from the shoe edit (no soft feather mush).
+ */
+export async function hardFeetComposite(
+  dressedSrc: string,
+  shoeEditSrc: string,
+  seam = 0.84
+): Promise<string> {
+  const [dressed, shoes] = await Promise.all([
+    loadHtmlImage(dressedSrc),
+    loadHtmlImage(shoeEditSrc),
+  ]);
+  const w = dressed.width;
+  const h = dressed.height;
+  if (w < 8 || h < 8) return dressedSrc;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dressedSrc;
+
+  // Full dressed look first
+  ctx.drawImage(dressed, 0, 0, w, h);
+  // Paste only the foot band from the shoe edit — hard edge, no gradient
+  const y0 = Math.floor(h * seam);
+  ctx.drawImage(
+    shoes,
+    0,
+    y0,
+    w,
+    h - y0,
+    0,
+    y0,
+    w,
+    h - y0
+  );
+  return canvas.toDataURL("image/jpeg", 0.96);
+}
+
+/**
  * After shoe finish: keep the dressed clothes photo above the ankles and only
  * take feet from the shoe edit. Rolls back only if the mid-body/dress was rewritten.
  *
- * Important: dress looks MUST still replace original boots from the body photo —
- * skipping shoes left the avatar’s own boots on screen (looked like “random knee boots”).
+ * Dress looks use a lower seam so original avatar boots (often mid-calf) get replaced.
  */
 export async function protectDressedLookAfterShoes(
   dressedSrc: string,
@@ -842,17 +882,12 @@ export async function protectDressedLookAfterShoes(
   opts?: { hasDress?: boolean }
 ): Promise<{ url: string; rolledBack: boolean }> {
   const hasDress = Boolean(opts?.hasDress);
-  // Hard feet strip. Dresses use a slightly higher seam so the hem stays intact
-  // while original boots still get replaced in the foot band.
-  const seam = hasDress ? 0.905 : 0.915;
-  const feather = 0.01;
+  // Lower seam on dresses = more of the original boots get overwritten by shoe AI.
+  const seam = hasDress ? 0.82 : 0.88;
 
   let blended: string;
   try {
-    blended = await keepUpperBlendLower(dressedSrc, shoeEditSrc, {
-      seam,
-      feather,
-    });
+    blended = await hardFeetComposite(dressedSrc, shoeEditSrc, seam);
   } catch {
     return { url: dressedSrc, rolledBack: true };
   }
@@ -861,7 +896,8 @@ export async function protectDressedLookAfterShoes(
     if (await hasTryOnArtifacts(blended)) {
       return { url: dressedSrc, rolledBack: true };
     }
-    if (await midBodyDriftTooHigh(dressedSrc, blended)) {
+    // Only check mid-body ABOVE the seam — feet are allowed to change
+    if (await midBodyDriftTooHigh(dressedSrc, blended, { y1: seam - 0.02 })) {
       return { url: dressedSrc, rolledBack: true };
     }
   } catch {
@@ -874,7 +910,8 @@ export async function protectDressedLookAfterShoes(
 /** True if the clothed mid-body drifted a lot vs the clean clothes frame. */
 export async function midBodyDriftTooHigh(
   baseSrc: string,
-  editedSrc: string
+  editedSrc: string,
+  opts?: { y0?: number; y1?: number }
 ): Promise<boolean> {
   const [base, edited] = await Promise.all([
     loadHtmlImage(baseSrc),
@@ -897,10 +934,11 @@ export async function midBodyDriftTooHigh(
   const b = mk(edited);
   if (!a || !b) return false;
 
-  const y0 = Math.floor(h * 0.34);
-  const y1 = Math.floor(h * 0.86);
+  const y0 = Math.floor(h * (opts?.y0 ?? 0.34));
+  const y1 = Math.floor(h * (opts?.y1 ?? 0.86));
   const x0 = Math.floor(w * 0.18);
   const x1 = Math.floor(w * 0.82);
+  if (y1 <= y0 + 4) return false;
   let sum = 0;
   let n = 0;
   for (let y = y0; y < y1; y += 2) {
@@ -914,7 +952,6 @@ export async function midBodyDriftTooHigh(
     }
   }
   if (!n) return false;
-  // ~35+ mean channel drift ⇒ clothes were rewritten
   return sum / n > 42;
 }
 

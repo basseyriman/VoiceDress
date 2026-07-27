@@ -1398,31 +1398,31 @@ export function OutfitStage({
               </div>
             )}
 
-            {!error && notice && (
-              <div className="absolute inset-x-3 bottom-14 z-30 rounded-2xl border border-line bg-ink/85 px-3 py-2.5 text-xs text-mist backdrop-blur-md sm:inset-x-4 sm:bottom-16">
-                {notice}
-              </div>
-            )}
-
-            <AnimatePresence>
-              {!dressing && wornUrl && outfit && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  className="pointer-events-none absolute inset-x-3 bottom-3 z-20 max-w-[90%] rounded-2xl border border-line bg-ink/80 px-3 py-2 backdrop-blur-md sm:left-4 sm:right-auto sm:max-w-[75%]"
-                >
-                  <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
-                    Ready · dressed for
-                  </p>
-                  <p className="font-display text-sm text-ivory">
-                    {outfit.occasion}
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {/* Status chips live BELOW the photo — never overlay face or shoes */}
           </div>
+
+          <AnimatePresence>
+            {!dressing && wornUrl && outfit && (
+              <motion.div
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.35 }}
+                className="mt-3 rounded-2xl border border-line bg-ink/60 px-3 py-2"
+              >
+                <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
+                  Ready · dressed for
+                </p>
+                <p className="font-display text-sm text-ivory">{outfit.occasion}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {!error && notice && (
+            <div className="mt-2 rounded-2xl border border-line bg-ink/60 px-3 py-2.5 text-xs text-mist">
+              {notice}
+            </div>
+          )}
 
           {/* Mobile: piece status under the photo — contained so it never blows page width */}
           {dressing && lookPieces.length > 0 && (

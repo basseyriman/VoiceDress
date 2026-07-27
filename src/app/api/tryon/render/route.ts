@@ -227,9 +227,9 @@ function shoeGlassesPrompt(piece: Piece): string {
       `Change ONLY the footwear on BOTH feet using image 2 (${look}).`,
       boot
         ? "If image 2 is boots, keep boot height realistic but do not cover or rewrite the dress/skirt/trousers above the boot shaft."
-        : "These are shoes/pumps/flats/sneakers — ankle height only. Do NOT paint mid-calf or knee boots. Do NOT extend footwear up the legs.",
+        : "These are shoes/pumps/flats/sneakers/heels — ankle height or lower ONLY. Completely REMOVE any existing boots, knee-highs, or mid-calf footwear from image 1. Do NOT paint mid-calf or knee boots. Do NOT extend footwear up the legs.",
       "Keep the dress, skirt, trousers, jacket, and everything from mid-shin upward pixel-identical to image 1 — do not blur, feather, recolor, or regenerate the garment hem.",
-      "Match shoe color from image 2 exactly. Do not invent denim. Do not alter face, torso, or background.",
+      "Match shoe color and silhouette from image 2 exactly. Do not invent denim. Do not alter face, torso, or background.",
     ].join(" ");
   }
   return [
@@ -572,6 +572,18 @@ async function applyFinishPiece(opts: {
       );
     }
     return tryKontext();
+  }
+
+  // Shoes: prefer OpenAI when available — Kontext often leaves/extends original boots
+  if (piece.category === "shoes") {
+    const openaiShoes = await tryOpenAI();
+    if (openaiShoes?.ok) return openaiShoes;
+    if (openaiShoes && !openaiShoes.ok) {
+      console.warn(
+        `[tryon] OpenAI shoes failed for ${piece.name || "shoes"}, trying Kontext:`,
+        openaiShoes.detail?.slice(0, 200)
+      );
+    }
   }
 
   return tryKontext();
