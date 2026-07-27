@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { LOOK_TOPUP_PACKS, PLANS } from "@/lib/stripe";
+import {
+  LIST_PRICE_MONTHLY_GBP,
+  LIST_PRICE_YEARLY_GBP,
+  LOOK_TOPUP_PACKS,
+  PLANS,
+} from "@/lib/stripe";
 import { authFetch } from "@/lib/auth-fetch";
 import { useAetherStore } from "@/store/aether-store";
 import {
@@ -13,6 +18,70 @@ import {
   photoTryOnCredits,
   photoTryOnsUsedThisMonth,
 } from "@/lib/entitlement";
+import type { UserProfile } from "@/lib/types";
+
+function statusCopy(user: UserProfile | null | undefined) {
+  const status = user?.subscriptionStatus || "none";
+  if (status === "none") return "Not started";
+  if (status === "trialing") {
+    const ends = user?.trialEndsAt
+      ? new Date(user.trialEndsAt).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        })
+      : null;
+    return ends ? `Trial · ends ${ends}` : "Trial";
+  }
+  if (status === "active") return "Active";
+  if (status === "canceled") return "Canceled";
+  return status;
+}
+
+function TopUpGrid({
+  loading,
+  onBuy,
+  emphasized,
+}: {
+  loading: string | null;
+  onBuy: (id: string) => void;
+  emphasized: boolean;
+}) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2">
+      {LOOK_TOPUP_PACKS.map((pack) => (
+        <div
+          key={pack.id}
+          className={
+            emphasized
+              ? "relative rounded-[1.75rem] border border-champagne/30 bg-champagne/[0.07] p-6"
+              : "relative rounded-[1.75rem] border border-line bg-white/[0.02] p-6"
+          }
+        >
+          {"badge" in pack && pack.badge ? (
+            <span className="absolute right-5 top-5 text-[10px] uppercase tracking-[0.2em] text-champagne">
+              {pack.badge}
+            </span>
+          ) : null}
+          <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
+          <p className="mt-3 font-display text-4xl text-ivory">
+            £{pack.priceGbp}
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-mist">
+            {pack.description}
+          </p>
+          <Button
+            className="mt-6 w-full"
+            variant={emphasized ? "primary" : "outline"}
+            disabled={loading === pack.id}
+            onClick={() => onBuy(pack.id)}
+          >
+            {loading === pack.id ? "Redirecting…" : `Buy ${pack.looks} looks`}
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function BillingPage() {
   const user = useAetherStore((s) => s.user);
@@ -82,8 +151,6 @@ export default function BillingPage() {
         return;
       }
 
-      // Stripe not fully configured — ensure a server-side trial instead of faking paid.
-      // Top-ups need live Stripe; don't fake credits.
       if (planId.startsWith("looks_")) {
         setMessage(
           data.message ||
@@ -124,193 +191,218 @@ export default function BillingPage() {
     }
   };
 
-  const statusLabel =
-    user?.subscriptionStatus === "none" || !user?.subscriptionStatus
-      ? "Not started"
-      : user.subscriptionStatus;
   const member = isMembershipActive(user);
   const credits = photoTryOnCredits(user);
+  const used = photoTryOnsUsedThisMonth(user);
+  const remaining = Math.max(0, PAID_PHOTO_TRYONS_PER_MONTH - used);
+  const usagePct = Math.min(
+    100,
+    Math.round((used / PAID_PHOTO_TRYONS_PER_MONTH) * 100)
+  );
+  const topupUrgent = member && remaining <= 6;
+  const freeUsed =
+    typeof user?.freePhotoTryOnsUsed === "number"
+      ? user.freePhotoTryOnsUsed
+      : 0;
 
   return (
-    <div className="space-y-8 pb-20">
-      <div>
-        <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-          Membership
-        </p>
-        <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
-          Membership
-        </h1>
-        <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
-          One on-photo look is free. Then £19/month or £149/year — both include a
-          7-day trial and 30 full on-photo looks per month. Status:{" "}
-          <span className="capitalize text-champagne">{statusLabel}</span>
-          {user?.trialEndsAt && user.subscriptionStatus === "trialing" ? (
-            <span className="text-mist">
-              {" "}
-              · ends{" "}
-              {new Date(user.trialEndsAt).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-              })}
-            </span>
-          ) : null}
-          {typeof user?.freePhotoTryOnsUsed === "number" &&
-          user.subscriptionStatus === "none" ? (
-            <span className="text-mist">
-              {" "}
-              · free looks used {user.freePhotoTryOnsUsed}/1
-            </span>
-          ) : null}
-          {member ? (
-            <span className="text-mist">
-              {" "}
-              · looks this month {photoTryOnsUsedThisMonth(user)}/
-              {PAID_PHOTO_TRYONS_PER_MONTH}
-              {credits > 0 ? ` · ${credits} top-up banked` : ""}
-            </span>
-          ) : null}
-        </p>
-      </div>
+    <div className="space-y-14 pb-20">
+      {member ? (
+        <header className="max-w-2xl">
+          <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+            VoiceDress
+          </p>
+          <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
+            Your membership
+          </h1>
+          <p className="mt-3 text-sm text-mist">
+            Status{" "}
+            <span className="text-champagne">{statusCopy(user)}</span>
+          </p>
 
-      {message && (
-        <div className="rounded-2xl border border-champagne/30 bg-champagne/10 px-4 py-3 text-sm text-ivory">
+          <div className="mt-10">
+            <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+              On-photo looks
+            </p>
+            <p className="mt-3 font-display text-6xl leading-none tracking-tight text-ivory sm:text-7xl">
+              {used}
+              <span className="text-mist">/{PAID_PHOTO_TRYONS_PER_MONTH}</span>
+            </p>
+            <div
+              className="mt-6 h-[2px] w-full max-w-sm overflow-hidden bg-white/10"
+              role="progressbar"
+              aria-valuenow={used}
+              aria-valuemin={0}
+              aria-valuemax={PAID_PHOTO_TRYONS_PER_MONTH}
+              aria-label="Looks used this month"
+            >
+              <div
+                className="h-full bg-champagne transition-[width] duration-700 ease-out"
+                style={{ width: `${usagePct}%` }}
+              />
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-mist">
+              {remaining === 0
+                ? "Included looks are used for this month."
+                : `${remaining} included look${remaining === 1 ? "" : "s"} left this month.`}
+              {credits > 0
+                ? ` · ${credits} top-up banked`
+                : " · Voice swaps stay unlimited."}
+            </p>
+          </div>
+        </header>
+      ) : (
+        <header className="max-w-xl">
+          <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+            VoiceDress
+          </p>
+          <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
+            Membership
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-mist">
+            One on-photo look is free. Then £{LIST_PRICE_MONTHLY_GBP}/month or £
+            {LIST_PRICE_YEARLY_GBP}/year — 7-day trial,{" "}
+            {PAID_PHOTO_TRYONS_PER_MONTH} full looks each month, unlimited voice
+            styling.
+          </p>
+          <p className="mt-2 text-sm text-mist">
+            Status{" "}
+            <span className="capitalize text-champagne">{statusCopy(user)}</span>
+            {user?.subscriptionStatus === "none" ? (
+              <span>
+                {" "}
+                · free looks used {freeUsed}/1
+              </span>
+            ) : null}
+          </p>
+        </header>
+      )}
+
+      {message ? (
+        <div className="max-w-xl border-l border-champagne/50 pl-4 text-sm text-ivory">
           {message}
         </div>
-      )}
+      ) : null}
 
-      {/* Members see top-ups first — that’s the action they need after the monthly 30 */}
-      {member && (
-        <div id="topup" className="scroll-mt-24 space-y-4">
-          <div>
+      {member ? (
+        <>
+          <section id="topup" className="scroll-mt-24 space-y-5">
+            <div className="max-w-xl">
+              <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+                Top up
+              </p>
+              <h2 className="mt-2 font-display text-3xl text-ivory">
+                {topupUrgent
+                  ? "Need more on-photo looks?"
+                  : "Extra looks when you need them"}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-mist">
+                {topupUrgent
+                  ? `Packs bank until you use them. Your plan’s ${PAID_PHOTO_TRYONS_PER_MONTH} reset each month.`
+                  : `Your plan includes ${PAID_PHOTO_TRYONS_PER_MONTH} full looks each month. Buy a pack anytime — banked after included looks run out.`}
+              </p>
+            </div>
+            <TopUpGrid
+              loading={loading}
+              onBuy={checkout}
+              emphasized={topupUrgent}
+            />
+          </section>
+
+          <section className="max-w-xl space-y-4 border-t border-line pt-12">
             <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-              Top up
+              Included
             </p>
-            <h2 className="mt-2 font-display text-3xl text-ivory">
-              Need more on-photo looks?
+            <h2 className="font-display text-2xl text-ivory">
+              What’s in your membership
             </h2>
-            <p className="mt-2 max-w-xl text-sm text-mist">
-              Your plan includes {PAID_PHOTO_TRYONS_PER_MONTH} full on-photo looks
-              each month. When those are used, buy a pack below — banked until you
-              use them. Voice swaps stay unlimited.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {LOOK_TOPUP_PACKS.map((pack) => (
-              <div
-                key={pack.id}
-                className="relative rounded-[1.75rem] border border-champagne/25 bg-champagne/[0.06] p-6"
-              >
-                {"badge" in pack && pack.badge ? (
-                  <span className="absolute right-5 top-5 rounded-full border border-champagne/40 bg-champagne/15 px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-champagne">
-                    {pack.badge}
-                  </span>
-                ) : null}
-                <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
-                <p className="mt-2 font-display text-4xl text-ivory">
-                  £{pack.priceGbp}
-                </p>
-                <p className="mt-2 text-sm text-mist">{pack.description}</p>
-                <Button
-                  className="mt-6 w-full"
-                  disabled={loading === pack.id}
-                  onClick={() => checkout(pack.id)}
-                >
-                  {loading === pack.id
-                    ? "Redirecting…"
-                    : `Buy ${pack.looks} looks`}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {PLANS.map((plan) => (
-          <div
-            key={plan.id}
-            className="glass shine-border relative rounded-[2rem] p-8"
-          >
-            {plan.badge && (
-              <span className="absolute right-6 top-6 rounded-full border border-champagne/40 bg-champagne/15 px-3 py-1 text-[10px] uppercase tracking-wider text-champagne">
-                {plan.badge}
-              </span>
-            )}
-            <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-              {plan.interval}
-            </p>
-            <h2 className="mt-2 font-display text-3xl text-ivory">{plan.name}</h2>
-            <p className="mt-4 font-display text-5xl text-ivory">
-              £{plan.price}
-              <span className="text-base text-mist">/{plan.interval}</span>
-            </p>
-            <p className="mt-3 text-sm text-mist">{plan.description}</p>
-            <ul className="mt-6 space-y-2">
-              {plan.features.map((f) => (
+            <ul className="space-y-2.5">
+              {[
+                `${PAID_PHOTO_TRYONS_PER_MONTH} full on-photo looks / month`,
+                "Unlimited voice styling & piece swaps",
+                "Weather-aware suggestions",
+                "Shopify sync + add from order photo",
+              ].map((f) => (
                 <li
                   key={f}
-                  className="flex items-start gap-2 text-sm text-ivory-muted"
+                  className="flex items-start gap-2.5 text-sm text-ivory-muted"
                 >
                   <Check className="mt-0.5 h-4 w-4 shrink-0 text-champagne" />
                   {f}
                 </li>
               ))}
             </ul>
-            <Button
-              className="mt-8 w-full"
-              disabled={member || loading === plan.id}
-              onClick={() => checkout(plan.id)}
-            >
-              {member
-                ? "Included in your membership"
-                : loading === plan.id
-                  ? "Redirecting…"
-                  : "Start 7-day trial"}
-            </Button>
-          </div>
-        ))}
-      </div>
-
-      {!member && (
-        <div id="topup" className="scroll-mt-24 space-y-4 opacity-90">
-          <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-              Top up
+            <p className="pt-2 text-sm text-mist">
+              From £{LIST_PRICE_MONTHLY_GBP}/month · Annual £
+              {LIST_PRICE_YEARLY_GBP} saves £
+              {LIST_PRICE_MONTHLY_GBP * 12 - LIST_PRICE_YEARLY_GBP} vs monthly.
             </p>
-            <h2 className="mt-2 font-display text-3xl text-ivory">
-              Extra looks after your monthly 30
-            </h2>
-            <p className="mt-2 max-w-xl text-sm text-mist">
-              Available once you’re on a trial or paid plan. Top-ups are banked
-              and used after your included looks.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            {LOOK_TOPUP_PACKS.map((pack) => (
+          </section>
+        </>
+      ) : (
+        <>
+          <section className="grid gap-6 lg:grid-cols-2">
+            {PLANS.map((plan) => (
               <div
-                key={pack.id}
-                className="relative rounded-[1.75rem] border border-line bg-white/[0.02] p-6"
+                key={plan.id}
+                className="glass shine-border relative rounded-[2rem] p-8"
               >
-                {"badge" in pack && pack.badge ? (
-                  <span className="absolute right-5 top-5 rounded-full border border-champagne/40 bg-champagne/15 px-2.5 py-0.5 text-[10px] uppercase tracking-wider text-champagne">
-                    {pack.badge}
+                {plan.badge ? (
+                  <span className="absolute right-6 top-6 text-[10px] uppercase tracking-[0.2em] text-champagne">
+                    {plan.badge}
                   </span>
                 ) : null}
-                <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
-                <p className="mt-2 font-display text-4xl text-ivory">
-                  £{pack.priceGbp}
+                <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+                  {plan.interval}
                 </p>
-                <p className="mt-2 text-sm text-mist">{pack.description}</p>
-                <Button className="mt-6 w-full" disabled>
-                  Members only
+                <h2 className="mt-2 font-display text-3xl text-ivory">
+                  {plan.name}
+                </h2>
+                <p className="mt-4 font-display text-5xl text-ivory">
+                  £{plan.price}
+                  <span className="text-base text-mist">/{plan.interval}</span>
+                </p>
+                <p className="mt-3 text-sm text-mist">{plan.description}</p>
+                <ul className="mt-6 space-y-2">
+                  {plan.features.map((f) => (
+                    <li
+                      key={f}
+                      className="flex items-start gap-2 text-sm text-ivory-muted"
+                    >
+                      <Check className="mt-0.5 h-4 w-4 shrink-0 text-champagne" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  className="mt-8 w-full"
+                  disabled={loading === plan.id}
+                  onClick={() => checkout(plan.id)}
+                >
+                  {loading === plan.id ? "Redirecting…" : "Start 7-day trial"}
                 </Button>
-                <p className="mt-2 text-[11px] text-mist">
-                  Start a trial or plan first, then top up anytime.
-                </p>
               </div>
             ))}
-          </div>
-        </div>
+          </section>
+
+          <section
+            id="topup"
+            className="scroll-mt-24 max-w-xl space-y-2 border-t border-line pt-12"
+          >
+            <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+              After membership
+            </p>
+            <h2 className="font-display text-2xl text-ivory">
+              Extra looks when you need them
+            </h2>
+            <p className="text-sm leading-relaxed text-mist">
+              Top-up packs (£{LOOK_TOPUP_PACKS[0].priceGbp} for{" "}
+              {LOOK_TOPUP_PACKS[0].looks}, £{LOOK_TOPUP_PACKS[1].priceGbp} for{" "}
+              {LOOK_TOPUP_PACKS[1].looks}) are available once you’re on a trial
+              or paid plan — banked until used.
+            </p>
+          </section>
+        </>
       )}
     </div>
   );
