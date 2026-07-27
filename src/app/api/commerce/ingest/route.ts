@@ -12,7 +12,7 @@ import {
   sanitizeGarmentCategory,
 } from "@/lib/commerce";
 import type { CommerceSource, Formality, Garment } from "@/lib/types";
-import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
+import { isAuthedUser, requireAuth } from "@/lib/api-auth";
 
 const garmentExtractSchema = z.object({
   items: z.array(
@@ -47,7 +47,7 @@ const garmentExtractSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const auth = await requireEntitled(req);
+  const auth = await requireAuth(req);
   if (!isAuthedUser(auth)) return auth;
 
   const body = await req.json();

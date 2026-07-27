@@ -3,10 +3,10 @@ import { suggestOutfit } from "@/lib/outfit-engine";
 import { inferOccasionProfile } from "@/lib/occasion-profile";
 import type { Garment, TasteMemory, WeatherSnapshot } from "@/lib/types";
 import type { OccasionProfile } from "@/lib/occasion-profile";
-import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
+import { isAuthedUser, requireAuth } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireEntitled(req);
+  const auth = await requireAuth(req);
   if (!isAuthedUser(auth)) return auth;
 
   const body = await req.json();
