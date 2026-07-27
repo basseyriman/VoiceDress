@@ -76,8 +76,8 @@ function WardrobeOnboardingInner() {
             Add what you already own
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-mist">
-            Connect a store or upload a receipt / product photo so we can dress
-            looks from your real pieces — not placeholders.
+            Connect a store or upload several receipts / product photos at once
+            so we can dress looks from your real pieces — not placeholders.
           </p>
 
           <div className="mt-8">
