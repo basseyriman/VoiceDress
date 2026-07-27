@@ -29,12 +29,21 @@ export function isUnderwearOrLounge(g: Named): boolean {
   );
 }
 
-/** Real shoes/boots — excludes hosiery mis-tagged as shoes. */
+/** Real shoes/boots — never trust a shoes label on shirts/apparel. */
 export function isRealFootwear(g: Named): boolean {
   if (isHosieryOrSocks(g)) return false;
-  if (g.category === "shoes") return true;
   const t = blobOf(g);
-  return /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxfords?|derbys?|brogues?|mules?|pumps?|espadrilles?|flats?|ballet\s*flats?|wedges?|stilettos?|slingbacks?|chelsea|derby|monk\s*strap|dress\s*shoe)\b/.test(
+  // "White Oxford Shirt" must never count as footwear
+  if (
+    /\b(shirt|blouse|tee|t-shirt|polo|sweater|jumper|hoodie|trouser|jeans?|pants?|skirt|jacket|coat|blazer)\b/.test(
+      t
+    ) &&
+    !/\b(dress\s*shoes?)\b/.test(t)
+  ) {
+    return false;
+  }
+  if (g.category === "shoes") return true;
+  return /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxford\s*shoes?|\boxfords\b|derbys?|brogues?|mules?|pumps?|espadrilles?|flats?|ballet\s*flats?|wedges?|stilettos?|slingbacks?|chelsea|derby|monk\s*strap)\b/.test(
     t
   );
 }
@@ -51,15 +60,24 @@ export function inferCategoryFromText(
   const t = `${name} ${brand} ${tags.join(" ")}`.toLowerCase();
   if (!t.trim()) return null;
 
-  // Order matters: hosiery before shoes, dress before top, etc.
+  // Order matters: hosiery → tops (oxford shirt) → shoes → …
   if (
     /\b(socks?|stockings?|tights|hosiery|no-?show)\b/.test(t) ||
     isUnderwearOrLounge({ name, tags, brand })
   ) {
     return "accessory";
   }
+  // Shirt / top BEFORE footwear — "Oxford Shirt" must not become shoes
   if (
-    /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxfords?|derbys?|brogues?|mules?|pumps?|espadrilles?|flats?|ballet\s*flats?|wedges?|stilettos?|slingbacks?|chelsea\s*boots?)\b/.test(
+    /\b(shirt|tee|t-shirt|polo|blouse|knit|sweater|jumper|hoodie|crewneck|tank|vest|cardigan|camisole|bodysuit|quarter[- ]?zip)\b/.test(
+      t
+    )
+  ) {
+    if (/\b(hoodie|overshirt)\b/.test(t)) return "outerwear";
+    return "top";
+  }
+  if (
+    /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxford\s*shoes?|\boxfords\b|derbys?|brogues?|mules?|pumps?|espadrilles?|flats?|ballet\s*flats?|wedges?|stilettos?|slingbacks?|chelsea\s*boots?)\b/.test(
       t
     )
   ) {
@@ -70,7 +88,6 @@ export function inferCategoryFromText(
       t
     )
   ) {
-    // "shirt dress" is dress; plain "dress shirt" is top — handled below
     if (/\bdress\s*shirt\b|\bdress\s*shoe/.test(t)) {
       /* fall through */
     } else {
@@ -101,14 +118,6 @@ export function inferCategoryFromText(
   ) {
     return "accessory";
   }
-  if (
-    /\b(shirt|tee|t-shirt|polo|blouse|knit|sweater|jumper|hoodie|crewneck|oxford|tank|vest|cardigan|camisole|bodysuit)\b/.test(
-      t
-    )
-  ) {
-    if (/\b(hoodie|overshirt)\b/.test(t)) return "outerwear";
-    return "top";
-  }
   return null;
 }
 
@@ -118,6 +127,8 @@ const CONFLICTS: Array<{
   reason: string;
 }> = [
   { when: "shoes", inferred: "accessory", reason: "hosiery_or_small_goods" },
+  { when: "shoes", inferred: "top", reason: "shirt_as_shoes" },
+  { when: "shoes", inferred: "bottom", reason: "trousers_as_shoes" },
   { when: "top", inferred: "outerwear", reason: "jacket_as_top" },
   { when: "top", inferred: "bottom", reason: "trousers_as_top" },
   { when: "top", inferred: "dress", reason: "dress_as_top" },
@@ -134,11 +145,13 @@ function shouldOverride(
   g: Named
 ): boolean {
   if (current === inferred) return false;
-  // Always correct hosiery / underwear
   if (isHosieryOrSocks(g) || isUnderwearOrLounge(g)) {
     return inferred === "accessory";
   }
-  // Always correct clear footwear text not tagged shoes
+  // Always fix shirts (etc.) wrongly stored as shoes
+  if (current === "shoes" && (inferred === "top" || inferred === "bottom")) {
+    return true;
+  }
   if (inferred === "shoes" && isRealFootwear({ ...g, category: "shoes" })) {
     return current !== "shoes";
   }
@@ -195,8 +208,9 @@ export function ensureLookHasFootwear(
   pickShoes: (pool: Garment[], already: Garment[]) => Garment | null
 ): Garment[] {
   let next = selected.filter(
-    (g) => !(g.category === "shoes" && isHosieryOrSocks(g))
+    (g) => !(g.category === "shoes" && !isRealFootwear(g))
   );
+  next = next.map(sanitizeGarmentCategory);
   // Hosiery never rides along as a styled "ON YOU" accessory by default
   next = next.filter((g) => !isHosieryOrSocks(g) && !isUnderwearOrLounge(g));
 
@@ -217,6 +231,9 @@ export function assertGarmentCategoryGuards(): void {
     { name: "No-Show Socks", expect: "accessory" },
     { name: "Black Ankle Socks 5-Pack", expect: "accessory" },
     { name: "Sheer Stockings", expect: "accessory" },
+    { name: "White Oxford Shirt", expect: "top" },
+    { name: "Men's Dress Shirt", expect: "top" },
+    { name: "Black Oxford Shoes", expect: "shoes" },
     { name: "Cognac Leather Loafers", expect: "shoes" },
     { name: "Suede Chelsea Boots", expect: "shoes" },
     { name: "White Leather Sneakers", expect: "shoes" },
@@ -252,8 +269,20 @@ export function assertGarmentCategoryGuards(): void {
     throw new Error("sanitizeGarmentCategory failed to fix socks→accessory");
   }
 
+  const shirtFix = sanitizeGarmentCategory({
+    name: "White Oxford Shirt",
+    tags: [],
+    category: "shoes" as GarmentCategory,
+  });
+  if (shirtFix.category !== "top") {
+    throw new Error("sanitizeGarmentCategory failed to fix oxford shirt→top");
+  }
+
   if (isRealFootwear({ name: "No-Show Socks", category: "shoes" })) {
     throw new Error("isRealFootwear must reject socks");
+  }
+  if (isRealFootwear({ name: "White Oxford Shirt", category: "shoes" })) {
+    throw new Error("isRealFootwear must reject oxford shirt");
   }
   if (!isRealFootwear({ name: "Cognac Loafers", category: "shoes" })) {
     throw new Error("isRealFootwear must accept loafers");
