@@ -191,6 +191,70 @@ export default function BillingPage() {
     }
   };
 
+  const openPortal = async () => {
+    setLoading("portal");
+    setMessage("");
+    try {
+      const res = await authFetch("/api/stripe/portal", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(
+          data.error || "Couldn’t open billing management. Try again."
+        );
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setMessage("Billing portal isn’t available yet.");
+    } catch (err) {
+      setMessage(
+        err instanceof Error
+          ? err.message
+          : "Couldn’t open billing management."
+      );
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const changePlan = async (planId: "monthly" | "yearly") => {
+    setLoading(`change_${planId}`);
+    setMessage("");
+    try {
+      if (typeof window !== "undefined") {
+        const { default: posthog } = await import("posthog-js");
+        if (posthog.__loaded) {
+          posthog.capture("billing_plan_change_started", { plan_id: planId });
+        }
+      }
+      const res = await authFetch("/api/stripe/change-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(data.error || "Couldn’t change plan. Try Manage membership.");
+        return;
+      }
+      if (data.planId === "monthly" || data.planId === "yearly") {
+        updateUser({ subscriptionPlan: data.planId });
+      }
+      setMessage(data.message || "Plan updated.");
+      if (user?.uid) {
+        void hydrateFromCloud(user.uid);
+      }
+    } catch (err) {
+      setMessage(
+        err instanceof Error ? err.message : "Couldn’t change plan."
+      );
+    } finally {
+      setLoading(null);
+    }
+  };
+
   const member = isMembershipActive(user);
   const credits = photoTryOnCredits(user);
   const used = photoTryOnsUsedThisMonth(user);
@@ -204,6 +268,9 @@ export default function BillingPage() {
     typeof user?.freePhotoTryOnsUsed === "number"
       ? user.freePhotoTryOnsUsed
       : 0;
+  const onYearly = user?.subscriptionPlan === "yearly";
+  const canOfferAnnual = member && user?.subscriptionPlan !== "yearly";
+  const annualSavings = LIST_PRICE_MONTHLY_GBP * 12 - LIST_PRICE_YEARLY_GBP;
 
   return (
     <div className="space-y-14 pb-20">
@@ -218,6 +285,12 @@ export default function BillingPage() {
           <p className="mt-3 text-sm text-mist">
             Status{" "}
             <span className="text-champagne">{statusCopy(user)}</span>
+            {user?.subscriptionPlan ? (
+              <span>
+                {" "}
+                · {user.subscriptionPlan === "yearly" ? "Annual" : "Monthly"}
+              </span>
+            ) : null}
           </p>
 
           <div className="mt-10">
@@ -309,6 +382,47 @@ export default function BillingPage() {
             />
           </section>
 
+          <section className="max-w-xl space-y-5 border-t border-line pt-12">
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+                Plan
+              </p>
+              <h2 className="mt-2 font-display text-2xl text-ivory">
+                {onYearly
+                  ? "You’re on annual"
+                  : canOfferAnnual
+                    ? "Save with annual"
+                    : "Manage your membership"}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-mist">
+                {onYearly
+                  ? `£${LIST_PRICE_YEARLY_GBP}/year · update your card or cancel anytime in Stripe.`
+                  : canOfferAnnual
+                    ? `Switch to £${LIST_PRICE_YEARLY_GBP}/year and save £${annualSavings} vs monthly. Stripe prorates the change — no second trial.`
+                    : `Update your card, cancel, or change plan in Stripe. Annual is £${LIST_PRICE_YEARLY_GBP}/year (saves £${annualSavings}).`}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              {canOfferAnnual ? (
+                <Button
+                  disabled={loading === "change_yearly"}
+                  onClick={() => changePlan("yearly")}
+                >
+                  {loading === "change_yearly"
+                    ? "Switching…"
+                    : `Switch to annual · £${LIST_PRICE_YEARLY_GBP}`}
+                </Button>
+              ) : null}
+              <Button
+                variant={canOfferAnnual ? "outline" : "primary"}
+                disabled={loading === "portal"}
+                onClick={() => openPortal()}
+              >
+                {loading === "portal" ? "Opening…" : "Manage membership"}
+              </Button>
+            </div>
+          </section>
+
           <section className="max-w-xl space-y-4 border-t border-line pt-12">
             <p className="text-xs uppercase tracking-[0.28em] text-champagne">
               Included
@@ -332,11 +446,6 @@ export default function BillingPage() {
                 </li>
               ))}
             </ul>
-            <p className="pt-2 text-sm text-mist">
-              From £{LIST_PRICE_MONTHLY_GBP}/month · Annual £
-              {LIST_PRICE_YEARLY_GBP} saves £
-              {LIST_PRICE_MONTHLY_GBP * 12 - LIST_PRICE_YEARLY_GBP} vs monthly.
-            </p>
           </section>
         </>
       ) : (

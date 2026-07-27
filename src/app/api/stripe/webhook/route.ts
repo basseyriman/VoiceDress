@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { getStripe } from "@/lib/stripe";
+import { getStripe, planIdFromStripePrice } from "@/lib/stripe";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
@@ -131,6 +131,11 @@ export async function POST(req: NextRequest) {
 
           let status: "trialing" | "active" = "active";
           let trialEndsAt: string | undefined;
+          let subscriptionPlan =
+            session.metadata?.planId === "yearly" ||
+            session.metadata?.planId === "monthly"
+              ? session.metadata.planId
+              : null;
           if (subscriptionId) {
             const sub = await stripe.subscriptions.retrieve(subscriptionId);
             status =
@@ -138,6 +143,15 @@ export async function POST(req: NextRequest) {
             if (sub.trial_end) {
               trialEndsAt = new Date(sub.trial_end * 1000).toISOString();
             }
+            const fromPrice = planIdFromStripePrice(
+              sub.items.data[0]?.price.id
+            );
+            const fromMeta =
+              sub.metadata?.planId === "yearly" ||
+              sub.metadata?.planId === "monthly"
+                ? sub.metadata.planId
+                : null;
+            subscriptionPlan = fromPrice || fromMeta || subscriptionPlan;
           }
 
           await setUserSubscription(uid, {
@@ -145,6 +159,7 @@ export async function POST(req: NextRequest) {
             ...(customerId ? { stripeCustomerId: customerId } : {}),
             ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
             ...(trialEndsAt ? { trialEndsAt } : {}),
+            ...(subscriptionPlan ? { subscriptionPlan } : {}),
           });
           break;
         }
@@ -167,6 +182,12 @@ export async function POST(req: NextRequest) {
               ? "canceled"
               : sub.status
           );
+          const subscriptionPlan =
+            planIdFromStripePrice(sub.items.data[0]?.price.id) ||
+            (sub.metadata?.planId === "yearly" ||
+            sub.metadata?.planId === "monthly"
+              ? sub.metadata.planId
+              : null);
           await setUserSubscription(uid, {
             subscriptionStatus: status,
             stripeSubscriptionId: sub.id,
@@ -174,6 +195,7 @@ export async function POST(req: NextRequest) {
             ...(sub.trial_end
               ? { trialEndsAt: new Date(sub.trial_end * 1000).toISOString() }
               : {}),
+            ...(subscriptionPlan ? { subscriptionPlan } : {}),
           });
           break;
         }

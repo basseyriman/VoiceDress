@@ -92,6 +92,8 @@ export interface UserProfile {
   lon?: number;
   stylePrefs: string[];
   subscriptionStatus: "trialing" | "active" | "canceled" | "none";
+  /** Which paid plan the Stripe subscription is on (when known). */
+  subscriptionPlan?: "monthly" | "yearly";
   /** ISO end of free trial — server/webhook authoritative for paid status. */
   trialEndsAt?: string;
   /**

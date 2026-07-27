@@ -319,6 +319,7 @@ export const useAetherStore = create<AetherState>()(
             subscriptionStatus:
               data.profile.subscriptionStatus ||
               (data.profile.trialEndsAt ? "trialing" : "none"),
+            subscriptionPlan: data.profile.subscriptionPlan,
             trialEndsAt: data.profile.trialEndsAt,
             freePhotoTryOnsUsed: data.profile.freePhotoTryOnsUsed ?? 0,
             photoTryOnsMonthKey: data.profile.photoTryOnsMonthKey,
@@ -377,6 +378,7 @@ export const useAetherStore = create<AetherState>()(
           // Entitlement fields are server-owned (Admin / Stripe webhook).
           const {
             subscriptionStatus: _s,
+            subscriptionPlan: _sp,
             trialEndsAt: _t,
             freePhotoTryOnsUsed: _f,
             photoTryOnsMonthKey: _mk,
@@ -414,6 +416,7 @@ export const useAetherStore = create<AetherState>()(
             lon: profile.lon ?? -0.1278,
             stylePrefs: profile.stylePrefs || ["quiet luxury", "old money"],
             subscriptionStatus: profile.subscriptionStatus || "none",
+            subscriptionPlan: profile.subscriptionPlan,
             trialEndsAt: profile.trialEndsAt,
             freePhotoTryOnsUsed: profile.freePhotoTryOnsUsed ?? 0,
             photoTryOnsMonthKey: profile.photoTryOnsMonthKey,

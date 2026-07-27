@@ -43,6 +43,19 @@ export function getStripe() {
   return new Stripe(key);
 }
 
+export type SubscriptionPlanId = "monthly" | "yearly";
+
+/** Map a live Stripe Price ID (or planId metadata) to VoiceDress plan. */
+export function planIdFromStripePrice(
+  priceId: string | null | undefined
+): SubscriptionPlanId | null {
+  if (!priceId) return null;
+  if (priceId === "monthly" || priceId === "yearly") return priceId;
+  if (priceId === STRIPE_PRICE_YEARLY) return "yearly";
+  if (priceId === STRIPE_PRICE_MONTHLY) return "monthly";
+  return null;
+}
+
 export const PLANS = [
   {
     id: "monthly",
