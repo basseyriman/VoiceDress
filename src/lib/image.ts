@@ -832,6 +832,9 @@ export async function keepUpperBlendLower(
 /**
  * After shoe finish: keep the dressed clothes photo above the ankles and only
  * take feet from the shoe edit. Rolls back to the clean dress if the edit glitches.
+ *
+ * Dress looks: always roll back — shoe AI routinely paints boots/feather mush over
+ * the hem. Callers should skip the shoe API for dresses; this is a hard safety net.
  */
 export async function protectDressedLookAfterShoes(
   dressedSrc: string,
@@ -839,9 +842,13 @@ export async function protectDressedLookAfterShoes(
   opts?: { hasDress?: boolean }
 ): Promise<{ url: string; rolledBack: boolean }> {
   const hasDress = Boolean(opts?.hasDress);
-  // Midi/maxi dresses need a high seam so calf boots can't paint over the hem.
-  const seam = hasDress ? 0.89 : 0.84;
-  const feather = hasDress ? 0.03 : 0.045;
+  if (hasDress) {
+    return { url: dressedSrc, rolledBack: true };
+  }
+
+  // Hard feet-only strip — soft feathers caused the black mush around ankles.
+  const seam = 0.915;
+  const feather = 0.012;
 
   let blended: string;
   try {
@@ -857,11 +864,61 @@ export async function protectDressedLookAfterShoes(
     if (await hasTryOnArtifacts(blended)) {
       return { url: dressedSrc, rolledBack: true };
     }
+    if (await midBodyDriftTooHigh(dressedSrc, blended)) {
+      return { url: dressedSrc, rolledBack: true };
+    }
   } catch {
     // keep blended
   }
 
   return { url: blended, rolledBack: false };
+}
+
+/** True if the clothed mid-body drifted a lot vs the clean clothes frame. */
+export async function midBodyDriftTooHigh(
+  baseSrc: string,
+  editedSrc: string
+): Promise<boolean> {
+  const [base, edited] = await Promise.all([
+    loadHtmlImage(baseSrc),
+    loadHtmlImage(editedSrc),
+  ]);
+  const w = Math.min(base.width, edited.width, 320);
+  const h = Math.min(base.height, edited.height, 480);
+  if (w < 16 || h < 16) return false;
+
+  const mk = (img: HTMLImageElement) => {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, w, h);
+    return ctx.getImageData(0, 0, w, h);
+  };
+  const a = mk(base);
+  const b = mk(edited);
+  if (!a || !b) return false;
+
+  const y0 = Math.floor(h * 0.34);
+  const y1 = Math.floor(h * 0.86);
+  const x0 = Math.floor(w * 0.18);
+  const x1 = Math.floor(w * 0.82);
+  let sum = 0;
+  let n = 0;
+  for (let y = y0; y < y1; y += 2) {
+    for (let x = x0; x < x1; x += 2) {
+      const i = (y * w + x) * 4;
+      sum +=
+        Math.abs(a.data[i] - b.data[i]) +
+        Math.abs(a.data[i + 1] - b.data[i + 1]) +
+        Math.abs(a.data[i + 2] - b.data[i + 2]);
+      n += 1;
+    }
+  }
+  if (!n) return false;
+  // ~35+ mean channel drift ⇒ clothes were rewritten
+  return sum / n > 42;
 }
 
 /**
