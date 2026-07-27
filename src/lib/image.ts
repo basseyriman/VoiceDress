@@ -175,7 +175,7 @@ export async function polishTryOnResult(src: string): Promise<string> {
  * so try-on can’t cartoonize or swap your identity.
  *
  * - strong: full head (face + hairline + ears), stops above the collar
- * - soft: real skin/hair with an eye band open so glasses frames can remain
+ * - soft: real skin/hair with a narrow eye band open so glasses frames can remain
  */
 export async function lockFaceIdentity(
   identitySrc: string,
@@ -199,13 +199,13 @@ export async function lockFaceIdentity(
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(dressed, 0, 0, w, h);
 
-  // Full-body 2:3: head sits in the upper band. Generous oval so AI cartoon face loses.
+  // Full-body 2:3: head sits in the upper band. Oversized oval so AI skin/hair loses.
   const cx = w * 0.5;
-  const cy = strength === "strong" ? h * 0.145 : h * 0.142;
-  const rx = strength === "strong" ? w * 0.28 : w * 0.24;
-  const ry = strength === "strong" ? h * 0.175 : h * 0.155;
+  const cy = strength === "strong" ? h * 0.138 : h * 0.136;
+  const rx = strength === "strong" ? w * 0.34 : w * 0.3;
+  const ry = strength === "strong" ? h * 0.2 : h * 0.175;
   // Never paste below the collar into the shirt
-  const maxY = h * (strength === "strong" ? 0.33 : 0.3);
+  const maxY = h * (strength === "strong" ? 0.36 : 0.32);
 
   const faceLayer = document.createElement("canvas");
   faceLayer.width = w;
@@ -214,8 +214,25 @@ export async function lockFaceIdentity(
   if (!fctx) return dressedSrc;
   fctx.imageSmoothingEnabled = true;
   fctx.imageSmoothingQuality = "high";
-  // Scale identity into the same canvas — both should be letterboxed 2:3
-  fctx.drawImage(identity, 0, 0, w, h);
+
+  // Draw identity with the same letterbox framing as the dressed canvas
+  // (contain, centered) so face lands on face — not stretched off-target.
+  const idRatio = identity.width / identity.height;
+  const canvasRatio = w / h;
+  let dw = w;
+  let dh = h;
+  let dx = 0;
+  let dy = 0;
+  if (idRatio > canvasRatio) {
+    dw = w;
+    dh = Math.round(w / idRatio);
+    dy = Math.round((h - dh) / 2);
+  } else {
+    dh = h;
+    dw = Math.round(h * idRatio);
+    dx = Math.round((w - dw) / 2);
+  }
+  fctx.drawImage(identity, dx, dy, dw, dh);
 
   const mask = document.createElement("canvas");
   mask.width = w;
@@ -223,30 +240,31 @@ export async function lockFaceIdentity(
   const mctx = mask.getContext("2d");
   if (!mctx) return dressedSrc;
 
-  const inner = ry * (strength === "strong" ? 0.5 : 0.45);
+  const inner = ry * (strength === "strong" ? 0.55 : 0.48);
   const grad = mctx.createRadialGradient(cx, cy, inner, cx, cy, ry);
-  // Near-opaque core — real photo skin/hair must win over AI smoothing
+  // Near-opaque core — real photo skin/hair must fully bury AI smoothing
   grad.addColorStop(0, "rgba(0,0,0,1)");
-  grad.addColorStop(0.62, "rgba(0,0,0,1)");
-  grad.addColorStop(0.86, "rgba(0,0,0,0.94)");
+  grad.addColorStop(0.72, "rgba(0,0,0,1)");
+  grad.addColorStop(0.9, "rgba(0,0,0,0.96)");
   grad.addColorStop(1, "rgba(0,0,0,0)");
   mctx.fillStyle = grad;
   mctx.beginPath();
   mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   mctx.fill();
 
-  // Soft: open an eye band so sunglass/optic frames from the try-on can show
+  // Soft: narrow eye band so sunglass/optic frames from the try-on can show,
+  // without giving the AI a wide strip to re-cartoonize the face.
   if (strength === "soft") {
     mctx.globalCompositeOperation = "destination-out";
-    const eyeY = h * 0.132;
-    const eyeH = h * 0.055;
+    const eyeY = h * 0.128;
+    const eyeH = h * 0.04;
     const eyeGrad = mctx.createLinearGradient(0, eyeY, 0, eyeY + eyeH);
     eyeGrad.addColorStop(0, "rgba(0,0,0,0)");
-    eyeGrad.addColorStop(0.25, "rgba(0,0,0,0.72)");
-    eyeGrad.addColorStop(0.75, "rgba(0,0,0,0.72)");
+    eyeGrad.addColorStop(0.3, "rgba(0,0,0,0.55)");
+    eyeGrad.addColorStop(0.7, "rgba(0,0,0,0.55)");
     eyeGrad.addColorStop(1, "rgba(0,0,0,0)");
     mctx.fillStyle = eyeGrad;
-    mctx.fillRect(w * 0.28, eyeY, w * 0.44, eyeH);
+    mctx.fillRect(w * 0.3, eyeY, w * 0.4, eyeH);
     mctx.globalCompositeOperation = "source-over";
   }
 

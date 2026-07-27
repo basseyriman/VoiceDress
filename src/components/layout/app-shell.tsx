@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative min-h-screen overflow-x-clip pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-16">
       <header className="sticky top-0 z-[100] isolate border-b border-line/50 bg-ink/80 backdrop-blur-2xl pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between gap-3 px-4 sm:h-[4.5rem] sm:gap-4 sm:px-6">
+        <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between gap-3 px-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:h-[4.5rem] sm:gap-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-4 sm:gap-10">
             <Logo variant="header" className="min-w-0 shrink" />
             <nav className="relative z-[101] hidden items-center gap-1 md:flex">
@@ -67,7 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               })}
             </nav>
           </div>
-          <div className="relative z-[101] flex items-center gap-3">
+          <div className="relative z-[101] flex shrink-0 items-center gap-2 sm:gap-3">
             {weather && (
               <div className="hidden items-center gap-2 rounded-full border border-line px-3 py-1.5 text-xs text-ivory-muted sm:flex">
                 <CloudSun className="h-3.5 w-3.5 text-champagne" />
@@ -79,7 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => {
                 void signOutLocal().then(() => router.push("/login"));
               }}
-              className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs text-mist transition hover:text-ivory"
+              className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-xs text-mist transition hover:text-ivory sm:px-3"
             >
               <span className="hidden sm:inline">{user?.displayName?.split(" ")[0]}</span>
               <LogOut className="h-3.5 w-3.5" />
@@ -88,14 +88,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="relative z-0 mx-auto min-w-0 max-w-7xl px-4 py-8 sm:px-6">
+      <main className="relative z-0 mx-auto min-w-0 max-w-7xl overflow-x-clip px-4 py-8 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:px-6">
         <PageTransition>{children}</PageTransition>
       </main>
 
       <FlowDock />
 
       <nav className="fixed inset-x-0 bottom-0 z-[100] isolate border-t border-line/50 bg-ink/95 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)] md:hidden">
-        <div className="flex justify-around px-1.5 py-2">
+        <div className="flex w-full max-w-full items-stretch justify-between gap-0 px-1 py-2 pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))]">
           {nav.map((item) => {
             const Icon = item.icon;
             const active = pathname.startsWith(item.href);
@@ -109,14 +109,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   go(item.href);
                 }}
                 className={cn(
-                  "relative z-[101] flex min-h-[3.25rem] min-w-[4.5rem] cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-3 py-2 text-[10px] tracking-wide transition",
+                  "relative z-[101] flex min-h-[3.25rem] min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] tracking-wide transition",
                   active
                     ? "bg-champagne/10 text-champagne"
                     : "text-mist hover:text-ivory"
                 )}
               >
                 <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
-                {item.label}
+                <span className="max-w-full truncate">{item.label}</span>
               </a>
             );
           })}

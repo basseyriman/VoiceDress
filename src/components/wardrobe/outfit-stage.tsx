@@ -904,12 +904,8 @@ export function OutfitStage({
           // keep current
         }
         try {
-          const hadGlasses = finishQueue.some((p) => isEyewearPiece(p));
-          current = await lockFaceIdentity(
-            identityPhoto,
-            current,
-            hadGlasses ? "soft" : "strong"
-          );
+          // Always strong at the end — soft eye bands leave AI skin that reads as cartoon
+          current = await lockFaceIdentity(identityPhoto, current, "strong");
         } catch {
           // keep current
         }
@@ -1022,12 +1018,12 @@ export function OutfitStage({
 
   return (
     <motion.div
-      className="glass shine-border relative overflow-hidden rounded-[1.5rem] p-3 sm:rounded-[2rem] sm:p-8"
+      className="glass shine-border relative w-full min-w-0 overflow-x-clip rounded-[1.5rem] p-3 sm:rounded-[2rem] sm:p-8"
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_400px_at_15%_0%,rgba(201,168,124,0.12),transparent_55%)]" />
 
-      <div className="relative z-10 grid gap-6 sm:gap-8 lg:grid-cols-[1fr_1.05fr]">
-        <div className="relative mx-auto w-full min-w-0 max-w-md">
+      <div className="relative z-10 grid w-full min-w-0 gap-6 sm:gap-8 lg:grid-cols-[1fr_1.05fr]">
+        <div className="relative mx-auto w-full min-w-0 max-w-md overflow-x-clip">
           <div className="mb-3 space-y-2.5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1261,15 +1257,15 @@ export function OutfitStage({
             </AnimatePresence>
           </div>
 
-          {/* Mobile: piece status under the photo (not over it) */}
+          {/* Mobile: piece status under the photo — contained so it never blows page width */}
           {dressing && lookPieces.length > 0 && (
-            <div className="-mx-1 mt-3 overflow-x-auto pb-1 lg:hidden">
-              <div className="flex w-max gap-2 px-1">
+            <div className="mt-3 max-w-full overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] lg:hidden">
+              <div className="flex w-max max-w-none gap-2">
                 {lookPieces.map((g) => (
                   <div
                     key={g.id}
                     className={cn(
-                      "max-w-[9.5rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[10px]",
+                      "max-w-[8.5rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[10px]",
                       activePieceId === g.id
                         ? "border-champagne bg-champagne/15 text-champagne"
                         : donePieceIds.includes(g.id)
@@ -1285,7 +1281,7 @@ export function OutfitStage({
           )}
         </div>
 
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-full overflow-x-clip">
           <p className="text-xs uppercase tracking-[0.28em] text-champagne">
             Today’s look
           </p>
@@ -1298,15 +1294,15 @@ export function OutfitStage({
               : "Tell VoiceDress where you’re going — one look from your wardrobe."}
           </p>
 
-          <div className="mt-6">
-            <div className="mb-2 flex items-end justify-between gap-3">
-              <p className="text-[10px] uppercase tracking-[0.22em] text-champagne">
+          <div className="mt-6 min-w-0">
+            <div className="mb-2 flex min-w-0 items-end justify-between gap-2">
+              <p className="min-w-0 truncate text-[10px] uppercase tracking-[0.22em] text-champagne">
                 Your look
               </p>
               {dressing && (
-                <p className="font-display text-lg tabular-nums text-champagne">
+                <p className="shrink-0 font-display text-base tabular-nums text-champagne sm:text-lg">
                   {progressPct}%
-                  <span className="ml-2 text-[10px] uppercase tracking-wider text-mist">
+                  <span className="ml-1.5 text-[10px] uppercase tracking-wider text-mist">
                     {piecesDone}/{piecesTotal}
                   </span>
                 </p>
@@ -1321,7 +1317,7 @@ export function OutfitStage({
                 />
               </div>
             )}
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
               {lookPieces.map((g) => (
                 <GarmentTile
                   key={g.id}
@@ -1508,20 +1504,20 @@ export function GarmentTile({
       onClick={onClick}
       aria-busy={dressing || undefined}
       className={cn(
-        "group relative flex w-full text-left transition duration-300",
+        "group relative flex w-full min-w-0 max-w-full text-left transition duration-300",
         large
           ? "flex-col gap-2.5 rounded-[1.25rem] border p-2.5"
-          : "gap-3 rounded-2xl border p-3",
-        // Only the piece being applied gets a strong gold border; others stay dim.
+          : "gap-2.5 rounded-2xl border p-2.5 sm:gap-3 sm:p-3",
+        // Ring (not thicker border) so active state never widens the card on mobile.
         dressing
-          ? "border-2 border-champagne bg-champagne/10"
+          ? "border-champagne bg-champagne/10 ring-2 ring-champagne/70 ring-inset"
           : missing
-            ? "border border-champagne/35 bg-champagne/[0.04]"
+            ? "border-champagne/35 bg-champagne/[0.04]"
             : done
-              ? "border border-line bg-champagne/[0.04]"
+              ? "border-line bg-champagne/[0.04]"
               : active
-                ? "border border-champagne/55 bg-champagne/10"
-                : "border border-line bg-white/[0.02] hover:border-champagne/40"
+                ? "border-champagne/55 bg-champagne/10"
+                : "border-line bg-white/[0.02] hover:border-champagne/40"
       )}
     >
       <div
@@ -1563,11 +1559,11 @@ export function GarmentTile({
               {dressing
                 ? progressPct != null
                   ? `${progressPct}%`
-                  : "Dressing"
+                  : "…"
                 : missing
-                  ? "Pending"
+                  ? "Soon"
                   : done
-                    ? "On you"
+                    ? "On"
                     : badge}
             </span>
           )}
