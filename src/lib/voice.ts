@@ -176,10 +176,25 @@ export async function handleVoiceCommandAsync(
       return finish(reply, { source: "keyword" as const, parsed });
     }
     const data = await res.json();
+    let llmActions = Array.isArray(data.actions) ? data.actions : [];
+    // Hard guard: piece-swap speech must never trigger a full new look
+    if (hasLook && clearSwap) {
+      llmActions = llmActions.filter(
+        (a: { tool?: string }) => a?.tool !== "suggest_look"
+      );
+      if (
+        !llmActions.some(
+          (a: { tool?: string }) =>
+            a?.tool === "swap_piece" || a?.tool === "pick_garment"
+        )
+      ) {
+        const parsed = parseVoiceIntent(transcript);
+        const reply = await applyLocalIntent(parsed, actions);
+        return finish(reply, { source: "keyword-swap" as const, parsed });
+      }
+    }
     const onlyWeather =
-      Array.isArray(data.actions) &&
-      data.actions.length === 1 &&
-      data.actions[0]?.tool === "check_weather";
+      llmActions.length === 1 && llmActions[0]?.tool === "check_weather";
     if (
       onlyWeather &&
       hasLook &&
@@ -192,8 +207,13 @@ export async function handleVoiceCommandAsync(
     if (genAtStart !== getSpeakGeneration()) {
       return { reply: data.reply, source: data.source || "llm", interrupted: true };
     }
-    const reply = await applyActions(data.actions || [], actions, data.reply);
-    return finish(reply, { source: data.source || "llm", actions: data.actions });
+    const reply = await applyActions(
+      llmActions,
+      actions,
+      data.reply,
+      transcript
+    );
+    return finish(reply, { source: data.source || "llm", actions: llmActions });
   } catch {
     if (
       hasLook &&
@@ -248,7 +268,7 @@ async function runOutfitChat(
           (a: { tool?: string }) => !a?.tool || a.tool === "none"
         )
       : rawActions;
-    await applyActions(safeActions, actions, data.reply);
+    await applyActions(safeActions, actions, data.reply, transcript);
     return data.reply || "Happy to refine this look — what should we change?";
   } catch {
     const e = actions.onExplainLook?.();
@@ -393,12 +413,45 @@ async function applyLocalIntent(
 async function applyActions(
   list: VoiceAction[],
   actions: VoiceActionHandlers,
-  fallbackReply: string
+  fallbackReply: string,
+  transcript = ""
 ): Promise<string> {
   let reply = fallbackReply;
+  const ctx = actions.getContext?.() || {};
+  const hasLook = Array.isArray(ctx.outfit) && ctx.outfit.length > 0;
+  const clearSwap = transcript ? isClearPieceSwap(transcript) : false;
+
   for (const a of list) {
     switch (a.tool) {
       case "suggest_look": {
+        // Never rebuild the whole look when they only asked to swap a piece
+        if (hasLook && clearSwap) {
+          const parsed = parseVoiceIntent(transcript);
+          if (parsed.intent === "swap_item") {
+            const catMap: Record<string, Garment["category"]> = {
+              top: "top",
+              bottom: "bottom",
+              shoes: "shoes",
+              outerwear: "outerwear",
+              accessory: "accessory",
+              dress: "dress",
+              bag: "bag",
+            };
+            const cat =
+              catMap[parsed.entities.item || ""] ||
+              (a.category as Garment["category"] | undefined) ||
+              "bottom";
+            actions.swapFromVoice(
+              cat,
+              parsed.entities.style,
+              parsed.entities.occasion,
+              parsed.entities.garmentQuery,
+              parsed.entities.sourceQuery
+            );
+            reply = parsed.reply || reply;
+            break;
+          }
+        }
         const outfit = (await (actions.generateOutfitAsync ||
           actions.generateOutfit)(
           a.occasion || "today",

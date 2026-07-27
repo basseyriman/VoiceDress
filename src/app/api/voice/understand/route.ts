@@ -128,8 +128,9 @@ ${wardrobeSummary || "(empty)"}
 Rules:
 - Only pick garments that exist in the wardrobe list (use their ids).
 - Never invent clothing.
-- Prefer swap_piece / pick_garment when user dislikes a piece.
-- Use suggest_look for new occasions OR weather what-ifs ("if it was 16 degrees").
+- Prefer swap_piece / pick_garment when user dislikes a piece OR asks to change/swap/replace ANY piece (shoes, top, trousers, jacket, watch, glasses, bag — anything).
+- CRITICAL: If Current look is not "none" and they ask to change/swap/replace/different ONE piece, you MUST use swap_piece or pick_garment — NEVER suggest_look. Keep the rest of the look. garmentQuery = only the TARGET item they want (not the full sentence).
+- Use suggest_look ONLY for new occasions OR weather what-ifs ("if it was 16 degrees") OR when they clearly want a brand-new outfit ("dress me for dinner", "new look").
 - CRITICAL: If they ask to pick/choose/suggest/help with an outfit AND mention wardrobe/closet ("from my wardrobe"), that is suggest_look — NOT open_page. Only open /wardrobe when they clearly want to browse the wardrobe page ("open my wardrobe", "show closet").
 - Social plans count as occasions: drinks, pub, friends, dinner, wedding, etc. Set occasion from what they said.
 - CONVERSATION: If they already have a Current look and ask about fabric weight, weather fit, belt, socks/stockings, confidence, or "what should I add" — answer as a stylist in reply and use tool "none" (or swap_piece if changing). Do NOT use check_weather just because they said "weather" while talking about a garment ("is this knit too thick for the weather").

@@ -103,7 +103,7 @@ export function parseSwapSpeech(speech: string): ParsedSwapSpeech {
 
   const swapVerb =
     /\b(swap|change|replace|switch)\b/.test(raw) ||
-    /\b(don't like|dont like|instead of)\b/.test(raw);
+    /\b(don't like|dont like|instead of|different|another)\b/.test(raw);
 
   // "change X to Y" / "swap X for Y" / "replace X with Y"
   const toMatch = raw.match(
@@ -127,7 +127,9 @@ export function parseSwapSpeech(speech: string): ParsedSwapSpeech {
     /\b(.+?)\s+instead of\s+(?:the\s+|my\s+|this\s+)?(.+?)(?:\s+please)?[.?!]*$/i
   );
   if (instead) {
-    const targetQuery = cleanSwapPhrase(instead[1].replace(/^(can you|could you|please)\s+/i, ""));
+    const targetQuery = cleanSwapPhrase(
+      instead[1].replace(/^(can you|could you|please)\s+/i, "")
+    );
     const sourceQuery = cleanSwapPhrase(instead[2]);
     return {
       sourceQuery: sourceQuery || undefined,
@@ -141,15 +143,32 @@ export function parseSwapSpeech(speech: string): ParsedSwapSpeech {
 
   if (!swapVerb) return { isSwap: false };
 
-  // "change the shoes" / "swap the top" — category only
+  // Whole-look asks are NOT piece swaps
+  if (
+    /\b(whole look|entire look|full look|new look|new outfit|start over|dress me|suggest (an |a )?outfit)\b/.test(
+      raw
+    )
+  ) {
+    return { isSwap: false };
+  }
+
+  // "change/swap/replace the shoes" / "different jacket" / "don't like these boots"
   const catOnly = raw.match(
-    /\b(?:change|swap|replace|switch)\s+(?:the\s+|my\s+|this\s+)?(.+?)(?:\s+please)?[.?!]*$/i
+    /\b(?:change|swap|replace|switch|different|another)\s+(?:the\s+|my\s+|this\s+|these\s+|that\s+)?(.+?)(?:\s+please)?[.?!]*$/i
   );
-  const phrase = cleanSwapPhrase(catOnly?.[1] || raw);
+  const dislike = raw.match(
+    /\b(?:don't like|dont like|hate|not feeling)\s+(?:the\s+|my\s+|this\s+|these\s+)?(.+?)(?:\s+please)?[.?!]*$/i
+  );
+  const phrase = cleanSwapPhrase(catOnly?.[1] || dislike?.[1] || raw);
+  const category = inferCategoryFromSpeech(phrase || raw);
+  // Need a recognizable piece/category — otherwise it's not a clear swap
+  if (!category && !catOnly && !dislike) {
+    return { isSwap: false };
+  }
   return {
     targetQuery: phrase || undefined,
     sourceQuery: phrase || undefined,
-    category: inferCategoryFromSpeech(phrase || raw),
+    category,
     isSwap: true,
   };
 }
@@ -157,11 +176,11 @@ export function parseSwapSpeech(speech: string): ParsedSwapSpeech {
 function cleanSwapPhrase(s: string): string {
   return s
     .replace(
-      /^(can you|could you|please|just|maybe|the|my|this|that|a|an)\s+/gi,
+      /^(can you|could you|please|just|maybe|the|my|this|that|these|a|an)\s+/gi,
       ""
     )
     .replace(
-      /\b(please|thanks|thank you|for me|on me|from the wardrobe)\b/gi,
+      /\b(please|thanks|thank you|for me|on me|from the wardrobe|from my wardrobe)\b/gi,
       ""
     )
     .replace(/\s+/g, " ")
@@ -177,14 +196,12 @@ export function isClearPieceSwap(transcript: string): boolean {
     /\b(whole look|entire look|full look|new look|outfit|everything)\b/i.test(
       transcript
     ) &&
-    !parsed.targetQuery
+    !parsed.targetQuery &&
+    !parsed.category
   ) {
     return false;
   }
   return Boolean(
-    parsed.category ||
-      parsed.targetQuery ||
-      parsed.sourceQuery ||
-      /\b(swap|change|replace)\b/i.test(transcript)
+    parsed.category || parsed.targetQuery || parsed.sourceQuery
   );
 }
