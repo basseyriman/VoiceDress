@@ -15,8 +15,8 @@ export async function prepareWardrobeIngestPhoto(file: File): Promise<{
   dataUrl: string;
   error?: string;
 }> {
-  // Smaller = faster upload + faster vision; still enough for product/receipt OCR
-  return prepareImageUpload(file, 960, 0.72);
+  // Smaller images = fewer vision tokens → fewer OpenAI TPM rate limits
+  return prepareImageUpload(file, 720, 0.68);
 }
 
 async function prepareImageUpload(

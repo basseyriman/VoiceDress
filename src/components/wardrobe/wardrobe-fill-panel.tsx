@@ -18,8 +18,9 @@ type Props = {
 };
 
 const MAX_BATCH = 20;
-/** Parallel vision calls — much faster than one-by-one. */
-const UPLOAD_CONCURRENCY = 3;
+/** One at a time avoids OpenAI TPM spikes on multi-photo uploads. */
+const UPLOAD_CONCURRENCY = 1;
+const RATE_LIMIT_RETRIES = 4;
 
 export function WardrobeFillPanel({
   returnTo = "/connect",
@@ -111,62 +112,74 @@ export function WardrobeFillPanel({
       };
     }
 
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 90_000);
-    try {
-      const res = await authFetch("/api/commerce/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          imageDataUrl: prepared.dataUrl,
-          source,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        const label = file.name || "photo";
-        if (res.status === 413) {
-          return { items: [], error: `${label}: too large.` };
+    const label = file.name || "photo";
+    for (let attempt = 0; attempt < RATE_LIMIT_RETRIES; attempt++) {
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 90_000);
+      try {
+        const res = await authFetch("/api/commerce/ingest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            imageDataUrl: prepared.dataUrl,
+            source,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 429 || isRateLimitMessage(data.error)) {
+          const waitMs = Number(data.retryAfterMs) || 1200 * (attempt + 1);
+          await sleep(waitMs);
+          continue;
         }
-        if (res.status === 422) {
+        if (!res.ok) {
+          if (res.status === 413) {
+            return { items: [], error: `${label}: too large.` };
+          }
+          if (res.status === 422) {
+            return {
+              items: [],
+              error:
+                data.error ||
+                `${label}: no clothing found — try a clearer shot.`,
+            };
+          }
+          if (res.status === 401) {
+            return { items: [], error: "Sign in again, then retry." };
+          }
           return {
             items: [],
-            error:
-              data.error ||
-              `${label}: no clothing found — try a clearer shot.`,
+            error: humanizeIngestError(data.error, label, res.status),
           };
         }
-        if (res.status === 401) {
-          return { items: [], error: "Sign in again, then retry." };
+        const items = (data.items || []) as Garment[];
+        if (!items.length) {
+          return {
+            items: [],
+            error: `${label}: no pieces found.`,
+          };
         }
-        return {
-          items: [],
-          error: data.error || `${label}: upload failed (${res.status}).`,
-        };
+        return { items };
+      } catch (err) {
+        const aborted =
+          err instanceof DOMException && err.name === "AbortError";
+        if (aborted) {
+          return { items: [], error: `${label} timed out.` };
+        }
+        const msg = err instanceof Error ? err.message : "Upload failed";
+        if (isRateLimitMessage(msg) && attempt < RATE_LIMIT_RETRIES - 1) {
+          await sleep(1200 * (attempt + 1));
+          continue;
+        }
+        return { items: [], error: humanizeIngestError(msg, label) };
+      } finally {
+        window.clearTimeout(timeout);
       }
-      const items = (data.items || []) as Garment[];
-      if (!items.length) {
-        return {
-          items: [],
-          error: `${file.name || "Photo"}: no pieces found.`,
-        };
-      }
-      return { items };
-    } catch (err) {
-      const aborted =
-        err instanceof DOMException && err.name === "AbortError";
-      return {
-        items: [],
-        error: aborted
-          ? `${file.name || "Photo"} timed out.`
-          : err instanceof Error
-            ? err.message
-            : "Upload failed",
-      };
-    } finally {
-      window.clearTimeout(timeout);
     }
+    return {
+      items: [],
+      error: `${label}: AI is busy — wait a moment and upload again.`,
+    };
   };
 
   const onIngestFiles = async (list?: FileList | null) => {
@@ -206,6 +219,7 @@ export function WardrobeFillPanel({
           while (true) {
             const i = nextIndex++;
             if (i >= batch.length) return;
+            if (i > 0) await sleep(350);
             const result = await ingestOnePhoto(batch[i], source);
             if (result.items.length) {
               addGarments(result.items);
@@ -436,4 +450,28 @@ function base64UrlDecode(input: string): string {
       .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
       .join("")
   );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimitMessage(msg: unknown): boolean {
+  if (typeof msg !== "string") return false;
+  return /rate limit|tokens per min|TPM|429|try again in/i.test(msg);
+}
+
+function humanizeIngestError(
+  msg: unknown,
+  label: string,
+  status?: number
+): string {
+  const text = typeof msg === "string" ? msg : "";
+  if (isRateLimitMessage(text)) {
+    return `${label}: AI is briefly busy — wait a few seconds and retry the rest.`;
+  }
+  if (text && !/AI_APICallError|org-|TPM|Request id/i.test(text)) {
+    return `${label}: ${text.slice(0, 120)}`;
+  }
+  return `${label}: upload failed${status ? ` (${status})` : ""}.`;
 }
