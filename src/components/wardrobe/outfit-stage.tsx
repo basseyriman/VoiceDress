@@ -208,6 +208,7 @@ export function OutfitStage({
         code?: string;
         detail?: string;
         imageUrl?: string;
+        message?: string;
       }, status?: number) => {
         if (data.needsKey) {
           setNeedsKey(true);

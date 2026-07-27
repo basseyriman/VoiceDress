@@ -51,13 +51,14 @@ export async function POST(req: NextRequest) {
         typeof data === "object" && data
           ? JSON.stringify(data).slice(0, 400)
           : String(data);
-      if (/balance|billing|payment|quota|exhausted/i.test(detail)) {
+      if (/exhausted balance|insufficient credits|out of credits|top up your balance/i.test(detail)) {
         return NextResponse.json({
           ok: false,
           needsBilling: true,
-          error: "fal.ai balance exhausted",
+          code: "tryon_busy",
+          error: "Photo prep is busy right now",
           message:
-            "fal.ai credits are used up. Top up to clear photo backgrounds.",
+            "Photo prep is busy right now. Try again in a moment — your wardrobe is fine.",
         });
       }
       return NextResponse.json(
