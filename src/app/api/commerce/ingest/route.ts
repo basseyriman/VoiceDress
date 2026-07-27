@@ -88,8 +88,13 @@ export async function POST(req: NextRequest) {
             {
               type: "text",
               text: `Extract clothing / footwear / accessory items from this receipt, order screenshot, or product photo for a wardrobe app.
-Return every distinct wearable item. Prefer accurate names and brands.
-Category rules: socks, stockings, tights, no-show socks → accessory (NOT shoes). shoes/boots/loafers/sneakers/heels/pumps/flats/sandals/wedges → shoes. dresses/jumpsuits/rompers → dress. skirts → bottom. blouses/tops → top. handbags/totes/clutches → bag.
+Return every distinct wearable item the shopper is actually buying. Prefer accurate names and brands.
+Category rules: socks, stockings, tights, no-show socks → accessory (NOT shoes). shoes/boots/loafers/sneakers/heels/pumps/flats/sandals/wedges → shoes. dresses/jumpsuits/rompers → dress. skirts → bottom. blouses/tops → top. handbags/totes/clutches → bag ONLY when the bag is the product being sold.
+CRITICAL — bags / handbags:
+- Do NOT add a bag just because a model is holding or wearing one in a dress/top/outfit photo.
+- Props, styling accessories, and background bags are NOT wardrobe items.
+- Only return category "bag" when the image/receipt is clearly selling a bag as its own product (bag is the main subject, or a receipt line is a bag).
+- If the main product is a dress, top, bottom, or outerwear, return that garment only — omit any held handbag.
 If it's a product photo of one garment, return one item.
 detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when recognizable.`,
             },
@@ -106,8 +111,17 @@ detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when re
       );
     }
 
+    // Drop incidental handbags held in apparel product shots
+    const rawItems = dropIncidentalBags(output.items);
+    if (!rawItems.length) {
+      return NextResponse.json(
+        { error: "Couldn’t find clothing items in that image. Try a clearer photo." },
+        { status: 422 }
+      );
+    }
+
     const now = new Date().toISOString();
-    const garments: Garment[] = output.items.map((item, i) => {
+    const garments: Garment[] = rawItems.map((item, i) => {
       const storeHint = (item.detectedStore || preferredSource).toLowerCase();
       const source = normalizeSource(storeHint, preferredSource);
       const colors = item.colors.length ? item.colors : ["neutral"];
@@ -150,6 +164,41 @@ detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when re
       { status: 500 }
     );
   }
+}
+
+type ExtractedItem = {
+  name: string;
+  brand: string;
+  category:
+    | "top"
+    | "bottom"
+    | "outerwear"
+    | "shoes"
+    | "accessory"
+    | "dress"
+    | "bag";
+  colors: string[];
+  fabric: string | null;
+  formality:
+    | "casual"
+    | "smart_casual"
+    | "business"
+    | "formal"
+    | "black_tie";
+  tags: string[];
+  price: number | null;
+  currency: string | null;
+  orderId: string | null;
+  detectedStore: string | null;
+};
+
+/** Bags held in dress/top photos are props — keep bags only when they're the product. */
+function dropIncidentalBags(items: ExtractedItem[]): ExtractedItem[] {
+  const apparel = items.filter((i) =>
+    ["dress", "top", "bottom", "outerwear"].includes(i.category)
+  );
+  if (!apparel.length) return items;
+  return items.filter((i) => i.category !== "bag");
 }
 
 function normalizeSource(
