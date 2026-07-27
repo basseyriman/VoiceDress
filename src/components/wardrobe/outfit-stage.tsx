@@ -264,6 +264,18 @@ export function OutfitStage({
         prevIds.length === 0;
       lastRetryNonceRef.current = retryNonce;
 
+      // Same pieces already on the photo — don't restart a full dress
+      // (outfit object can change id/metadata without changing garments)
+      if (
+        !forceFull &&
+        addedIds.length === 0 &&
+        removedIds.length === 0 &&
+        nextIds.length > 0 &&
+        nextIds.length === prevIds.length
+      ) {
+        return;
+      }
+
       const replacePieceOnly =
         !forceFull &&
         addedIds.length === 1 &&

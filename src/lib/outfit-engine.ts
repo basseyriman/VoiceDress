@@ -10,6 +10,7 @@ import { inferOccasionProfile } from "./occasion-profile";
 import {
   inferCategoryFromSpeech,
   matchGarmentFromSpeech,
+  parseSwapSpeech,
 } from "./garment-match";
 import { buildStylingGuide } from "./styling-guide";
 import {
@@ -1116,7 +1117,11 @@ export function parseVoiceIntent(transcript: string) {
       ));
 
   if (swapAsk || shoeSwap) {
-    let item = inferCategoryFromSpeech(t) || (shoeAsk ? "shoes" : "bottom");
+    const swap = parseSwapSpeech(transcript);
+    let item =
+      swap.category ||
+      inferCategoryFromSpeech(t) ||
+      (shoeAsk ? "shoes" : "bottom");
     if (shoeAsk && shoeSwap) item = "shoes";
 
     let style: string | undefined;
@@ -1136,7 +1141,9 @@ export function parseVoiceIntent(transcript: string) {
         style,
         occasion,
         replaceWith: style,
-        garmentQuery: transcript,
+        // Target only — never the full sentence (that matches the worn piece)
+        garmentQuery: swap.targetQuery || swap.sourceQuery || transcript,
+        sourceQuery: swap.sourceQuery,
         tempC: spokenWeather?.tempC,
       },
       reply:
@@ -1244,4 +1251,9 @@ export function parseVoiceIntent(transcript: string) {
   };
 }
 
-export { matchGarmentFromSpeech, inferCategoryFromSpeech };
+export {
+  matchGarmentFromSpeech,
+  inferCategoryFromSpeech,
+  parseSwapSpeech,
+  isClearPieceSwap,
+} from "./garment-match";

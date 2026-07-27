@@ -126,6 +126,8 @@ export interface VoiceCommandResult {
     occasion?: string;
     replaceWith?: string;
     garmentQuery?: string;
+    /** Piece currently worn that they want replaced (from "change X to Y") */
+    sourceQuery?: string;
     path?: string;
     garmentId?: string;
     tempC?: number;

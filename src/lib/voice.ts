@@ -2,6 +2,7 @@
 
 import { authFetch } from "@/lib/auth-fetch";
 import {
+  isClearPieceSwap,
   isHighConfidenceVoiceIntent,
   isOutfitConversation,
   parseVoiceIntent,
@@ -81,7 +82,8 @@ export type VoiceActionHandlers = {
     category: Garment["category"],
     style?: string,
     occasion?: string,
-    garmentQuery?: string
+    garmentQuery?: string,
+    sourceQuery?: string
   ) => unknown;
   pickGarmentById?: (garmentId: string) => unknown;
   onOpenWardrobe?: () => void;
@@ -112,9 +114,12 @@ export async function handleVoiceCommandAsync(
   const genAtStart = getSpeakGeneration();
   const ctx = actions.getContext?.() || {};
   const hasLook = Array.isArray(ctx.outfit) && ctx.outfit.length > 0;
+  // "Change the sweater to a t-shirt" must swap one piece — never chat/re-suggest
+  const clearSwap = isClearPieceSwap(transcript);
   const chatting =
-    shouldPreferOutfitChat(transcript, hasLook) ||
-    (isOutfitConversation(transcript) && hasLook);
+    !clearSwap &&
+    (shouldPreferOutfitChat(transcript, hasLook) ||
+      (isOutfitConversation(transcript) && hasLook));
 
   const finish = (reply: string, meta: Record<string, unknown>) => {
     // User tapped Speak again while we were thinking — don’t talk over them
@@ -124,6 +129,15 @@ export async function handleVoiceCommandAsync(
     speak(reply);
     return { reply, ...meta };
   };
+
+  // Explicit piece swaps take the surgical keyword path
+  if (clearSwap && hasLook) {
+    const parsed = parseVoiceIntent(transcript);
+    if (parsed.intent === "swap_item") {
+      const reply = await applyLocalIntent(parsed, actions);
+      return finish(reply, { source: "keyword-swap" as const, parsed });
+    }
+  }
 
   // Follow-ups about the suggested look → stylist chat (not weather dump / not re-suggest)
   if (chatting) {
@@ -313,7 +327,8 @@ async function applyLocalIntent(
         cat,
         parsed.entities.style,
         parsed.entities.occasion,
-        parsed.entities.garmentQuery
+        parsed.entities.garmentQuery,
+        parsed.entities.sourceQuery
       );
       return parsed.reply;
     }
