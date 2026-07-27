@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       await convert({
         buffer: inputBuffer,
         format: "JPEG",
-        quality: 0.82,
+        quality: 0.92,
       })
     );
 

@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook, hasTryOnArtifacts } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
@@ -365,6 +365,11 @@ export function OutfitStage({
             }
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
+            try {
+              current = await polishTryOnResult(current);
+            } catch {
+              // keep locked
+            }
             setWornUrl(current);
             setKeyConfigured(true);
             if (apparelData.consumedFreeTryOn) {
@@ -425,16 +430,26 @@ export function OutfitStage({
             }
 
             try {
-              current = await lockFaceIdentity(
-                identityPhoto,
-                finishData.imageUrl,
-                isEyewearPiece(piece) ? "soft" : "strong"
-              );
+              if (isEyewearPiece(piece)) {
+                current = await lockFaceIdentity(
+                  identityPhoto,
+                  finishData.imageUrl,
+                  "soft"
+                );
+              } else {
+                // Skip heavy face re-encode on shoes/watch — preserves sharpness
+                current = finishData.imageUrl;
+              }
             } catch {
               current = finishData.imageUrl;
             }
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
+            try {
+              current = await polishTryOnResult(current);
+            } catch {
+              // keep
+            }
             setWornUrl(current);
             setKeyConfigured(true);
           }
@@ -849,11 +864,8 @@ export function OutfitStage({
                   "soft"
                 );
               } else {
-                current = await lockFaceIdentity(
-                  identityPhoto,
-                  finishData.imageUrl,
-                  "strong"
-                );
+                // Shoes/watch: keep FASHN/Kontext pixels — skip JPEG face re-encode mush
+                current = finishData.imageUrl;
               }
             } catch {
               current = finishData.imageUrl;
@@ -869,8 +881,8 @@ export function OutfitStage({
           }
         }
 
-        // Final identity pass — you should look like your original photo
-        setStepLabel("Restoring your face…");
+        // One final identity pass + premium polish (not after every piece)
+        setStepLabel("Finishing your look…");
         try {
           const hadGlasses = finishQueue.some((p) => isEyewearPiece(p));
           current = await lockFaceIdentity(
@@ -878,10 +890,15 @@ export function OutfitStage({
             current,
             hadGlasses ? "soft" : "strong"
           );
-          setWornUrl(current);
         } catch {
           // keep current
         }
+        try {
+          current = await polishTryOnResult(current);
+        } catch {
+          // keep current
+        }
+        setWornUrl(current);
 
         const missed = lookPieces.filter(
           (p) => !appliedIds.has(p.id) && !appliedNames.has(p.name)

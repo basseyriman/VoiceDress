@@ -29,7 +29,7 @@ export async function prepareProfilePhoto(file: File): Promise<{
       return { dataUrl: "", error: "Please upload a JPG, PNG, WebP, or HEIC photo." };
     }
 
-    return { dataUrl: await compressBlob(source, 1200, 0.82) };
+    return { dataUrl: await compressBlob(source, 1800, 0.92) };
   } catch {
     return {
       dataUrl: "",
@@ -89,7 +89,85 @@ export async function letterboxForTryOn(src: string): Promise<string> {
     drawH
   );
 
-  return canvas.toDataURL("image/jpeg", 0.96);
+  return canvas.toDataURL("image/jpeg", 0.97);
+}
+
+/**
+ * Final display polish — mild contrast/clarity without AI re-generation.
+ * Cuts muddy multi-pass look so the dressed photo feels premium next to UI.
+ */
+export async function polishTryOnResult(src: string): Promise<string> {
+  const img = await loadHtmlImage(src);
+  const w = img.width;
+  const h = img.height;
+  if (w < 8 || h < 8) return src;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return src;
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  // Tone: slight contrast + saturation so fabric colors read cleaner
+  ctx.filter = "contrast(1.06) saturate(1.07) brightness(1.02)";
+  ctx.drawImage(img, 0, 0, w, h);
+  ctx.filter = "none";
+
+  // Unsharp only on moderate sizes — full 2k pixel loops stall phones
+  if (w * h > 1_600_000) {
+    return canvas.toDataURL("image/jpeg", 0.95);
+  }
+
+  const sharp = document.createElement("canvas");
+  sharp.width = w;
+  sharp.height = h;
+  const sctx = sharp.getContext("2d");
+  if (!sctx) return canvas.toDataURL("image/jpeg", 0.95);
+
+  sctx.drawImage(canvas, 0, 0);
+  const srcData = sctx.getImageData(0, 0, w, h);
+  const out = sctx.createImageData(w, h);
+  const s = srcData.data;
+  const d = out.data;
+  const k = [0, -0.12, 0, -0.12, 1.48, -0.12, 0, -0.12, 0];
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        let v = 0;
+        let ki = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            v += s[((y + dy) * w + (x + dx)) * 4 + c] * k[ki++];
+          }
+        }
+        d[i + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+      d[i + 3] = s[i + 3];
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    for (let c = 0; c < 4; c++) {
+      d[x * 4 + c] = s[x * 4 + c];
+      d[((h - 1) * w + x) * 4 + c] = s[((h - 1) * w + x) * 4 + c];
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let c = 0; c < 4; c++) {
+      d[y * w * 4 + c] = s[y * w * 4 + c];
+      d[(y * w + w - 1) * 4 + c] = s[(y * w + w - 1) * 4 + c];
+    }
+  }
+  sctx.putImageData(out, 0, 0);
+
+  ctx.globalAlpha = 0.4;
+  ctx.drawImage(sharp, 0, 0);
+  ctx.globalAlpha = 1;
+
+  return canvas.toDataURL("image/jpeg", 0.95);
 }
 
 /**
@@ -821,7 +899,7 @@ async function convertHeicOnServer(
       const converted = await heic2any({
         blob: file,
         toType: "image/jpeg",
-        quality: 0.82,
+        quality: 0.92,
       });
       const blob = Array.isArray(converted) ? converted[0] : converted;
       return { ok: true, blob: blob as Blob };
