@@ -831,10 +831,10 @@ export async function keepUpperBlendLower(
 
 /**
  * After shoe finish: keep the dressed clothes photo above the ankles and only
- * take feet from the shoe edit. Rolls back to the clean dress if the edit glitches.
+ * take feet from the shoe edit. Rolls back only if the mid-body/dress was rewritten.
  *
- * Dress looks: always roll back — shoe AI routinely paints boots/feather mush over
- * the hem. Callers should skip the shoe API for dresses; this is a hard safety net.
+ * Important: dress looks MUST still replace original boots from the body photo —
+ * skipping shoes left the avatar’s own boots on screen (looked like “random knee boots”).
  */
 export async function protectDressedLookAfterShoes(
   dressedSrc: string,
@@ -842,13 +842,10 @@ export async function protectDressedLookAfterShoes(
   opts?: { hasDress?: boolean }
 ): Promise<{ url: string; rolledBack: boolean }> {
   const hasDress = Boolean(opts?.hasDress);
-  if (hasDress) {
-    return { url: dressedSrc, rolledBack: true };
-  }
-
-  // Hard feet-only strip — soft feathers caused the black mush around ankles.
-  const seam = 0.915;
-  const feather = 0.012;
+  // Hard feet strip. Dresses use a slightly higher seam so the hem stays intact
+  // while original boots still get replaced in the foot band.
+  const seam = hasDress ? 0.905 : 0.915;
+  const feather = 0.01;
 
   let blended: string;
   try {

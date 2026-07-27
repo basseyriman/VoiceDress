@@ -113,6 +113,9 @@ export function apparelPromptForPiece(
       `Wear this exact ${piece.category === "dress" ? "dress" : "top"}: ${piece.name || "garment"}.`,
       colors ? `Keep the ${colors} color — do not darken or recolor it.` : "Keep the exact product color.",
       "Replace the current upper clothing completely.",
+      piece.category === "dress"
+        ? "Do not invent tall boots or change footwear into knee-high boots — leave feet simple; shoes are applied in a later step."
+        : "",
     ]
       .filter(Boolean)
       .join(" ");

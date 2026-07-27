@@ -622,16 +622,8 @@ export function OutfitStage({
             (p) => p.category === "accessory" && isEyewearPiece(p)
           ),
         ];
-
-        // Dress + shoe AI currently spoils the hem (boots / black feather mush).
-        // Keep the clean dress on photo; shoes stay in the look list to swap later.
         const lookHasDress = lookPieces.some((g) => g.category === "dress");
-        const shoesDeferred = lookHasDress
-          ? finishQueue.filter((p) => p.category === "shoes")
-          : [];
-        const photoFinishQueue = lookHasDress
-          ? finishQueue.filter((p) => p.category !== "shoes")
-          : finishQueue;
+        // Always run shoes on photo — original avatar boots otherwise stay under the dress.
 
         const markApplied = (step: { id?: string; name?: string }) => {
           if (step.id) appliedIds.add(step.id);
@@ -823,7 +815,7 @@ export function OutfitStage({
               ...apparelDoneIds,
             ]);
             // Clothes landed — accessories stay “applying” until finish finishes
-            setApplyingPieceIds(photoFinishQueue.map((p) => p.id));
+            setApplyingPieceIds(finishQueue.map((p) => p.id));
             setProgress(55);
           }
 
@@ -908,29 +900,19 @@ export function OutfitStage({
           }
         }
 
-        // 2) Finish extras — for dress looks, skip shoes on the photo (keeps hem clean)
-        if (shoesDeferred.length) {
-          for (const piece of shoesDeferred) {
-            setMissingIds((ids) =>
-              ids.includes(piece.id) ? ids : [...ids, piece.id]
-            );
-          }
-        }
-
-        if (photoFinishQueue.length) {
+        // 2) Shoes + accessories on the dressed photo (replaces original avatar boots)
+        if (finishQueue.length) {
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
 
-          setActivePieceId(photoFinishQueue[0]?.id || null);
-          setApplyingPieceIds(photoFinishQueue.map((p) => p.id));
+          setActivePieceId(finishQueue[0]?.id || null);
+          setApplyingPieceIds(finishQueue.map((p) => p.id));
           setStepLabel(
-            lookHasDress && shoesDeferred.length
-              ? `Finishing look — keeping dress clean (shoes in list)…`
-              : photoFinishQueue.length > 1
-                ? `Adding ${photoFinishQueue.map((p) => p.name).join(" + ")}…`
-                : `Adding ${photoFinishQueue[0].name}…`
+            finishQueue.length > 1
+              ? `Adding ${finishQueue.map((p) => p.name).join(" + ")}…`
+              : `Adding ${finishQueue[0].name}…`
           );
           setDonePieceIds((ids) =>
-            ids.filter((id) => !photoFinishQueue.some((p) => p.id === id))
+            ids.filter((id) => !finishQueue.some((p) => p.id === id))
           );
           setProgress(62);
 
@@ -943,8 +925,8 @@ export function OutfitStage({
               personImage: current,
               stage: "finish",
               includeFaceAccessories: true,
-              maxPieces: photoFinishQueue.length,
-              garments: photoFinishQueue.map(toPayload),
+              maxPieces: finishQueue.length,
+              garments: finishQueue.map(toPayload),
             }),
           });
           const finishData = await finishRes.json();
@@ -957,7 +939,7 @@ export function OutfitStage({
             Array.isArray(finishData.steps) &&
             finishData.steps.length > 0
           ) {
-            const finishHadShoes = photoFinishQueue.some(
+            const finishHadShoes = finishQueue.some(
               (p) => p.category === "shoes"
             );
             let shoesRolledBack = false;
@@ -974,14 +956,12 @@ export function OutfitStage({
                 const protectedLook = await protectDressedLookAfterShoes(
                   beforeFinish,
                   current,
-                  {
-                    hasDress: lookHasDress,
-                  }
+                  { hasDress: lookHasDress }
                 );
                 current = protectedLook.url;
                 shoesRolledBack = protectedLook.rolledBack;
                 if (protectedLook.rolledBack) {
-                  for (const piece of photoFinishQueue.filter(
+                  for (const piece of finishQueue.filter(
                     (p) => p.category === "shoes"
                   )) {
                     setMissingIds((ids) =>
@@ -1000,7 +980,7 @@ export function OutfitStage({
                 // keep color-stabilized frame
               }
             }
-            const hasEyewear = photoFinishQueue.some((p) =>
+            const hasEyewear = finishQueue.some((p) =>
               /glass|frame|optic|sunglass|spec/i.test(
                 `${p.name || ""} ${(p.tags || []).join(" ")}`
               )
@@ -1029,7 +1009,7 @@ export function OutfitStage({
                 .map((s: { name?: string }) => s.name)
                 .filter(Boolean) as string[]
             );
-            for (const piece of photoFinishQueue) {
+            for (const piece of finishQueue) {
               const shoeFailed = shoesRolledBack && piece.category === "shoes";
               const landed =
                 !shoeFailed &&
@@ -1050,16 +1030,12 @@ export function OutfitStage({
             }
           } else {
             setApplyingPieceIds([]);
-            for (const piece of photoFinishQueue) {
+            for (const piece of finishQueue) {
               setMissingIds((ids) =>
                 ids.includes(piece.id) ? ids : [...ids, piece.id]
               );
             }
           }
-        } else if (shoesDeferred.length) {
-          // Dress-only finish: photo stays on clean apparel
-          setApplyingPieceIds([]);
-          setStepLabel("Dress ready — shoes listed, not painted on photo");
         }
 
         // Polish clothes/body first, then restore YOUR face last (never polish the face)
@@ -1423,7 +1399,7 @@ export function OutfitStage({
             )}
 
             {!error && notice && (
-              <div className="absolute inset-x-4 top-[4.75rem] z-30 rounded-2xl border border-line bg-ink/80 px-4 py-3 text-xs text-mist backdrop-blur-md sm:top-[5.25rem]">
+              <div className="absolute inset-x-3 bottom-14 z-30 rounded-2xl border border-line bg-ink/85 px-3 py-2.5 text-xs text-mist backdrop-blur-md sm:inset-x-4 sm:bottom-16">
                 {notice}
               </div>
             )}
@@ -1431,11 +1407,11 @@ export function OutfitStage({
             <AnimatePresence>
               {!dressing && wornUrl && outfit && (
                 <motion.div
-                  initial={{ opacity: 0, y: -6 }}
+                  initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  className="pointer-events-none absolute left-4 top-4 z-20 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md"
+                  className="pointer-events-none absolute inset-x-3 bottom-3 z-20 max-w-[90%] rounded-2xl border border-line bg-ink/80 px-3 py-2 backdrop-blur-md sm:left-4 sm:right-auto sm:max-w-[75%]"
                 >
                   <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
                     Ready · dressed for
@@ -1679,12 +1655,7 @@ export function OutfitStage({
           )}
           {!generating && !dressing && wornUrl && outfit && photoTryOn && missingIds.length > 0 && (
             <p className="mt-4 text-xs text-mist">
-              {lookPieces.some((g) => g.category === "dress") &&
-              missingIds.some((id) =>
-                lookPieces.some((g) => g.id === id && g.category === "shoes")
-              )
-                ? "Dress kept clean on photo — tap shoes to pick a different pair."
-                : "Some pieces didn’t match — tap to swap."}
+              Some pieces didn’t match — tap to swap.
             </p>
           )}
         </div>
