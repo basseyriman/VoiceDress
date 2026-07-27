@@ -780,11 +780,6 @@ export function OutfitStage({
                     : "Quick pick — photo optional"}
                 </p>
               </div>
-              {dressing && (
-                <span className="shrink-0 rounded-full border border-champagne/40 bg-champagne/15 px-3 py-1 text-[11px] font-medium tabular-nums tracking-wide text-champagne">
-                  {progressPct}%
-                </span>
-              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {autoTryOn && (
@@ -827,6 +822,48 @@ export function OutfitStage({
             </div>
           </div>
 
+          {/* Progress sits ABOVE the photo — never covers legs/shoes */}
+          <AnimatePresence>
+            {hasAvatar && dressing && !showKeyPrompt && !showBillingPrompt && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-3 overflow-hidden"
+              >
+                <div className="rounded-2xl border border-line/80 bg-ink/80 px-3 py-2.5 backdrop-blur-md">
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-display text-sm leading-snug text-ivory sm:text-base">
+                        {stepLabel}
+                      </p>
+                      <p className="mt-0.5 text-[10px] uppercase tracking-wider text-mist">
+                        {piecesDone}/{piecesTotal}
+                        {activePieceId ? " · applying" : ""}
+                        {" · "}~
+                        {etaSec < 60
+                          ? `${etaSec}s`
+                          : `${Math.ceil(etaSec / 60)}m`}{" "}
+                        left
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-display text-2xl tabular-nums leading-none text-champagne sm:text-3xl">
+                      {progressPct}
+                      <span className="text-sm sm:text-base">%</span>
+                    </p>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
+                    <motion.div
+                      className="h-full rounded-full bg-champagne shadow-[0_0_10px_rgba(201,168,124,0.4)]"
+                      animate={{ width: `${Math.max(progressPct, 4)}%` }}
+                      transition={{ duration: 0.4 }}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="relative overflow-hidden rounded-[1.75rem] border border-line bg-[#0e0e0d] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_30%,rgba(201,168,124,0.08),transparent_60%)]" />
 
@@ -839,7 +876,7 @@ export function OutfitStage({
                   initial={{ opacity: 0.55, filter: "brightness(0.96)" }}
                   animate={{
                     opacity: 1,
-                    filter: dressing ? "brightness(0.92)" : "brightness(1)",
+                    filter: dressing ? "brightness(0.96)" : "brightness(1)",
                   }}
                   transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
                   className="relative z-[1] mx-auto block h-auto max-h-[min(72vh,42rem)] w-full object-contain object-center"
@@ -876,48 +913,6 @@ export function OutfitStage({
                 </Link>
               </div>
             )}
-
-            <AnimatePresence>
-              {hasAvatar && dressing && !showKeyPrompt && !showBillingPrompt && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 6 }}
-                  className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-2.5 sm:p-3"
-                >
-                  {/* Compact status card — keeps the photo visible on mobile */}
-                  <div className="rounded-2xl border border-line/80 bg-ink/90 px-3 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-md">
-                    <div className="flex items-center gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-display text-sm leading-snug text-ivory sm:text-base">
-                          {stepLabel}
-                        </p>
-                        <p className="mt-0.5 text-[10px] uppercase tracking-wider text-mist">
-                          {piecesDone}/{piecesTotal}
-                          {activePieceId ? " · applying" : ""}
-                          {" · "}~
-                          {etaSec < 60
-                            ? `${etaSec}s`
-                            : `${Math.ceil(etaSec / 60)}m`}{" "}
-                          left
-                        </p>
-                      </div>
-                      <p className="shrink-0 font-display text-2xl tabular-nums leading-none text-champagne sm:text-3xl">
-                        {progressPct}
-                        <span className="text-sm sm:text-base">%</span>
-                      </p>
-                    </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
-                      <motion.div
-                        className="h-full rounded-full bg-champagne shadow-[0_0_10px_rgba(201,168,124,0.4)]"
-                        animate={{ width: `${Math.max(progressPct, 4)}%` }}
-                        transition={{ duration: 0.4 }}
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             {showBillingPrompt && hasAvatar && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center backdrop-blur-sm">
