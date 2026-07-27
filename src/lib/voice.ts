@@ -66,6 +66,13 @@ export function unlockSpeech() {
   }
 }
 
+/** Prefer a warm female English voice on every device (desktop + iOS/Android). */
+const FEMALE_VOICE_HINT =
+  /\b(female|woman|girl)\b|serena|martha|libby|sonia|susan|samantha|karen|moira|fiona|tessa|victoria|kate|zira|ava|allison|amy|emma|joanna|salli|ivy|kimberly|kendra|olivia|emily|hazel|nicky|veena|raveena|google uk english female|microsoft (sonia|susan|hazel|zira)/i;
+
+const MALE_VOICE_HINT =
+  /\b(male|man|boy)\b|daniel|david|arthur|ryan|thomas|fred|ralph|alex\b|tom\b|mark\b|james|oliver|george|brian|matthew|justin|joey|google uk english male|microsoft (david|mark|george|ryan)/i;
+
 function pickBestVoice(): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
@@ -75,29 +82,56 @@ function pickBestVoice(): SpeechSynthesisVoice | null {
     const name = v.name.toLowerCase();
     const lang = (v.lang || "").toLowerCase();
     let s = 0;
-    if (lang.startsWith("en-gb")) s += 60;
-    else if (lang.startsWith("en-us")) s += 25;
+
+    // Language — British English first (same vibe as desktop)
+    if (lang.startsWith("en-gb") || lang === "en_gb") s += 70;
+    else if (lang.startsWith("en-au") || lang.startsWith("en-ie")) s += 40;
+    else if (lang.startsWith("en-us") || lang === "en_us") s += 28;
     else if (lang.startsWith("en")) s += 15;
-    if (name.includes("google") && lang.startsWith("en-gb")) s += 35;
+
+    // Hard preference: female over male on every platform
+    if (FEMALE_VOICE_HINT.test(name)) s += 120;
+    if (MALE_VOICE_HINT.test(name)) s -= 200;
+
+    // Chrome desktop favourite
+    if (name.includes("google") && (lang.startsWith("en-gb") || lang === "en_gb")) {
+      s += 40;
+      if (name.includes("female")) s += 50;
+    }
+
     if (
       name.includes("natural") ||
       name.includes("neural") ||
       name.includes("enhanced") ||
-      name.includes("premium")
+      name.includes("premium") ||
+      name.includes("quality")
     ) {
       s += 18;
     }
-    if (
-      /daniel|martha|serena|libby|ryan|sonia|susan|arthur/.test(name) &&
-      lang.startsWith("en-gb")
-    ) {
-      s += 12;
-    }
+
+    // iOS often exposes gender via name only — boost known soft female defaults
+    if (/serena|samantha|karen|moira|libby|sonia/.test(name)) s += 25;
+
     if (v.localService) s += 2;
+    if (v.default && FEMALE_VOICE_HINT.test(name)) s += 5;
+    // Never trust OS default if it's a male voice
+    if (v.default && MALE_VOICE_HINT.test(name)) s -= 40;
+
     return s;
   };
 
-  preferredVoice = [...voices].sort((a, b) => score(b) - score(a))[0] || null;
+  const ranked = [...voices].sort((a, b) => score(b) - score(a));
+  // Prefer the best female English voice; only fall back if none exist
+  const femaleEn = ranked.find(
+    (v) =>
+      FEMALE_VOICE_HINT.test(v.name) &&
+      (v.lang || "").toLowerCase().startsWith("en")
+  );
+  preferredVoice =
+    femaleEn ||
+    ranked.find((v) => !MALE_VOICE_HINT.test(v.name) && (v.lang || "").toLowerCase().startsWith("en")) ||
+    ranked[0] ||
+    null;
   return preferredVoice;
 }
 
