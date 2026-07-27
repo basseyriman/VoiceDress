@@ -7,7 +7,7 @@
  * 2. Finish — shoes/watch/bag/glasses in one request; client locks trousers + face.
  */
 
-import { isHosieryOrSocks } from "@/lib/commerce";
+import { isHosieryOrSocks, isRealFootwear } from "@/lib/commerce";
 
 export const TRYON_APPAREL_CATEGORIES = [
   "top",
@@ -37,9 +37,7 @@ export function lookPiecesForTryOn<
   const apparel = apparelOrder
     .map((cat) => garments.find((g) => g.category === cat))
     .filter(Boolean) as T[];
-  const shoes = garments.find(
-    (g) => g.category === "shoes" && !isHosieryOrSocks(g)
-  );
+  const shoes = garments.find((g) => isRealFootwear(g));
   const bag = garments.find((g) => g.category === "bag");
   const accessories = garments.filter(
     (g) => g.category === "accessory" && !isHosieryOrSocks(g)
@@ -83,12 +81,13 @@ export function apparelForTryOn<T extends { category: string }>(garments: T[]) {
 }
 
 export function finishingPieces<
-  T extends { category: string; name?: string; tags?: string[] },
+  T extends { category: string; name?: string; tags?: string[]; colors?: string[]; fabric?: string },
 >(garments: T[]) {
   return garments.filter((g) => {
-    if (!isFinishTryOnCategory(g.category)) return false;
     if (isHosieryOrSocks(g)) return false;
-    return true;
+    if (isRealFootwear(g)) return true;
+    if (g.category === "shoes") return false; // jeans mistagged as shoes — skip
+    return isFinishTryOnCategory(g.category);
   });
 }
 

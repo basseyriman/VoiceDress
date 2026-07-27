@@ -929,10 +929,19 @@ export async function POST(req: NextRequest) {
 
   if (runFinish && finish.length) {
     const shoePieces = finish.filter((g) => isRealFootwear(g));
-    const otherFinish = finish.filter((g) => !isRealFootwear(g));
+    // Never treat mistagged jeans/apparel (category=shoes but not footwear) as accessories
+    const otherFinish = finish.filter(
+      (g) => !isRealFootwear(g) && g.category !== "shoes"
+    );
     // Watches stay text-only (product collage often blobs). Glasses/bags can batch.
     const watchPieces = otherFinish.filter(isWatch);
-    const batchable = otherFinish.filter((g) => !isWatch(g));
+    const eyewearPieces = otherFinish.filter(isEyewear);
+    const bagPieces = otherFinish.filter((g) => g.category === "bag");
+    const otherAccessories = otherFinish.filter(
+      (g) => !isWatch(g) && !isEyewear(g) && g.category !== "bag"
+    );
+    // Batch bags + small accessories only — never mix eyewear into a collage with junk
+    const batchable = [...bagPieces, ...otherAccessories];
 
     const runOne = async (g: Piece) => {
       let productImage = "";
@@ -993,13 +1002,13 @@ export async function POST(req: NextRequest) {
       });
     };
 
-    // 1) Shoes first (feet region)
+    // 1) Shoes first (feet region) — real footwear only
     for (const g of shoePieces) {
       const billed = await runOne(g);
       if (billed instanceof NextResponse) return billed;
     }
 
-    // 2) Glasses/bag in ONE collage call when 2+ (cuts accessory wait roughly in half)
+    // 2) Bags / small accessories (optional collage)
     if (batchable.length >= 2 && falKey) {
       try {
         const productImages = await Promise.all(
@@ -1064,7 +1073,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3) Watch text-only last (fast; doesn’t need product image)
+    // 3) Glasses alone — dedicated pass so they aren’t lost in a collage
+    for (const g of eyewearPieces) {
+      const billed = await runOne(g);
+      if (billed instanceof NextResponse) return billed;
+    }
+
+    // 4) Watch text-only last (fast; doesn’t need product image)
     for (const g of watchPieces) {
       const billed = await runOne(g);
       if (billed instanceof NextResponse) return billed;

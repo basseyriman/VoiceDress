@@ -13,6 +13,7 @@ import {
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
 import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
+import { isRealFootwear } from "@/lib/commerce";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
@@ -594,7 +595,7 @@ export function OutfitStage({
         const appliedNames = new Set<string>();
 
         const finishQueue = [
-          ...styledExtras.filter((p) => p.category === "shoes"),
+          ...styledExtras.filter((p) => isRealFootwear(p)),
           ...styledExtras.filter(
             (p) => p.category === "accessory" && isWatchPiece(p)
           ),
@@ -604,7 +605,8 @@ export function OutfitStage({
               !isEyewearPiece(p) &&
               !isWatchPiece(p)
           ),
-          // Glasses last — they rewrite the face; restore identity before them
+          ...styledExtras.filter((p) => p.category === "bag"),
+          // Glasses last — they rewrite the face; restore identity after
           ...styledExtras.filter(
             (p) => p.category === "accessory" && isEyewearPiece(p)
           ),
