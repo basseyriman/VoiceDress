@@ -62,17 +62,17 @@ export default function LandingPage() {
             transition={{ duration: 0.7 }}
             className="flex items-center gap-3"
           >
-            {/* Exact home-screen icon */}
+            {/* Quiet couture mark — brand name carries the luxury */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/icons/icon-192.png?v=12"
+              src="/logo.svg?v=13"
               alt=""
-              width={44}
-              height={44}
-              className="h-11 w-11 rounded-[0.85rem] border border-champagne/20"
+              width={36}
+              height={26}
+              className="h-7 w-auto opacity-90"
             />
-            <p className="font-display text-base font-medium tracking-[0.18em] text-champagne">
-              VoiceDress
+            <p className="font-display text-xl font-medium tracking-[0.16em] text-ivory sm:text-2xl">
+              Voice<span className="text-champagne">Dress</span>
             </p>
           </motion.div>
           <motion.h1

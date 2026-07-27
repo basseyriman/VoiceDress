@@ -42,13 +42,13 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icon.svg?v=12", type: "image/svg+xml" },
-      { url: "/icons/icon-192.png?v=12", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png?v=12", sizes: "512x512", type: "image/png" },
+      { url: "/icon.svg?v=13", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png?v=13", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png?v=13", sizes: "512x512", type: "image/png" },
     ],
     apple: [
-      { url: "/apple-touch-icon.png?v=12", sizes: "180x180", type: "image/png" },
-      { url: "/icons/icon-180.png?v=12", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png?v=13", sizes: "180x180", type: "image/png" },
+      { url: "/icons/icon-180.png?v=13", sizes: "180x180", type: "image/png" },
     ],
   },
   manifest: "/manifest.webmanifest",

@@ -41,19 +41,19 @@ export function Logo({ className }: { className?: string }) {
   return (
     <Link
       href="/"
-      className={cn("group inline-flex items-center gap-3", className)}
+      className={cn("group inline-flex items-center gap-2.5", className)}
       aria-label="VoiceDress home"
     >
-      {/* Exact home-screen icon (thick stroke + padding) */}
+      {/* Quiet couture mark — wordmark leads the luxury */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/icons/icon-192.png?v=12"
+        src="/logo.svg?v=13"
         alt=""
-        width={36}
-        height={36}
-        className="h-9 w-9 shrink-0 rounded-[0.75rem] border border-champagne/20 transition duration-300 group-hover:opacity-90"
+        width={28}
+        height={20}
+        className="h-[1.15rem] w-auto shrink-0 opacity-90 transition duration-300 group-hover:opacity-100"
       />
-      <span className="font-display text-[1.35rem] font-medium leading-none tracking-[0.06em] text-ivory">
+      <span className="font-display text-[1.45rem] font-medium leading-none tracking-[0.12em] text-ivory">
         Voice
         <span className="text-champagne">Dress</span>
       </span>
