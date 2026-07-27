@@ -836,13 +836,9 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       if (acc) selected.push(acc);
     }
 
-    // Bags when wardrobe has them and occasion warrants (or dress look)
-    const wantBag =
-      profile.preferCategories.includes("bag") ||
-      wearingDress ||
-      formalityRank(formality) >= 2 ||
-      dressFriendly;
-    if (wantBag) {
+    // Bags only when the style profile asks for them — never force a clutch
+    // from a dress product shot into every look.
+    if (profile.preferCategories.includes("bag")) {
       const bag = pick(byCat("bag"), selected);
       if (bag) selected.push(bag);
     }

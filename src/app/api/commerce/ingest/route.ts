@@ -14,36 +14,57 @@ import {
 import type { CommerceSource, Formality, Garment } from "@/lib/types";
 import { isAuthedUser, requireAuth } from "@/lib/api-auth";
 
+const garmentCategoryEnum = z.enum([
+  "top",
+  "bottom",
+  "outerwear",
+  "shoes",
+  "accessory",
+  "dress",
+  "bag",
+]);
+
+const extractedItemSchema = z.object({
+  name: z.string(),
+  brand: z.string(),
+  category: garmentCategoryEnum,
+  colors: z.array(z.string()),
+  fabric: z.string().nullable(),
+  formality: z.enum([
+    "casual",
+    "smart_casual",
+    "business",
+    "formal",
+    "black_tie",
+  ]),
+  tags: z.array(z.string()),
+  price: z.number().nullable(),
+  currency: z.string().nullable(),
+  orderId: z.string().nullable(),
+  detectedStore: z.string().nullable(),
+});
+
 const garmentExtractSchema = z.object({
-  items: z.array(
-    z.object({
-      name: z.string(),
-      brand: z.string(),
-      category: z.enum([
-        "top",
-        "bottom",
-        "outerwear",
-        "shoes",
-        "accessory",
-        "dress",
-        "bag",
-      ]),
-      colors: z.array(z.string()),
-      fabric: z.string().nullable(),
-      formality: z.enum([
-        "casual",
-        "smart_casual",
-        "business",
-        "formal",
-        "black_tie",
-      ]),
-      tags: z.array(z.string()),
-      price: z.number().nullable(),
-      currency: z.string().nullable(),
-      orderId: z.string().nullable(),
-      detectedStore: z.string().nullable(),
-    })
-  ),
+  /** What the photo is mainly selling (not a prop the model holds). */
+  dominantProduct: garmentCategoryEnum,
+  items: z.array(extractedItemSchema),
+});
+
+const bagGuardSchema = z.object({
+  mainProductIsBag: z.boolean(),
+  category: garmentCategoryEnum,
+  name: z.string(),
+  brand: z.string(),
+  colors: z.array(z.string()),
+  fabric: z.string().nullable(),
+  formality: z.enum([
+    "casual",
+    "smart_casual",
+    "business",
+    "formal",
+    "black_tie",
+  ]),
+  tags: z.array(z.string()),
 });
 
 export async function POST(req: NextRequest) {
@@ -87,8 +108,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Drop incidental handbags held in apparel product shots
-    const rawItems = dropIncidentalBags(output.items);
+    let rawItems = finalizeExtractedItems(output);
+    // Model often labels a dress photo as "Handbag" because a clutch is held —
+    // second look when the only result is a bag.
+    if (rawItems.length === 1 && rawItems[0].category === "bag") {
+      const corrected = await guardBagOnlyExtraction(
+        openai,
+        imageDataUrl,
+        rawItems[0]
+      );
+      rawItems = corrected;
+    }
     if (!rawItems.length) {
       return NextResponse.json(
         { error: "Couldn’t find clothing items in that image. Try a clearer photo." },
@@ -175,14 +205,20 @@ async function generateTextWithRateLimit(
               {
                 type: "text",
                 text: `Extract clothing / footwear / accessory items from this receipt, order screenshot, or product photo for a wardrobe app.
+
+Set dominantProduct to what the photo is MAINLY selling (the product a shopper would buy) — never a prop.
+Examples:
+- Model in a midi dress holding a small clutch → dominantProduct=dress, items=[the dress only]. Do NOT return the clutch.
+- Close-up of a tote on a white background → dominantProduct=bag, items=[the bag].
+- Receipt with dress + sandals lines → dominantProduct can be dress or the first apparel line; include each purchased line item (still omit styling props not on the receipt).
+
 Return every distinct wearable item the shopper is actually buying. Prefer accurate names and brands.
-Category rules: socks, stockings, tights, no-show socks → accessory (NOT shoes). shoes/boots/loafers/sneakers/heels/pumps/flats/sandals/wedges → shoes. dresses/jumpsuits/rompers → dress. skirts → bottom. blouses/tops → top. handbags/totes/clutches → bag ONLY when the bag is the product being sold.
+Category rules: socks, stockings, tights, no-show socks → accessory (NOT shoes). shoes/boots/loafers/sneakers/heels/pumps/flats/sandals/wedges → shoes. dresses/jumpsuits/rompers → dress. skirts → bottom. blouses/tops → top.
 CRITICAL — bags / handbags:
-- Do NOT add a bag just because a model is holding or wearing one in a dress/top/outfit photo.
-- Props, styling accessories, and background bags are NOT wardrobe items.
-- Only return category "bag" when the image/receipt is clearly selling a bag as its own product (bag is the main subject, or a receipt line is a bag).
-- If the main product is a dress, top, bottom, or outerwear, return that garment only — omit any held handbag.
-If it's a product photo of one garment, return one item.
+- A bag the model is holding, wearing, or styled with is a PROP, not a wardrobe item.
+- NEVER return category "bag" for dress, top, skirt, or jumpsuit product photos — even if a handbag is visible.
+- Only return category "bag" when the bag itself is the product (bag fills most of the frame, bag listing page, or receipt line is a bag).
+If it's a product photo of one garment, return exactly one item matching dominantProduct.
 detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when recognizable.`,
               },
               { type: "image", image: imageDataUrl },
@@ -211,39 +247,127 @@ detectedStore should be amazon|asos|zara|ebay|shein|temu|shopify|receipt when re
     : new Error("Rate limit — try again shortly");
 }
 
-type ExtractedItem = {
-  name: string;
-  brand: string;
-  category:
-    | "top"
-    | "bottom"
-    | "outerwear"
-    | "shoes"
-    | "accessory"
-    | "dress"
-    | "bag";
-  colors: string[];
-  fabric: string | null;
-  formality:
-    | "casual"
-    | "smart_casual"
-    | "business"
-    | "formal"
-    | "black_tie";
-  tags: string[];
-  price: number | null;
-  currency: string | null;
-  orderId: string | null;
-  detectedStore: string | null;
-};
+type ExtractedItem = z.infer<typeof extractedItemSchema>;
+type ExtractOutput = z.infer<typeof garmentExtractSchema>;
 
-/** Bags held in dress/top photos are props — keep bags only when they're the product. */
-function dropIncidentalBags(items: ExtractedItem[]): ExtractedItem[] {
-  const apparel = items.filter((i) =>
-    ["dress", "top", "bottom", "outerwear"].includes(i.category)
-  );
-  if (!apparel.length) return items;
-  return items.filter((i) => i.category !== "bag");
+const APPAREL_CATS = new Set(["dress", "top", "bottom", "outerwear"]);
+
+/** Drop prop bags; coerce when dominant product is apparel but model returned bags. */
+function finalizeExtractedItems(output: ExtractOutput): ExtractedItem[] {
+  const { dominantProduct, items } = output;
+  if (!items.length) return [];
+
+  if (APPAREL_CATS.has(dominantProduct)) {
+    const apparel = items.filter((i) => APPAREL_CATS.has(i.category));
+    if (apparel.length) {
+      // Keep apparel + real shoes from multi-item receipts; never bags
+      const shoes = items.filter((i) => i.category === "shoes");
+      return [...apparel, ...shoes];
+    }
+    // Dominant is apparel but model only returned bag/accessory — coerce first item
+    const seed = items[0];
+    return [
+      {
+        ...seed,
+        category: dominantProduct as ExtractedItem["category"],
+        name: looksLikeBagName(seed.name)
+          ? defaultNameForCategory(dominantProduct)
+          : seed.name,
+        tags: [
+          ...(seed.tags || []).filter((t) => !/bag|clutch|tote|purse/i.test(t)),
+          "corrected_prop_bag",
+        ],
+      },
+    ];
+  }
+
+  if (dominantProduct === "bag") {
+    return items.filter((i) => i.category === "bag");
+  }
+
+  // Receipts / mixed: drop bags whenever apparel is also present
+  const apparel = items.filter((i) => APPAREL_CATS.has(i.category));
+  if (apparel.length) {
+    return items.filter((i) => i.category !== "bag");
+  }
+  return items;
+}
+
+function looksLikeBagName(name: string): boolean {
+  return /^(hand\s*)?bag|clutch|tote|purse|crossbody$/i.test(name.trim());
+}
+
+function defaultNameForCategory(cat: string): string {
+  switch (cat) {
+    case "dress":
+      return "Dress";
+    case "top":
+      return "Top";
+    case "bottom":
+      return "Bottom";
+    case "outerwear":
+      return "Outerwear";
+    default:
+      return "Garment";
+  }
+}
+
+/** Second vision pass when extraction returned only a bag — catch dress-with-clutch shots. */
+async function guardBagOnlyExtraction(
+  openai: NonNullable<ReturnType<typeof getOpenAI>>,
+  imageDataUrl: string,
+  bagItem: ExtractedItem
+): Promise<ExtractedItem[]> {
+  try {
+    const { output } = await generateText({
+      model: openai(INGEST_VISION_MODEL),
+      output: Output.object({ schema: bagGuardSchema }),
+      maxRetries: 0,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `This photo was classified as a handbag. Double-check carefully.
+
+Is the MAIN product being sold a bag/purse/clutch, OR is it clothing (dress, top, skirt, jumpsuit, etc.) where a bag is only held or styled as a prop?
+
+- If clothing dominates the frame (person wearing a dress/outfit), set mainProductIsBag=false and fill category/name/brand/colors for the CLOTHING (e.g. category=dress).
+- Only set mainProductIsBag=true if this is clearly a bag product shot (bag is the subject for sale).`,
+            },
+            { type: "image", image: imageDataUrl },
+          ],
+        },
+      ],
+    });
+
+    if (!output) return [bagItem];
+    if (output.mainProductIsBag) return [bagItem];
+    if (!APPAREL_CATS.has(output.category) && output.category !== "shoes") {
+      return [bagItem];
+    }
+    return [
+      {
+        name: output.name || defaultNameForCategory(output.category),
+        brand: output.brand || bagItem.brand,
+        category: output.category,
+        colors: output.colors?.length ? output.colors : bagItem.colors,
+        fabric: output.fabric,
+        formality: output.formality || bagItem.formality,
+        tags: [
+          ...(output.tags || []),
+          "corrected_prop_bag",
+        ],
+        price: bagItem.price,
+        currency: bagItem.currency,
+        orderId: bagItem.orderId,
+        detectedStore: bagItem.detectedStore,
+      },
+    ];
+  } catch {
+    return [bagItem];
+  }
 }
 
 function normalizeSource(
@@ -264,3 +388,4 @@ function normalizeSource(
   if (allowed.includes(hint as CommerceSource)) return hint as CommerceSource;
   return fallback;
 }
+
