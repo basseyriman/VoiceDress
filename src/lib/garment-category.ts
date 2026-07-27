@@ -16,9 +16,31 @@ function blobOf(g: Named): string {
 /** Socks / stockings / tights — never footwear. */
 export function isHosieryOrSocks(g: Named): boolean {
   const t = blobOf(g);
-  return /\b(socks?|stockings?|tights|hosiery|no-?show\s*socks?|ankle\s*socks?|crew\s*socks?|trainer\s*socks?|knee[- ]highs?)\b/.test(
-    t
-  );
+  if (
+    /\b(socks?|stockings?|tights|hosiery|no-?show|ankle\s*socks?|crew\s*socks?|trainer\s*socks?|knee[- ]highs?|liner\s*socks?|footies?|ped\s*socks?|invisible\s*socks?|sock\s*liners?|shoe\s*liners?)\b/.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  return isLikelySockPackMislabel(g);
+}
+
+/**
+ * Sock liner multi-packs are often misnamed "Ballet Flat" / "Flats" by vision.
+ * Real ballet flats are usually 1–2 colors + leather/suede language.
+ */
+export function isLikelySockPackMislabel(g: Named & { colors?: string[] }): boolean {
+  const t = blobOf(g);
+  const colors = g.colors || [];
+  const multiColorPack = colors.length >= 4;
+  const weakFlatName =
+    /\b(ballet\s*flats?|flats?|slippers?|house\s*shoes?)\b/.test(t) &&
+    !/\b(leather|suede|patent|nubuck|heel|wedge|strap|buckle|toe\s*cap)\b/.test(t);
+  const packHints =
+    /\b(pack|multi[- ]?pack|set of|liner|no-?show|invisible)\b/.test(t) ||
+    multiColorPack;
+  return Boolean(weakFlatName && packHints);
 }
 
 /** Underwear / base layers that shouldn't dress as main apparel. */
@@ -29,9 +51,9 @@ export function isUnderwearOrLounge(g: Named): boolean {
   );
 }
 
-/** Real shoes/boots — never trust a shoes label on shirts/apparel. */
-export function isRealFootwear(g: Named): boolean {
-  if (isHosieryOrSocks(g)) return false;
+/** Real shoes/boots — never trust a shoes label on shirts/apparel/socks. */
+export function isRealFootwear(g: Named & { colors?: string[] }): boolean {
+  if (isHosieryOrSocks(g) || isLikelySockPackMislabel(g)) return false;
   const t = blobOf(g);
   // "White Oxford Shirt" must never count as footwear
   if (
@@ -42,7 +64,13 @@ export function isRealFootwear(g: Named): boolean {
   ) {
     return false;
   }
-  if (g.category === "shoes") return true;
+  // Category alone is not enough — sock packs get stored as shoes="Ballet Flat"
+  if (g.category === "shoes") {
+    if (/\b(ballet\s*flats?|\bflats?\b)\b/.test(t) && (g.colors?.length ?? 0) >= 4) {
+      return false;
+    }
+    return true;
+  }
   return /\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxford\s*shoes?|\boxfords\b|derbys?|brogues?|mules?|pumps?|espadrilles?|flats?|ballet\s*flats?|wedges?|stilettos?|slingbacks?|chelsea|derby|monk\s*strap)\b/.test(
     t
   );
@@ -167,22 +195,31 @@ export function sanitizeGarmentCategory<
     name?: string;
     tags?: string[];
     brand?: string;
+    colors?: string[];
     category: GarmentCategory;
   },
 >(g: T): T {
+  if (isHosieryOrSocks(g) || isLikelySockPackMislabel(g)) {
+    const name =
+      isLikelySockPackMislabel(g) && !/\bsock/i.test(g.name || "")
+        ? "No-Show Socks"
+        : g.name;
+    return {
+      ...g,
+      name,
+      category: "accessory",
+      tags: Array.from(
+        new Set([...(g.tags || []), "hosiery", "not_footwear"])
+      ),
+    };
+  }
+
   const inferred = inferCategoryFromText(g.name || "", g.tags || [], g.brand);
   if (!inferred) {
-    // Last-line defense: hosiery stuck as shoes
-    if (isHosieryOrSocks(g) && g.category === "shoes") {
-      return { ...g, category: "accessory" };
-    }
     return g;
   }
   if (shouldOverride(g.category, inferred, g)) {
     return { ...g, category: inferred };
-  }
-  if (isHosieryOrSocks(g) && g.category === "shoes") {
-    return { ...g, category: "accessory" };
   }
   return g;
 }
@@ -286,5 +323,18 @@ export function assertGarmentCategoryGuards(): void {
   }
   if (!isRealFootwear({ name: "Cognac Loafers", category: "shoes" })) {
     throw new Error("isRealFootwear must accept loafers");
+  }
+
+  const pack = sanitizeGarmentCategory({
+    name: "Ballet Flat",
+    tags: [],
+    colors: ["black", "beige", "grey", "pink", "white"],
+    category: "shoes" as GarmentCategory,
+  });
+  if (pack.category !== "accessory" || isRealFootwear(pack)) {
+    throw new Error("multi-color Ballet Flat pack must not count as shoes");
+  }
+  if (!isRealFootwear({ name: "Nude Ballet Flats", category: "shoes", colors: ["nude"] })) {
+    throw new Error("real single-color ballet flats must still count as shoes");
   }
 }

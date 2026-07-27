@@ -67,6 +67,24 @@ const bagGuardSchema = z.object({
   tags: z.array(z.string()),
 });
 
+const shoesGuardSchema = z.object({
+  isRealFootwear: z.boolean(),
+  /** If not real footwear: socks / liners / hosiery → accessory */
+  category: garmentCategoryEnum,
+  name: z.string(),
+  brand: z.string(),
+  colors: z.array(z.string()),
+  fabric: z.string().nullable(),
+  formality: z.enum([
+    "casual",
+    "smart_casual",
+    "business",
+    "formal",
+    "black_tie",
+  ]),
+  tags: z.array(z.string()),
+});
+
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (!isAuthedUser(auth)) return auth;
@@ -119,6 +137,13 @@ export async function POST(req: NextRequest) {
       );
       rawItems = corrected;
     }
+    // Sock liner packs are often misnamed "Ballet Flat" / shoes — verify footwear.
+    rawItems = await Promise.all(
+      rawItems.map(async (item) => {
+        if (item.category !== "shoes") return item;
+        return guardShoesExtraction(openai, imageDataUrl, item);
+      })
+    );
     if (!rawItems.length) {
       return NextResponse.json(
         { error: "Couldn’t find clothing items in that image. Try a clearer photo." },
@@ -213,7 +238,13 @@ Examples:
 - Receipt with dress + sandals lines → dominantProduct can be dress or the first apparel line; include each purchased line item (still omit styling props not on the receipt).
 
 Return every distinct wearable item the shopper is actually buying. Prefer accurate names and brands.
-Category rules: socks, stockings, tights, no-show socks → accessory (NOT shoes). shoes/boots/loafers/sneakers/heels/pumps/flats/sandals/wedges → shoes. dresses/jumpsuits/rompers → dress. skirts → bottom. blouses/tops → top.
+Category rules:
+- socks, stockings, tights, no-show socks, sock liners, invisible socks, multi-packs of footies → accessory (NEVER shoes). Name them "No-Show Socks" or "Socks" — never "Ballet Flat" or "Flats".
+- shoes/boots/loafers/sneakers/heels/pumps/leather ballet flats/sandals/wedges → shoes (only hard footwear with soles you walk on outdoors).
+- dresses/jumpsuits/rompers → dress. skirts → bottom. blouses/tops → top.
+CRITICAL — socks vs shoes:
+- A product photo of several soft colored sock liners / no-shows laid out = accessory socks, NOT ballet flats.
+- Ballet flats are leather/fabric shoes with a sole and usually one pair — not a multi-color sock pack.
 CRITICAL — bags / handbags:
 - A bag the model is holding, wearing, or styled with is a PROP, not a wardrobe item.
 - NEVER return category "bag" for dress, top, skirt, or jumpsuit product photos — even if a handbag is visible.
@@ -367,6 +398,83 @@ Is the MAIN product being sold a bag/purse/clutch, OR is it clothing (dress, top
     ];
   } catch {
     return [bagItem];
+  }
+}
+
+/** Catch no-show sock packs mislabeled as ballet flats / shoes. */
+async function guardShoesExtraction(
+  openai: NonNullable<ReturnType<typeof getOpenAI>>,
+  imageDataUrl: string,
+  shoeItem: ExtractedItem
+): Promise<ExtractedItem> {
+  // Fast path: multi-color "flats" without shoe materials → socks
+  if (
+    shoeItem.colors.length >= 4 &&
+    /\b(ballet\s*flats?|flats?|slippers?)\b/i.test(shoeItem.name) &&
+    !/\b(leather|suede|patent)\b/i.test(
+      `${shoeItem.name} ${shoeItem.tags.join(" ")}`
+    )
+  ) {
+    return {
+      ...shoeItem,
+      category: "accessory",
+      name: "No-Show Socks",
+      tags: [...shoeItem.tags, "hosiery", "corrected_socks_as_shoes"],
+    };
+  }
+
+  try {
+    const { output } = await generateText({
+      model: openai(INGEST_VISION_MODEL),
+      output: Output.object({ schema: shoesGuardSchema }),
+      maxRetries: 0,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `This photo was classified as shoes ("${shoeItem.name}"). Double-check carefully.
+
+Are these REAL footwear (leather/fabric shoes, boots, sandals, sneakers with hard soles you walk outdoors in), OR are they socks / no-show sock liners / footies / hosiery (often a multi-pack of soft colored liners)?
+
+- If socks/liners/hosiery: set isRealFootwear=false, category=accessory, name like "No-Show Socks".
+- If real shoes: set isRealFootwear=true, category=shoes, keep an accurate shoe name.
+Never call a sock liner pack "Ballet Flat".`,
+            },
+            { type: "image", image: imageDataUrl },
+          ],
+        },
+      ],
+    });
+
+    if (!output) return shoeItem;
+    if (output.isRealFootwear && output.category === "shoes") {
+      return {
+        ...shoeItem,
+        name: output.name || shoeItem.name,
+        brand: output.brand || shoeItem.brand,
+        colors: output.colors?.length ? output.colors : shoeItem.colors,
+        fabric: output.fabric ?? shoeItem.fabric,
+        formality: output.formality || shoeItem.formality,
+        tags: output.tags?.length ? output.tags : shoeItem.tags,
+      };
+    }
+    return {
+      ...shoeItem,
+      category: "accessory",
+      name: output.name?.trim() || "No-Show Socks",
+      brand: output.brand || shoeItem.brand,
+      colors: output.colors?.length ? output.colors : shoeItem.colors,
+      fabric: output.fabric ?? shoeItem.fabric,
+      tags: [
+        ...(output.tags || shoeItem.tags),
+        "hosiery",
+        "corrected_socks_as_shoes",
+      ],
+    };
+  } catch {
+    return shoeItem;
   }
 }
 
