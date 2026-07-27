@@ -8,6 +8,7 @@ import {
   createSpeechRecognizer,
   handleVoiceCommandAsync,
   stopSpeaking,
+  unlockSpeech,
 } from "@/lib/voice";
 import { buildVoiceHandlers } from "@/lib/voice-handlers";
 import { useAetherStore } from "@/store/aether-store";
@@ -19,6 +20,7 @@ export function FlowDock() {
   const pathname = usePathname();
   const router = useRouter();
   const [hint, setHint] = useState("");
+  const [phase, setPhase] = useState<"idle" | "listening" | "working">("idle");
   const [dockBlocked, setDockBlocked] = useState(false);
   const [supported, setSupported] = useState(true);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -71,17 +73,43 @@ export function FlowDock() {
         setTranscript(text);
         setHint(text);
         setListening(false);
-        void handleVoiceCommandAsync(
-          text,
-          buildVoiceHandlers(router, path)
-        ).then(() => {
-          setTimeout(() => setHint(""), 2400);
-        });
+        setPhase("working");
+        setHint("Styling your look…");
+        void handleVoiceCommandAsync(text, buildVoiceHandlers(router, path))
+          .then((result) => {
+            const interrupted =
+              result &&
+              typeof result === "object" &&
+              "interrupted" in result &&
+              Boolean((result as { interrupted?: boolean }).interrupted);
+            if (interrupted) {
+              setHint("Stopped.");
+            } else if (typeof result?.reply === "string" && result.reply) {
+              setHint(result.reply.slice(0, 100));
+            } else {
+              setHint("Done.");
+            }
+            setTimeout(() => {
+              setHint("");
+              setPhase("idle");
+            }, 3200);
+          })
+          .catch(() => {
+            setHint("Couldn’t style that — tap Speak and try again.");
+            setTimeout(() => {
+              setHint("");
+              setPhase("idle");
+            }, 3200);
+          });
       }
     };
-    rec.onend = () => setListening(false);
+    rec.onend = () => {
+      setListening(false);
+      setPhase((p) => (p === "listening" ? "idle" : p));
+    };
     rec.onerror = (event: SpeechRecognitionErrorEvent) => {
       setListening(false);
+      setPhase("idle");
       if (event.error === "not-allowed") {
         setHint("Allow microphone access to speak.");
       } else if (event.error !== "aborted" && event.error !== "no-speech") {
@@ -103,7 +131,7 @@ export function FlowDock() {
       }
       recognitionRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recreate when page type changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hidden, router, setTranscript, setListening]);
 
   if (hidden) return null;
@@ -115,24 +143,28 @@ export function FlowDock() {
       setTimeout(() => setHint(""), 3200);
       return;
     }
-    if (listening) {
+    if (listening || phase === "listening") {
       try {
         rec.stop();
       } catch {
         // ignore
       }
       setListening(false);
+      setPhase("idle");
       setHint("");
       return;
     }
+    if (phase === "working") return;
+
     stopSpeaking();
+    unlockSpeech();
+    setPhase("listening");
     setHint("Listening…");
     try {
       rec.stop();
     } catch {
       // not running
     }
-    // Start on the same user-gesture tick + short retry for mobile WebKit
     const start = () => {
       try {
         rec.start();
@@ -144,6 +176,7 @@ export function FlowDock() {
             setListening(true);
           } catch {
             setListening(false);
+            setPhase("idle");
             setHint("Couldn’t start mic — tap Speak again.");
             setTimeout(() => setHint(""), 2800);
           }
@@ -152,6 +185,8 @@ export function FlowDock() {
     };
     window.setTimeout(start, 60);
   };
+
+  const active = listening || phase === "listening" || phase === "working";
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-[110] flex flex-col items-center px-4 md:bottom-8">
@@ -176,17 +211,36 @@ export function FlowDock() {
         whileTap={{ scale: 0.96 }}
         className={cn(
           "pointer-events-auto flex min-h-[3rem] items-center gap-3 rounded-full border px-5 py-3 shadow-[0_20px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl transition-colors",
-          listening
+          active
             ? "border-champagne/50 bg-champagne text-ink"
             : "border-champagne/35 bg-ink/90 text-champagne hover:bg-champagne/10"
         )}
-        aria-label={listening ? "Stop listening" : "Speak your look"}
+        aria-label={
+          phase === "working"
+            ? "Styling"
+            : listening
+              ? "Stop listening"
+              : "Speak your look"
+        }
       >
-        {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+        {listening || phase === "listening" ? (
+          <MicOff className="h-4 w-4" />
+        ) : (
+          <Mic className="h-4 w-4" />
+        )}
         <span className="text-xs font-medium tracking-wide">
-          {listening ? "Listening" : supported ? "Speak" : "Speak (Chrome)"}
+          {phase === "working"
+            ? "Styling…"
+            : listening || phase === "listening"
+              ? "Listening"
+              : supported
+                ? "Speak"
+                : "Speak (Chrome)"}
         </span>
-        <Waveform active={listening} className="h-5" />
+        <Waveform
+          active={listening || phase === "listening"}
+          className="h-5"
+        />
       </motion.button>
     </div>
   );

@@ -8,6 +8,7 @@ import {
   handleVoiceCommandAsync,
   speak,
   stopSpeaking,
+  unlockSpeech,
 } from "@/lib/voice";
 import { buildVoiceHandlers } from "@/lib/voice-handlers";
 import { VoiceOrb } from "@/components/voice/voice-orb";
@@ -144,6 +145,7 @@ export default function TodayPage() {
     const rec = recognitionRef.current;
     if (!rec || !supported) return;
     stopSpeaking();
+    unlockSpeech();
     setComposing(false);
     setActiveOccasion(null);
     setInterim("");
@@ -169,6 +171,7 @@ export default function TodayPage() {
 
   const pickEvent = (event: (typeof QUICK_EVENTS)[number]) => {
     stopSpeaking();
+    unlockSpeech();
     setActiveOccasion(event.id);
     setComposing(true);
     void generateOutfitAsync(event.occasion)

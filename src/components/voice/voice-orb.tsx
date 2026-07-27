@@ -7,6 +7,7 @@ import {
   createSpeechRecognizer,
   handleVoiceCommandAsync,
   stopSpeaking,
+  unlockSpeech,
 } from "@/lib/voice";
 import { buildVoiceHandlers } from "@/lib/voice-handlers";
 import { useAetherStore } from "@/store/aether-store";
@@ -83,6 +84,7 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
     const rec = recognitionRef.current;
     if (!rec) return;
     stopSpeaking();
+    unlockSpeech();
     setInterim("");
     setPhase("listening");
     setVoiceListening(true);
@@ -114,6 +116,7 @@ export function VoiceOrb({ compact = false }: { compact?: boolean }) {
 
   const runPrompt = (prompt: string) => {
     stopSpeaking();
+    unlockSpeech();
     setTranscript(prompt);
     setPhase("thinking");
     void handleVoiceCommandAsync(

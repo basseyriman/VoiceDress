@@ -42,6 +42,30 @@ export function stopSpeaking() {
   window.speechSynthesis.cancel();
 }
 
+/**
+ * iOS/WebKit only allows speechSynthesis after a user gesture.
+ * Call this synchronously inside the Speak tap handler.
+ */
+export function unlockSpeech() {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  try {
+    ensureVoicesLoaded();
+    // Prime the engine inside the tap — otherwise later async speak() is silent
+    window.speechSynthesis.cancel();
+    const warm = new SpeechSynthesisUtterance(" ");
+    warm.volume = 0.01;
+    warm.rate = 2;
+    warm.lang = "en-GB";
+    const voice = pickBestVoice();
+    if (voice) warm.voice = voice;
+    window.speechSynthesis.speak(warm);
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+  } catch {
+    // ignore
+  }
+}
+
 function pickBestVoice(): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices();
@@ -166,7 +190,12 @@ export function speak(text: string) {
 
   const gen = speakGeneration;
   clearSpeakKeepalive();
-  window.speechSynthesis.cancel();
+  try {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+  } catch {
+    // ignore
+  }
   ensureVoicesLoaded();
   const voice = pickBestVoice();
   const chunks = chunkForSpeech(cleaned);
@@ -174,6 +203,8 @@ export function speak(text: string) {
 
   startSpeakKeepalive(gen);
   void (async () => {
+    // Small yield helps WebKit attach the next utterance after cancel()
+    await new Promise((r) => setTimeout(r, 40));
     for (const chunk of chunks) {
       if (gen !== speakGeneration) break;
       await speakChunk(chunk, gen, voice);

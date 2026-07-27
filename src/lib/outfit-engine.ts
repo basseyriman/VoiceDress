@@ -981,7 +981,7 @@ export function isHighConfidenceVoiceIntent(transcript: string): boolean {
   const wantsOutfit = wantsOutfitSuggestion(t);
   const clearSuggest =
     wantsOutfit ||
-    /\b(birthday|interview|wedding|dinner|meeting|gym|travel|drinks?|pub)\b/.test(
+    /\b(birthday|interview|wedding|dinner|meeting|gym|travel|drinks?|drink|pub|bar)\b/.test(
       t
     ) ||
     /\b(feeling cold|feeling hot|degrees|°)\b/.test(t);
@@ -1012,6 +1012,15 @@ export function isOutfitConversation(transcript: string): boolean {
   if (!t) return false;
   // Fresh occasion / dress-me asks are suggestions, not chat
   if (wantsOutfitSuggestion(t)) return false;
+  // "I'm going for drinks/dinner…" must dress a look — not open look-chat
+  if (
+    /^i('?m| am)\b/.test(t) &&
+    /\b(going|heading|off to|have (a |an )?|meeting|drinks?|drink|dinner|wedding|travel|party|date|brunch)\b/.test(
+      t
+    )
+  ) {
+    return false;
+  }
   if (
     /\b(going|heading|off to|wedding|dinner|interview|meeting|drinks?|date)\b/.test(
       t
@@ -1029,9 +1038,14 @@ export function isOutfitConversation(transcript: string): boolean {
 
   return (
     /\?/.test(t) ||
-    /^(why|how|what|which|is|are|should|can|do|does|will|would|am i|i('?m| am))\b/.test(
+    /^(why|how|what|which|is|are|should|can|do|does|will|would|am i)\b/.test(
       t
     ) ||
+    // "I'm unsure / I'm wearing…" follow-ups — not "I'm going out"
+    (/^i('?m| am)\b/.test(t) &&
+      /\b(unsure|not sure|thinking|wondering|wearing|tucking|worried|confident)\b/.test(
+        t
+      )) ||
     /\b(too (thick|thin|hot|cold|warm|much|dressy|casual)|thick|heavy|light enough|for the weather|what about|should i|do i (need|wear|put|tuck)|am i (tuck|wearing)|tuck(ing|ed)?|untuck|shirt|belt|sock|stockings?|tights|tie|confident|sure about|keep the|swap the|change the|instead of|how (do|should|to) (i )?wear|sleeve|button|layer)\b/.test(
       t
     )
@@ -1079,7 +1093,12 @@ export function wantsOutfitSuggestion(t: string): boolean {
         s
       )) ||
     (/\b(going|heading|off to|i('?m| am) going)\b/.test(s) &&
-      /\b(wear|outfit|dress|look|clothes|wardrobe|closet)\b/.test(s))
+      /\b(wear|outfit|dress|look|clothes|wardrobe|closet)\b/.test(s)) ||
+    // Natural occasion speech: "I'm going for a drink with friends"
+    (/\b(going|heading|off to|i('?m| am) going|i have (a |an )?)\b/.test(s) &&
+      /\b(drink|drinks|dinner|meeting|wedding|travel|party|date|brunch|interview|work|pub|bar)\b/.test(
+        s
+      ))
   );
 }
 
