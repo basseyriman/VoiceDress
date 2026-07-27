@@ -62,11 +62,13 @@ export default function LandingPage() {
             transition={{ duration: 0.7 }}
             className="flex items-center gap-3"
           >
-            {/* Same mark as header + home-screen icon */}
+            {/* Exact home-screen icon */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/icon.svg?v=10"
+              src="/icons/icon-192.png?v=12"
               alt=""
+              width={44}
+              height={44}
               className="h-11 w-11 rounded-[0.85rem] border border-champagne/20"
             />
             <p className="font-display text-base font-medium tracking-[0.18em] text-champagne">

@@ -44,12 +44,14 @@ export function Logo({ className }: { className?: string }) {
       className={cn("group inline-flex items-center gap-3", className)}
       aria-label="VoiceDress home"
     >
-      {/* Same asset as home-screen / PWA icon — padded mark on ink */}
+      {/* Exact home-screen icon (thick stroke + padding) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/icon.svg?v=10"
+        src="/icons/icon-192.png?v=12"
         alt=""
-        className="h-9 w-9 shrink-0 rounded-[0.75rem] border border-champagne/20 shadow-[inset_0_1px_0_rgba(245,240,232,0.04)] transition duration-300 group-hover:opacity-90"
+        width={36}
+        height={36}
+        className="h-9 w-9 shrink-0 rounded-[0.75rem] border border-champagne/20 transition duration-300 group-hover:opacity-90"
       />
       <span className="font-display text-[1.35rem] font-medium leading-none tracking-[0.06em] text-ivory">
         Voice
