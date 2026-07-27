@@ -133,9 +133,14 @@ export function OutfitStage({
   const piecesTotal = Math.max(1, lookPieces.length);
   const piecesDone = donePieceIds.length;
   const piecesLeft = Math.max(0, piecesTotal - piecesDone);
-  // Quality/2k ≈ 15–25s per piece; show a calm estimate
+  // Two stages: clothes (~45s) then accessories (~25s) — not per-piece × 18s
   const etaSec = dressing
-    ? Math.max(8, piecesLeft * 18 + (activePieceId ? 12 : 0))
+    ? Math.max(
+        10,
+        donePieceIds.length >= apparelPieces.length
+          ? 25 - Math.round(progress / 4)
+          : 50 - Math.round(progress / 2)
+      )
     : 0;
 
   const lookKey = lookPieces.map((g) => g.id).join("|");
@@ -611,9 +616,11 @@ export function OutfitStage({
             // Keep the whole look highlighted — clothes land together in one request
             setApplyingPieceIds(lookPieces.map((p) => p.id));
             setStepLabel(
-              allApparel.length > 1
-                ? `Dressing ${allApparel.map((p) => p.name.split(" ").slice(0, 3).join(" ")).join(" · ")}…`
-                : `Dressing ${allApparel[0].name}…`
+              outerPiece
+                ? `Dressing clothes + ${outerPiece.name.split(" ").slice(0, 2).join(" ")}…`
+                : allApparel.length > 1
+                  ? `Dressing ${allApparel.map((p) => p.name.split(" ").slice(0, 3).join(" ")).join(" · ")}…`
+                  : `Dressing ${allApparel[0].name}…`
             );
             setProgress(12);
 
@@ -1337,21 +1344,29 @@ export function OutfitStage({
           {dressing && lookPieces.length > 0 && (
             <div className="mt-3 max-w-full overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] lg:hidden">
               <div className="flex w-max max-w-none gap-2">
-                {lookPieces.map((g) => (
+                {lookPieces.map((g) => {
+                  const pieceDone = donePieceIds.includes(g.id);
+                  const pieceMissing = missingIds.includes(g.id);
+                  const pieceApplying =
+                    dressing && !pieceDone && !pieceMissing;
+                  return (
                   <div
                     key={g.id}
                     className={cn(
                       "max-w-[8.5rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[10px]",
-                      activePieceId === g.id || applyingPieceIds.includes(g.id)
+                      pieceApplying
                         ? "border-champagne bg-champagne/15 text-champagne"
-                        : donePieceIds.includes(g.id)
+                        : pieceDone
                           ? "border-champagne/40 text-champagne"
-                          : "border-white/10 text-mist"
+                          : pieceMissing
+                            ? "border-champagne/35 text-champagne/80"
+                            : "border-white/10 text-mist"
                     )}
                   >
                     {g.name}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1394,27 +1409,26 @@ export function OutfitStage({
               </div>
             )}
             <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-              {lookPieces.map((g) => (
+              {lookPieces.map((g) => {
+                const pieceDone = donePieceIds.includes(g.id);
+                const pieceMissing = missingIds.includes(g.id);
+                // While dressing, every unfinished piece shows Applying — including
+                // jacket/shoes — so progress never looks “stuck” on top+bottom only.
+                const pieceApplying =
+                  dressing && !pieceDone && !pieceMissing;
+                return (
                 <GarmentTile
                   key={g.id}
                   garment={g}
                   active={
                     swapTargetId === g.id ||
                     activePieceId === g.id ||
-                    applyingPieceIds.includes(g.id)
+                    pieceApplying
                   }
-                  dressing={
-                    dressing &&
-                    (activePieceId === g.id || applyingPieceIds.includes(g.id))
-                  }
-                  done={donePieceIds.includes(g.id)}
-                  missing={missingIds.includes(g.id)}
-                  progressPct={
-                    dressing &&
-                    (activePieceId === g.id || applyingPieceIds.includes(g.id))
-                      ? progressPct
-                      : undefined
-                  }
+                  dressing={pieceApplying}
+                  done={pieceDone}
+                  missing={pieceMissing}
+                  progressPct={pieceApplying ? progressPct : undefined}
                   onClick={() => {
                     if (swapTargetId === g.id) {
                       setSwapFor(null);
@@ -1425,7 +1439,8 @@ export function OutfitStage({
                     }
                   }}
                 />
-              ))}
+                );
+              })}
             </div>
           </div>
 

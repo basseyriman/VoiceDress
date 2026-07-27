@@ -299,6 +299,44 @@ function watchTextPrompt(piece: Piece): string {
   ].join(" ");
 }
 
+/** Batch shoes/glasses/bag collage edit — one Kontext call for multiple extras. */
+async function kontextAccessoriesBatch(opts: {
+  falKey: string;
+  personImage: string;
+  productCollage: string;
+  pieces: Piece[];
+}): Promise<TryResult> {
+  const labels = opts.pieces
+    .map((p) => `${p.name || p.category}${(p.colors || []).length ? ` (${p.colors!.join(", ")})` : ""}`)
+    .join("; ");
+  const prompt = [
+    KEEP_YOU,
+    KEEP_FRAMING,
+    `Image 2 is a collage of accessories. Add ALL of them onto the person: ${labels}.`,
+    "Match each product’s exact colors and shapes. Thin realistic glasses frames if present — never invent neon lenses.",
+    "Small natural watch size if a watch is in the collage.",
+    "Do NOT change trousers, jacket, shirt, or shoe colors. Keep face photoreal — no cartoon skin.",
+  ].join(" ");
+
+  const res = await fetch("https://fal.run/fal-ai/flux-pro/kontext/multi", {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${opts.falKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt,
+      image_urls: [opts.personImage, opts.productCollage],
+      guidance_scale: 4.4,
+      num_images: 1,
+      output_format: "jpeg",
+      enhance_prompt: false,
+      safety_tolerance: "5",
+    }),
+  });
+  return parseFalImages(res);
+}
+
 /** Product-guided edit for shoes / glasses (image 2 = product). */
 async function kontextProductEdit(opts: {
   falKey: string;
@@ -890,17 +928,22 @@ export async function POST(req: NextRequest) {
   }
 
   if (runFinish && finish.length) {
-    for (const g of finish) {
+    const shoePieces = finish.filter((g) => isRealFootwear(g));
+    const otherFinish = finish.filter((g) => !isRealFootwear(g));
+    // Watches stay text-only (product collage often blobs). Glasses/bags can batch.
+    const watchPieces = otherFinish.filter(isWatch);
+    const batchable = otherFinish.filter((g) => !isWatch(g));
+
+    const runOne = async (g: Piece) => {
       let productImage = "";
       try {
         productImage = await resolveGarmentImageForFal(g.imageUrl);
       } catch (err) {
-        // Watch text-only Kontext can proceed without product; OpenAI prefers it.
         if (!isWatch(g)) {
           warnings.push(
             `Skipped ${g.name}: ${err instanceof Error ? err.message : "load failed"}`
           );
-          continue;
+          return;
         }
       }
 
@@ -937,7 +980,7 @@ export async function POST(req: NextRequest) {
             edited.detail ? ` (${edited.detail.slice(0, 120)})` : ""
           }`
         );
-        continue;
+        return;
       }
 
       current = edited.url;
@@ -948,6 +991,83 @@ export async function POST(req: NextRequest) {
         url: edited.url,
         provider: edited.provider || "finish",
       });
+    };
+
+    // 1) Shoes first (feet region)
+    for (const g of shoePieces) {
+      const billed = await runOne(g);
+      if (billed instanceof NextResponse) return billed;
+    }
+
+    // 2) Glasses/bag in ONE collage call when 2+ (cuts accessory wait roughly in half)
+    if (batchable.length >= 2 && falKey) {
+      try {
+        const productImages = await Promise.all(
+          batchable.map((g) => resolveGarmentImageForFal(g.imageUrl))
+        );
+        const collage = await composeApparelCollage(productImages);
+        const batched = await kontextAccessoriesBatch({
+          falKey,
+          personImage: current,
+          productCollage: collage,
+          pieces: batchable,
+        });
+        if (batched.ok) {
+          current = batched.url;
+          for (const g of batchable) {
+            steps.push({
+              id: g.id,
+              category: g.category,
+              name: g.name,
+              url: current,
+              provider: "kontext-accessories-batch",
+            });
+          }
+        } else if (isFalBillingError(batched.detail)) {
+          return NextResponse.json({
+            ok: false,
+            needsBilling: true,
+            code: "tryon_busy",
+            error: "Dressing temporarily unavailable",
+            detail: batched.detail,
+            imageUrl: current,
+            steps,
+            partial: true,
+            message: userTryOnUnavailableMessage(),
+          });
+        } else {
+          warnings.push(
+            `Accessory batch skipped${
+              batched.detail ? `: ${batched.detail.slice(0, 120)}` : ""
+            }`
+          );
+          for (const g of batchable) {
+            const billed = await runOne(g);
+            if (billed instanceof NextResponse) return billed;
+          }
+        }
+      } catch (err) {
+        warnings.push(
+          `Accessory batch failed: ${
+            err instanceof Error ? err.message.slice(0, 120) : "unknown"
+          }`
+        );
+        for (const g of batchable) {
+          const billed = await runOne(g);
+          if (billed instanceof NextResponse) return billed;
+        }
+      }
+    } else {
+      for (const g of batchable) {
+        const billed = await runOne(g);
+        if (billed instanceof NextResponse) return billed;
+      }
+    }
+
+    // 3) Watch text-only last (fast; doesn’t need product image)
+    for (const g of watchPieces) {
+      const billed = await runOne(g);
+      if (billed instanceof NextResponse) return billed;
     }
   }
 

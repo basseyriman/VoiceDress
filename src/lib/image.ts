@@ -660,8 +660,9 @@ export async function verifyApparelLook(
       nearest = Math.min(nearest, colorDistance(region, t));
     }
 
-    // Catastrophic only: expected white/ivory stayed near-black
-    if (expectedLight && region.lum < 100) {
+    // Catastrophic only: expected white/ivory stayed near-black (shadowed
+    // hallways often read real white shirts as ~120–160 lum — don’t false-fail).
+    if (expectedLight && region.lum < 75) {
       failedIds.push(piece.id);
       reasons.push(`${piece.name || piece.category} stayed dark`);
       continue;
@@ -689,7 +690,15 @@ export async function verifyApparelLook(
       }
       continue;
     }
-    if (nearest > 120 && !(expectedLight && region.lum > 170)) {
+    // Light tops: pass once the torso is clearly light — don’t require near-white
+    if (expectedLight && (piece.category === "top" || piece.category === "dress")) {
+      if (region.lum < 110 && nearest > 140) {
+        failedIds.push(piece.id);
+        reasons.push(`${piece.name || piece.category} color didn’t land`);
+      }
+      continue;
+    }
+    if (nearest > 120 && !(expectedLight && region.lum > 150)) {
       failedIds.push(piece.id);
       reasons.push(`${piece.name || piece.category} color didn’t land`);
     }
