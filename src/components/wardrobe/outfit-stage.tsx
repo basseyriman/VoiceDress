@@ -366,7 +366,13 @@ export function OutfitStage({
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
             try {
+              // Polish then re-lock face so clarity doesn't cartoonize you
               current = await polishTryOnResult(current);
+              current = await lockFaceIdentity(
+                identityPhoto,
+                current,
+                "strong"
+              );
             } catch {
               // keep locked
             }
@@ -447,6 +453,11 @@ export function OutfitStage({
               return;
             try {
               current = await polishTryOnResult(current);
+              current = await lockFaceIdentity(
+                identityPhoto,
+                current,
+                isEyewearPiece(piece) ? "soft" : "strong"
+              );
             } catch {
               // keep
             }
@@ -881,8 +892,13 @@ export function OutfitStage({
           }
         }
 
-        // One final identity pass + premium polish (not after every piece)
+        // Polish clothes/body first, then restore YOUR face last (never polish the face)
         setStepLabel("Finishing your look…");
+        try {
+          current = await polishTryOnResult(current);
+        } catch {
+          // keep current
+        }
         try {
           const hadGlasses = finishQueue.some((p) => isEyewearPiece(p));
           current = await lockFaceIdentity(
@@ -890,11 +906,6 @@ export function OutfitStage({
             current,
             hadGlasses ? "soft" : "strong"
           );
-        } catch {
-          // keep current
-        }
-        try {
-          current = await polishTryOnResult(current);
         } catch {
           // keep current
         }
@@ -1199,7 +1210,7 @@ export function OutfitStage({
             )}
 
             {error && (
-              <div className="absolute inset-x-4 top-4 z-30 rounded-2xl border border-danger/30 bg-ink/85 px-4 py-3 text-xs text-danger">
+              <div className="absolute inset-x-4 top-[4.75rem] z-30 rounded-2xl border border-danger/30 bg-ink/85 px-4 py-3 text-xs text-danger sm:top-[5.25rem]">
                 <p>{error}</p>
                 <button
                   type="button"
@@ -1215,19 +1226,19 @@ export function OutfitStage({
             )}
 
             {!error && notice && (
-              <div className="absolute inset-x-4 top-4 z-30 rounded-2xl border border-line bg-ink/80 px-4 py-3 text-xs text-mist backdrop-blur-md">
+              <div className="absolute inset-x-4 top-[4.75rem] z-30 rounded-2xl border border-line bg-ink/80 px-4 py-3 text-xs text-mist backdrop-blur-md sm:top-[5.25rem]">
                 {notice}
               </div>
             )}
 
             <AnimatePresence>
-              {!dressing && wornUrl && outfit && !notice && !error && (
+              {!dressing && wornUrl && outfit && (
                 <motion.div
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  className="pointer-events-none absolute left-4 top-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md"
+                  className="pointer-events-none absolute left-4 top-4 z-20 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md"
                 >
                   <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
                     Ready · dressed for
@@ -1238,17 +1249,6 @@ export function OutfitStage({
                 </motion.div>
               )}
             </AnimatePresence>
-
-            {!dressing && wornUrl && outfit && (notice || error) && (
-              <div className="pointer-events-none absolute left-4 bottom-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md">
-                <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
-                  Dressed for
-                </p>
-                <p className="font-display text-sm text-ivory">
-                  {outfit.occasion}
-                </p>
-              </div>
-            )}
           </div>
 
           {/* Mobile: piece status under the photo (not over it) */}

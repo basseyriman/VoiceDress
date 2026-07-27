@@ -175,7 +175,7 @@ export async function polishTryOnResult(src: string): Promise<string> {
  * so try-on can’t cartoonize or swap your identity.
  *
  * - strong: full head (face + hairline + ears), stops above the collar
- * - soft: eyes/nose/mouth core only — keeps glasses frames
+ * - soft: real skin/hair with an eye band open so glasses frames can remain
  */
 export async function lockFaceIdentity(
   identitySrc: string,
@@ -199,14 +199,13 @@ export async function lockFaceIdentity(
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(dressed, 0, 0, w, h);
 
-  // Full-body 2:3: head sits in the upper band. Strong covers hair→chin;
-  // soft is a smaller oval so eyewear can remain.
+  // Full-body 2:3: head sits in the upper band. Generous oval so AI cartoon face loses.
   const cx = w * 0.5;
-  const cy = strength === "strong" ? h * 0.155 : h * 0.15;
-  const rx = strength === "strong" ? w * 0.22 : w * 0.13;
-  const ry = strength === "strong" ? h * 0.145 : h * 0.085;
+  const cy = strength === "strong" ? h * 0.145 : h * 0.142;
+  const rx = strength === "strong" ? w * 0.28 : w * 0.24;
+  const ry = strength === "strong" ? h * 0.175 : h * 0.155;
   // Never paste below the collar into the shirt
-  const maxY = h * (strength === "strong" ? 0.3 : 0.24);
+  const maxY = h * (strength === "strong" ? 0.33 : 0.3);
 
   const faceLayer = document.createElement("canvas");
   faceLayer.width = w;
@@ -224,23 +223,32 @@ export async function lockFaceIdentity(
   const mctx = mask.getContext("2d");
   if (!mctx) return dressedSrc;
 
-  const inner = ry * (strength === "strong" ? 0.42 : 0.5);
+  const inner = ry * (strength === "strong" ? 0.5 : 0.45);
   const grad = mctx.createRadialGradient(cx, cy, inner, cx, cy, ry);
-  if (strength === "strong") {
-    // Opaque core so skin texture from the real photo wins over AI smoothing
-    grad.addColorStop(0, "rgba(0,0,0,1)");
-    grad.addColorStop(0.55, "rgba(0,0,0,1)");
-    grad.addColorStop(0.78, "rgba(0,0,0,0.85)");
-    grad.addColorStop(1, "rgba(0,0,0,0)");
-  } else {
-    grad.addColorStop(0, "rgba(0,0,0,0.98)");
-    grad.addColorStop(0.65, "rgba(0,0,0,0.6)");
-    grad.addColorStop(1, "rgba(0,0,0,0)");
-  }
+  // Near-opaque core — real photo skin/hair must win over AI smoothing
+  grad.addColorStop(0, "rgba(0,0,0,1)");
+  grad.addColorStop(0.62, "rgba(0,0,0,1)");
+  grad.addColorStop(0.86, "rgba(0,0,0,0.94)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
   mctx.fillStyle = grad;
   mctx.beginPath();
   mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   mctx.fill();
+
+  // Soft: open an eye band so sunglass/optic frames from the try-on can show
+  if (strength === "soft") {
+    mctx.globalCompositeOperation = "destination-out";
+    const eyeY = h * 0.132;
+    const eyeH = h * 0.055;
+    const eyeGrad = mctx.createLinearGradient(0, eyeY, 0, eyeY + eyeH);
+    eyeGrad.addColorStop(0, "rgba(0,0,0,0)");
+    eyeGrad.addColorStop(0.25, "rgba(0,0,0,0.72)");
+    eyeGrad.addColorStop(0.75, "rgba(0,0,0,0.72)");
+    eyeGrad.addColorStop(1, "rgba(0,0,0,0)");
+    mctx.fillStyle = eyeGrad;
+    mctx.fillRect(w * 0.28, eyeY, w * 0.44, eyeH);
+    mctx.globalCompositeOperation = "source-over";
+  }
 
   // Clip anything below the collar line
   mctx.globalCompositeOperation = "destination-in";
