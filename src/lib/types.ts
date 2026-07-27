@@ -94,6 +94,11 @@ export interface UserProfile {
   subscriptionStatus: "trialing" | "active" | "canceled" | "none";
   /** ISO end of free trial — server/webhook authoritative for paid status. */
   trialEndsAt?: string;
+  /**
+   * On-photo try-ons used while not on a trial/plan.
+   * First one is free (aha moment); then we offer the 7-day trial.
+   */
+  freePhotoTryOnsUsed?: number;
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   connectedStores: CommerceSource[];

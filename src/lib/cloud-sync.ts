@@ -88,6 +88,8 @@ export async function saveUserProfile(
     "lon",
     "stylePrefs",
     "subscriptionStatus",
+    "trialEndsAt",
+    "freePhotoTryOnsUsed",
     "stripeCustomerId",
     "connectedStores",
     "voiceEnabled",
@@ -279,9 +281,6 @@ export async function bootstrapUserCloud(input: {
   }
 
   const now = new Date().toISOString();
-  const trialEndsAt = new Date(
-    Date.now() + 7 * 24 * 60 * 60 * 1000
-  ).toISOString();
   const profile: UserProfile = {
     uid: input.uid,
     email: input.email,
@@ -293,8 +292,9 @@ export async function bootstrapUserCloud(input: {
     lat: 51.5074,
     lon: -0.1278,
     stylePrefs: ["quiet luxury", "old money"],
-    subscriptionStatus: "trialing",
-    trialEndsAt,
+    // No trial until after the free on-photo aha moment
+    subscriptionStatus: "none",
+    freePhotoTryOnsUsed: 0,
     connectedStores: [],
     voiceEnabled: true,
     createdAt: now,

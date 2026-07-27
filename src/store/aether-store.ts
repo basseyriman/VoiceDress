@@ -314,8 +314,11 @@ export const useAetherStore = create<AetherState>()(
             lat: data.profile.lat ?? 51.5074,
             lon: data.profile.lon ?? -0.1278,
             stylePrefs: data.profile.stylePrefs || ["quiet luxury", "old money"],
-            subscriptionStatus: data.profile.subscriptionStatus || "trialing",
+            subscriptionStatus:
+              data.profile.subscriptionStatus ||
+              (data.profile.trialEndsAt ? "trialing" : "none"),
             trialEndsAt: data.profile.trialEndsAt,
+            freePhotoTryOnsUsed: data.profile.freePhotoTryOnsUsed ?? 0,
             stripeCustomerId: data.profile.stripeCustomerId,
             stripeSubscriptionId: data.profile.stripeSubscriptionId,
             connectedStores: data.profile.connectedStores || [],
@@ -370,6 +373,7 @@ export const useAetherStore = create<AetherState>()(
           const {
             subscriptionStatus: _s,
             trialEndsAt: _t,
+            freePhotoTryOnsUsed: _f,
             stripeCustomerId: _c,
             stripeSubscriptionId: _sub,
             ...safePatch
@@ -401,7 +405,9 @@ export const useAetherStore = create<AetherState>()(
             lat: profile.lat ?? 51.5074,
             lon: profile.lon ?? -0.1278,
             stylePrefs: profile.stylePrefs || ["quiet luxury", "old money"],
-            subscriptionStatus: profile.subscriptionStatus || "trialing",
+            subscriptionStatus: profile.subscriptionStatus || "none",
+            trialEndsAt: profile.trialEndsAt,
+            freePhotoTryOnsUsed: profile.freePhotoTryOnsUsed ?? 0,
             connectedStores: profile.connectedStores || [],
             voiceEnabled: profile.voiceEnabled ?? true,
             createdAt: profile.createdAt || new Date().toISOString(),

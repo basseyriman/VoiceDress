@@ -4,7 +4,7 @@ import {
   hasOpenAIImageKey,
   openaiFinishEdit,
 } from "@/lib/openai-finish";
-import { isAuthedUser, requireEntitled } from "@/lib/api-auth";
+import { isAuthedUser, requireTryOnAccess, consumeFreePhotoTryOn } from "@/lib/api-auth";
 import {
   apparelPromptForPiece,
   collageApparelPrompt,
@@ -552,11 +552,13 @@ function orderFinishPieces(
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireEntitled(req);
+  const body = await req.json();
+  const auth = await requireTryOnAccess(req, {
+    stage: typeof body.stage === "string" ? body.stage : "auto",
+  });
   if (!isAuthedUser(auth)) return auth;
 
   const falKey = process.env.FAL_KEY?.trim();
-  const body = await req.json();
   const personImage = body.personImage as string | undefined;
   const garments = (body.garments || []) as Piece[];
   const stage = (body.stage as string) || "auto";
@@ -566,6 +568,7 @@ export async function POST(req: NextRequest) {
   const stripOuterwear = Boolean(body.stripOuterwear);
   const stylingPrompt =
     typeof body.stylingPrompt === "string" ? body.stylingPrompt.trim() : "";
+  let consumedFreeTryOn = false;
 
   if (!personImage) {
     return NextResponse.json({ error: "personImage required" }, { status: 400 });
@@ -942,6 +945,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Burn the free gift only after a successful apparel dress
+  const isApparelStage =
+    stage === "apparel" ||
+    stage === "auto" ||
+    stage === "collage" ||
+    stage === "base";
+  if (isApparelStage && steps.length > 0) {
+    try {
+      const burn = await consumeFreePhotoTryOn(auth.uid);
+      consumedFreeTryOn = burn.consumed;
+    } catch {
+      // don't fail the dress if counter write fails
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     applied: true,
@@ -951,6 +969,7 @@ export async function POST(req: NextRequest) {
     apparelBaseUrl:
       runApparel && apparelBaseUrl !== current ? apparelBaseUrl : undefined,
     steps,
+    consumedFreeTryOn: consumedFreeTryOn || undefined,
     ...(warnings.length ? { warning: warnings.join(" · ") } : {}),
   });
 }

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 import type { UserProfile } from "@/lib/types";
+import {
+  FREE_PHOTO_TRYONS,
+  freePhotoTryOnsUsed,
+  isMembershipActive,
+} from "@/lib/entitlement";
 
 export type AuthedUser = {
   uid: string;
@@ -40,7 +45,6 @@ export async function requireAuth(
     );
   }
 
-  // Local/demo without Admin: accept unsigned uid header only when explicitly allowed
   if (!isAdminConfigured()) {
     if (process.env.ALLOW_INSECURE_API === "true") {
       const uid = req.headers.get("x-voicedress-uid");
@@ -79,21 +83,7 @@ export function isEntitled(
   user?: { uid: string; email?: string | null }
 ): boolean {
   if (user && isCompedAccount(user)) return true;
-  if (!profile) return false;
-  const status = profile.subscriptionStatus || "none";
-  if (status === "active") return true;
-  if (status === "trialing") {
-    const end =
-      profile.trialEndsAt ||
-      (profile.createdAt
-        ? new Date(
-            new Date(profile.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000
-          ).toISOString()
-        : null);
-    if (!end) return true; // legacy trialing without end date — allow during migration
-    return Date.now() < new Date(end).getTime();
-  }
-  return false;
+  return isMembershipActive(profile);
 }
 
 export async function loadUserProfileAdmin(
@@ -106,14 +96,13 @@ export async function loadUserProfileAdmin(
   return snap.data() as Partial<UserProfile>;
 }
 
-/** Auth + membership gate for expensive routes (try-on, LLM styling, etc.). */
+/** Auth + membership gate for features that require an active trial/plan. */
 export async function requireEntitled(
   req: NextRequest
 ): Promise<AuthedUser | NextResponse> {
   const auth = await requireAuth(req);
   if (!isAuthedUser(auth)) return auth;
 
-  // Without Admin DB we can't verify entitlement server-side
   if (!getAdminDb()) {
     if (process.env.ALLOW_INSECURE_API === "true") return auth;
     return NextResponse.json(
@@ -140,4 +129,92 @@ export async function requireEntitled(
   }
 
   return auth;
+}
+
+export type TryOnAccess = AuthedUser & {
+  /** True when this request consumed the one free on-photo dress. */
+  consumedFreeTryOn?: boolean;
+};
+
+/**
+ * On-photo try-on gate: membership OR one unused free dress (aha moment).
+ * Does not consume the free credit — call `consumeFreePhotoTryOn` after a
+ * successful apparel response so failed dresses don't burn the gift.
+ */
+export async function requireTryOnAccess(
+  req: NextRequest,
+  opts?: { stage?: string }
+): Promise<TryOnAccess | NextResponse> {
+  const auth = await requireAuth(req);
+  if (!isAuthedUser(auth)) return auth;
+
+  if (!getAdminDb()) {
+    if (process.env.ALLOW_INSECURE_API === "true") return auth;
+    return NextResponse.json(
+      {
+        error: "Membership check unavailable. Configure Firebase Admin.",
+        code: "admin_not_configured",
+      },
+      { status: 503 }
+    );
+  }
+
+  if (isCompedAccount(auth)) return auth;
+
+  const profile = await loadUserProfileAdmin(auth.uid);
+  if (isEntitled(profile, auth)) return auth;
+
+  const used = freePhotoTryOnsUsed(profile);
+  const stage = (opts?.stage || "auto").toLowerCase();
+  const isApparelStage =
+    stage === "apparel" ||
+    stage === "auto" ||
+    stage === "collage" ||
+    stage === "base";
+
+  // Finish / style after the free apparel dress must still run
+  if (!isApparelStage) {
+    return auth;
+  }
+
+  if (used >= FREE_PHOTO_TRYONS) {
+    return NextResponse.json(
+      {
+        error:
+          "You’ve used your free on-photo look. Start a 7-day free trial to keep dressing.",
+        code: "trial_required",
+      },
+      { status: 402 }
+    );
+  }
+
+  // Eligible for the free gift — credit consumed only after a successful dress
+  return { ...auth, consumedFreeTryOn: false };
+}
+
+/** Mark the free on-photo gift as used (after a successful apparel dress). */
+export async function consumeFreePhotoTryOn(
+  uid: string
+): Promise<{ consumed: boolean; used: number }> {
+  const db = getAdminDb();
+  if (!db) return { consumed: false, used: 0 };
+  const ref = db.collection("users").doc(uid);
+  const snap = await ref.get();
+  const profile = (snap.data() || {}) as Partial<UserProfile>;
+  if (isEntitled(profile, { uid })) {
+    return { consumed: false, used: freePhotoTryOnsUsed(profile) };
+  }
+  const used = freePhotoTryOnsUsed(profile);
+  if (used >= FREE_PHOTO_TRYONS) {
+    return { consumed: false, used };
+  }
+  const next = used + 1;
+  await ref.set(
+    {
+      freePhotoTryOnsUsed: next,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+  return { consumed: true, used: next };
 }

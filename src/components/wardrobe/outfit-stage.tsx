@@ -15,6 +15,11 @@ import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
 import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook, hasTryOnArtifacts } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
+import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
+import {
+  canStartPhotoTryOn,
+  shouldOfferTrial,
+} from "@/lib/entitlement";
 import Link from "next/link";
 
 export function OutfitStage({
@@ -31,6 +36,8 @@ export function OutfitStage({
 }) {
   const garments = outfit?.garments || [];
   const wardrobe = useAetherStore((s) => s.wardrobe);
+  const user = useAetherStore((s) => s.user);
+  const updateUser = useAetherStore((s) => s.updateUser);
   const swapFromVoice = useAetherStore((s) => s.swapFromVoice);
   const setCurrentOutfit = useAetherStore((s) => s.setCurrentOutfit);
   const confirmWear = useAetherStore((s) => s.confirmWear);
@@ -70,6 +77,7 @@ export function OutfitStage({
   const [dressing, setDressing] = useState(false);
   const [needsKey, setNeedsKey] = useState(false);
   const [needsBilling, setNeedsBilling] = useState(false);
+  const [trialOffer, setTrialOffer] = useState<"soft" | "hard" | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [stepLabel, setStepLabel] = useState("");
@@ -162,6 +170,14 @@ export function OutfitStage({
     let cancelled = false;
 
     (async () => {
+      // Hard gate before spending try-on credits — free gift already used
+      if (!canStartPhotoTryOn(user)) {
+        setWornUrl(displayAvatar);
+        setDressing(false);
+        setTrialOffer("hard");
+        return;
+      }
+
       setDressing(true);
       setError("");
       setNotice("");
@@ -173,6 +189,7 @@ export function OutfitStage({
       setProgress(4);
       setWornUrl(displayAvatar);
 
+      let consumedFreeThisRun = false;
       let current = displayAvatar;
       let identityPhoto = displayAvatar;
       try {
@@ -199,11 +216,20 @@ export function OutfitStage({
           return true;
         }
         if (
-          data.needsBilling ||
-          status === 402 ||
+          data.code === "trial_required" ||
           data.code === "entitlement_required"
         ) {
+          setTrialOffer("hard");
+          setDressing(false);
+          return true;
+        }
+        if (data.needsBilling) {
           setNeedsBilling(true);
+          setDressing(false);
+          return true;
+        }
+        if (status === 402) {
+          setTrialOffer("hard");
           setDressing(false);
           return true;
         }
@@ -337,6 +363,16 @@ export function OutfitStage({
             setWornUrl(current);
             setKeyConfigured(true);
             apparelBaseBeforeOuter = current;
+
+            if (apparelData.consumedFreeTryOn) {
+              consumedFreeThisRun = true;
+              updateUser({
+                freePhotoTryOnsUsed: Math.max(
+                  1,
+                  (user?.freePhotoTryOnsUsed || 0) + 1
+                ),
+              });
+            }
 
             const stepIds = new Set(
               Array.isArray(apparelData.steps)
@@ -640,6 +676,25 @@ export function OutfitStage({
           if (appliedIds.size > 0 || appliedNames.size > 0) {
             confirmWear(outfit);
           }
+          // Soft paywall after the free aha dress
+          const after = {
+            subscriptionStatus: user?.subscriptionStatus || "none",
+            trialEndsAt: user?.trialEndsAt,
+            freePhotoTryOnsUsed: consumedFreeThisRun
+              ? Math.max(1, user?.freePhotoTryOnsUsed || 0)
+              : user?.freePhotoTryOnsUsed,
+          };
+          if (shouldOfferTrial(after)) {
+            setTrialOffer("soft");
+            try {
+              const { default: posthog } = await import("posthog-js");
+              if (posthog.__loaded) {
+                posthog.capture("trial_offer_shown", { mode: "soft" });
+              }
+            } catch {
+              // ignore
+            }
+          }
         }
       } catch (err) {
         if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
@@ -664,6 +719,11 @@ export function OutfitStage({
     outfit,
     confirmWear,
     runTryOn,
+    user?.uid,
+    user?.subscriptionStatus,
+    user?.freePhotoTryOnsUsed,
+    user?.trialEndsAt,
+    updateUser,
   ]);
 
   const alternatives = swapFor
@@ -1100,6 +1160,12 @@ export function OutfitStage({
           )}
         </div>
       </div>
+
+      <TrialOfferModal
+        open={trialOffer !== null}
+        mode={trialOffer || "soft"}
+        onClose={() => setTrialOffer(null)}
+      />
     </motion.div>
   );
 }

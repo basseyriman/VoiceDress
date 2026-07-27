@@ -115,7 +115,8 @@ export default function BillingPage() {
           Membership
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
-          £19/month or £149/year — both include a 7-day trial. Status:{" "}
+          One on-photo look is free. Then £19/month or £149/year — both include a
+          7-day trial. Status:{" "}
           <span className="capitalize text-champagne">{statusLabel}</span>
           {user?.trialEndsAt && user.subscriptionStatus === "trialing" ? (
             <span className="text-mist">
@@ -125,6 +126,13 @@ export default function BillingPage() {
                 month: "short",
                 day: "numeric",
               })}
+            </span>
+          ) : null}
+          {typeof user?.freePhotoTryOnsUsed === "number" &&
+          user.subscriptionStatus === "none" ? (
+            <span className="text-mist">
+              {" "}
+              · free looks used {user.freePhotoTryOnsUsed}/1
             </span>
           ) : null}
         </p>
