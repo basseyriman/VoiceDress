@@ -4,11 +4,13 @@ type Named = {
   name?: string;
   tags?: string[];
   brand?: string;
+  fabric?: string;
+  texture?: string;
   category?: GarmentCategory | string;
 };
 
 function blobOf(g: Named): string {
-  return `${g.name || ""} ${g.brand || ""} ${(g.tags || []).join(" ")}`
+  return `${g.name || ""} ${g.brand || ""} ${(g.tags || []).join(" ")} ${g.fabric || ""} ${g.texture || ""}`
     .toLowerCase()
     .trim();
 }
@@ -43,6 +45,28 @@ export function isLikelySockPackMislabel(g: Named & { colors?: string[] }): bool
   return Boolean(weakFlatName && packHints);
 }
 
+/** Jeans / trousers / shirts mistagged as shoes (e.g. denim named "Dress Shoes"). */
+export function isApparelMislabeledAsShoes(g: Named): boolean {
+  const t = blobOf(g);
+  // Denim / bottoms evidence wins — even over a "Dress Shoes" title
+  if (
+    /\b(jeans?|denim|trousers?|chinos?|pants?|skirt|shorts?|joggers?|leggings?)\b/.test(
+      t
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(shirt|blouse|tee|t-shirt|polo|sweater|jumper|hoodie|jacket|coat|blazer)\b/.test(
+      t
+    ) &&
+    !/\b(dress\s*shoes?)\b/.test(t)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** Underwear / base layers that shouldn't dress as main apparel. */
 export function isUnderwearOrLounge(g: Named): boolean {
   const t = blobOf(g);
@@ -51,19 +75,12 @@ export function isUnderwearOrLounge(g: Named): boolean {
   );
 }
 
-/** Real shoes/boots — never trust a shoes label on shirts/apparel/socks. */
+/** Real shoes/boots — never trust a shoes label on shirts/jeans/socks. */
 export function isRealFootwear(g: Named & { colors?: string[] }): boolean {
   if (isHosieryOrSocks(g) || isLikelySockPackMislabel(g)) return false;
+  // Jeans named "Dress Shoes" must never count as footwear
+  if (isApparelMislabeledAsShoes(g)) return false;
   const t = blobOf(g);
-  // "White Oxford Shirt" must never count as footwear
-  if (
-    /\b(shirt|blouse|tee|t-shirt|polo|sweater|jumper|hoodie|trouser|jeans?|pants?|skirt|jacket|coat|blazer)\b/.test(
-      t
-    ) &&
-    !/\b(dress\s*shoes?)\b/.test(t)
-  ) {
-    return false;
-  }
   // Category alone is not enough — sock packs get stored as shoes="Ballet Flat"
   if (g.category === "shoes") {
     if (/\b(ballet\s*flats?|\bflats?\b)\b/.test(t) && (g.colors?.length ?? 0) >= 4) {
@@ -88,12 +105,20 @@ export function inferCategoryFromText(
   const t = `${name} ${brand} ${tags.join(" ")}`.toLowerCase();
   if (!t.trim()) return null;
 
-  // Order matters: hosiery → tops (oxford shirt) → shoes → …
+  // Order matters: hosiery → bottoms/denim → tops → shoes …
   if (
     /\b(socks?|stockings?|tights|hosiery|no-?show)\b/.test(t) ||
     isUnderwearOrLounge({ name, tags, brand })
   ) {
     return "accessory";
+  }
+  // Jeans / trousers BEFORE shoes — denim must never become "Dress Shoes"
+  if (
+    /\b(jeans?|denim|trousers?|pants?|chinos?|skirt|shorts?|joggers?|sweatpants?|leggings?|culottes?)\b/.test(
+      t
+    )
+  ) {
+    return "bottom";
   }
   // Shirt / top BEFORE footwear — "Oxford Shirt" must not become shoes
   if (
@@ -128,13 +153,6 @@ export function inferCategoryFromText(
     )
   ) {
     return "outerwear";
-  }
-  if (
-    /\b(jeans?|trousers?|pants?|chinos?|skirt|shorts?|joggers?|sweatpants?|leggings?|culottes?)\b/.test(
-      t
-    )
-  ) {
-    return "bottom";
   }
   if (/\b(bag|tote|handbag|clutch|backpack|crossbody|purse)\b/.test(t)) {
     return "bag";
@@ -195,6 +213,8 @@ export function sanitizeGarmentCategory<
     name?: string;
     tags?: string[];
     brand?: string;
+    fabric?: string;
+    texture?: string;
     colors?: string[];
     category: GarmentCategory;
   },
@@ -214,12 +234,45 @@ export function sanitizeGarmentCategory<
     };
   }
 
-  const inferred = inferCategoryFromText(g.name || "", g.tags || [], g.brand);
-  if (!inferred) {
+  // Jeans / denim mistagged as shoes (common vision error: "Dress Shoes")
+  if (g.category === "shoes" && isApparelMislabeledAsShoes(g)) {
+    const t = blobOf(g);
+    const asBottom = /\b(jeans?|denim|trousers?|pants?|chinos?|skirt|shorts?)\b/.test(
+      t
+    );
+    const asTop = /\b(shirt|tee|t-shirt|polo|blouse|sweater|jumper)\b/.test(t);
+    return {
+      ...g,
+      category: asTop && !asBottom ? "top" : "bottom",
+      name:
+        /^(dress\s*)?shoes?$/i.test((g.name || "").trim()) && asBottom
+          ? /\bjeans?\b/.test(t)
+            ? "Jeans"
+            : "Trousers"
+          : g.name,
+      tags: Array.from(
+        new Set([...(g.tags || []), "corrected_apparel_as_shoes"])
+      ),
+    };
+  }
+
+  const inferred = inferCategoryFromText(
+    g.name || "",
+    g.tags || [],
+    g.brand || ""
+  );
+  // Also pass fabric into inference via tags blob
+  const inferredWithFabric = inferCategoryFromText(
+    g.name || "",
+    [...(g.tags || []), g.fabric || "", g.texture || ""].filter(Boolean),
+    g.brand || ""
+  );
+  const best = inferredWithFabric || inferred;
+  if (!best) {
     return g;
   }
-  if (shouldOverride(g.category, inferred, g)) {
-    return { ...g, category: inferred };
+  if (shouldOverride(g.category, best, g)) {
+    return { ...g, category: best };
   }
   return g;
 }
@@ -323,6 +376,16 @@ export function assertGarmentCategoryGuards(): void {
   }
   if (!isRealFootwear({ name: "Cognac Loafers", category: "shoes" })) {
     throw new Error("isRealFootwear must accept loafers");
+  }
+
+  const jeansAsShoes = sanitizeGarmentCategory({
+    name: "Dress Shoes",
+    tags: ["denim", "blue"],
+    fabric: "denim",
+    category: "shoes" as GarmentCategory,
+  });
+  if (jeansAsShoes.category !== "bottom" || isRealFootwear(jeansAsShoes)) {
+    throw new Error("denim mistagged as Dress Shoes must become bottom");
   }
 
   const pack = sanitizeGarmentCategory({

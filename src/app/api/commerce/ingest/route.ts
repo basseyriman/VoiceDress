@@ -401,7 +401,7 @@ Is the MAIN product being sold a bag/purse/clutch, OR is it clothing (dress, top
   }
 }
 
-/** Catch no-show sock packs mislabeled as ballet flats / shoes. */
+/** Catch jeans/socks mislabeled as ballet flats / dress shoes. */
 async function guardShoesExtraction(
   openai: NonNullable<ReturnType<typeof getOpenAI>>,
   imageDataUrl: string,
@@ -423,6 +423,22 @@ async function guardShoesExtraction(
     };
   }
 
+  // Fast path: denim / jeans language already in the extract
+  if (
+    /\b(jeans?|denim|trousers?|chinos?|pants?)\b/i.test(
+      `${shoeItem.name} ${shoeItem.tags.join(" ")} ${shoeItem.fabric || ""}`
+    )
+  ) {
+    return {
+      ...shoeItem,
+      category: "bottom",
+      name: /\bjeans?\b/i.test(shoeItem.name)
+        ? shoeItem.name
+        : "Jeans",
+      tags: [...shoeItem.tags, "denim", "corrected_apparel_as_shoes"],
+    };
+  }
+
   try {
     const { output } = await generateText({
       model: openai(INGEST_VISION_MODEL),
@@ -436,11 +452,17 @@ async function guardShoesExtraction(
               type: "text",
               text: `This photo was classified as shoes ("${shoeItem.name}"). Double-check carefully.
 
-Are these REAL footwear (leather/fabric shoes, boots, sandals, sneakers with hard soles you walk outdoors in), OR are they socks / no-show sock liners / footies / hosiery (often a multi-pack of soft colored liners)?
+What is the MAIN product in the photo?
+1) REAL footwear — shoes, boots, loafers, heels, sneakers with hard soles
+2) SOCKS / no-show liners / footies / hosiery (soft fabric, often multi-packs)
+3) JEANS / trousers / pants / denim bottoms (folded denim, jean legs — NOT shoes)
+4) Other clothing (shirt, jacket, etc.)
 
-- If socks/liners/hosiery: set isRealFootwear=false, category=accessory, name like "No-Show Socks".
-- If real shoes: set isRealFootwear=true, category=shoes, keep an accurate shoe name.
-Never call a sock liner pack "Ballet Flat".`,
+Rules:
+- Jeans or trousers → isRealFootwear=false, category=bottom, name like "Jeans" or "Trousers". Never call jeans "Dress Shoes".
+- Socks/liners → isRealFootwear=false, category=accessory, name like "No-Show Socks".
+- Real shoes only → isRealFootwear=true, category=shoes.
+Never call a sock pack "Ballet Flat" or denim "Dress Shoes".`,
             },
             { type: "image", image: imageDataUrl },
           ],
@@ -460,17 +482,31 @@ Never call a sock liner pack "Ballet Flat".`,
         tags: output.tags?.length ? output.tags : shoeItem.tags,
       };
     }
+    const cat = output.category;
+    const safeCat =
+      cat === "bottom" || cat === "top" || cat === "dress" || cat === "outerwear"
+        ? cat
+        : cat === "accessory" || cat === "bag"
+          ? cat
+          : "bottom";
     return {
       ...shoeItem,
-      category: "accessory",
-      name: output.name?.trim() || "No-Show Socks",
+      category: safeCat,
+      name:
+        output.name?.trim() ||
+        (safeCat === "bottom"
+          ? "Jeans"
+          : safeCat === "accessory"
+            ? "No-Show Socks"
+            : shoeItem.name),
       brand: output.brand || shoeItem.brand,
       colors: output.colors?.length ? output.colors : shoeItem.colors,
       fabric: output.fabric ?? shoeItem.fabric,
       tags: [
         ...(output.tags || shoeItem.tags),
-        "hosiery",
-        "corrected_socks_as_shoes",
+        safeCat === "accessory"
+          ? "corrected_socks_as_shoes"
+          : "corrected_apparel_as_shoes",
       ],
     };
   } catch {

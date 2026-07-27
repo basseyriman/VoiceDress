@@ -8,6 +8,7 @@ export {
   isHosieryOrSocks,
   isRealFootwear,
   isUnderwearOrLounge,
+  isApparelMislabeledAsShoes,
   normalizeGarmentCategory,
   sanitizeGarmentCategory,
   sanitizeWardrobe,
