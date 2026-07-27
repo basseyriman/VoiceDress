@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import type Stripe from "stripe";
 import {
   getStripe,
   STRIPE_PRICE_MONTHLY,
   STRIPE_PRICE_YEARLY,
-  planIdFromStripePrice,
   LIST_PRICE_YEARLY_GBP,
 } from "@/lib/stripe";
+import {
+  findLiveSubscription,
+  planFromSubscription,
+} from "@/lib/stripe-subscription";
 import { requireAuth, isAuthedUser } from "@/lib/api-auth";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 
@@ -16,58 +18,6 @@ function isLivePriceId(priceId: string) {
   return (
     priceId.startsWith("price_") &&
     !/voicedress|vestoir|aether/i.test(priceId)
-  );
-}
-
-function planFromSubscription(sub: Stripe.Subscription) {
-  const priceId = sub.items.data[0]?.price?.id;
-  return (
-    planIdFromStripePrice(priceId) ||
-    (sub.metadata?.planId === "yearly" || sub.metadata?.planId === "monthly"
-      ? sub.metadata.planId
-      : null) ||
-    (priceId === STRIPE_PRICE_YEARLY
-      ? "yearly"
-      : priceId === STRIPE_PRICE_MONTHLY
-        ? "monthly"
-        : null)
-  );
-}
-
-async function findLiveSubscription(
-  stripe: Stripe,
-  customerId: string | undefined,
-  subscriptionId: string | undefined
-): Promise<Stripe.Subscription | null> {
-  if (subscriptionId) {
-    try {
-      const sub = await stripe.subscriptions.retrieve(subscriptionId);
-      if (
-        sub.status === "active" ||
-        sub.status === "trialing" ||
-        sub.status === "past_due"
-      ) {
-        return sub;
-      }
-    } catch (err) {
-      console.warn("change-plan: stored subscriptionId retrieve failed", err);
-    }
-  }
-
-  if (!customerId) return null;
-
-  const list = await stripe.subscriptions.list({
-    customer: customerId,
-    status: "all",
-    limit: 10,
-  });
-  return (
-    list.data.find(
-      (s) =>
-        s.status === "active" ||
-        s.status === "trialing" ||
-        s.status === "past_due"
-    ) || null
   );
 }
 
@@ -123,36 +73,20 @@ export async function POST(req: NextRequest) {
   const ref = db.collection("users").doc(auth.uid);
   const snap = await ref.get();
   const data = snap.data() || {};
-  const storedSubId = data.stripeSubscriptionId as string | undefined;
-  let customerId = data.stripeCustomerId as string | undefined;
 
   try {
-    // Recover customer from email if Firestore never stored stripeCustomerId
-    if (!customerId && auth.email) {
-      const customers = await stripe.customers.list({
-        email: auth.email,
-        limit: 5,
-      });
-      customerId = customers.data[0]?.id;
-      if (customerId) {
-        await ref.set(
-          {
-            stripeCustomerId: customerId,
-            updatedAt: new Date().toISOString(),
-          },
-          { merge: true }
-        );
-      }
-    }
-
-    const sub = await findLiveSubscription(stripe, customerId, storedSubId);
+    const { sub, customerId } = await findLiveSubscription(stripe, {
+      customerId: data.stripeCustomerId as string | undefined,
+      subscriptionId: data.stripeSubscriptionId as string | undefined,
+      email: auth.email || data.email,
+      firebaseUid: auth.uid,
+    });
 
     if (!sub) {
       return NextResponse.json(
         {
-          error: customerId
-            ? "We found your Stripe customer but no live subscription. Finish checkout for Monthly or Annual first, then switch here."
-            : "No Stripe subscription on this account yet. Start a plan from Membership, then you can switch to annual.",
+          error:
+            "Couldn’t find your membership subscription in Stripe. Open Billing details, confirm the Monthly trial is there, then try again — or contact support.",
           code: "no_subscription",
         },
         { status: 400 }
@@ -176,9 +110,7 @@ export async function POST(req: NextRequest) {
         {
           subscriptionPlan: target,
           stripeSubscriptionId: sub.id,
-          ...(typeof sub.customer === "string"
-            ? { stripeCustomerId: sub.customer }
-            : {}),
+          ...(customerId ? { stripeCustomerId: customerId } : {}),
           updatedAt: new Date().toISOString(),
         },
         { merge: true }
@@ -195,7 +127,6 @@ export async function POST(req: NextRequest) {
 
     const updated = await stripe.subscriptions.update(sub.id, {
       items: [{ id: item.id, price: targetPrice }],
-      // During trial, just change what they’ll pay after — avoid odd prorations.
       proration_behavior:
         sub.status === "trialing" ? "none" : "create_prorations",
       metadata: {
@@ -206,14 +137,16 @@ export async function POST(req: NextRequest) {
     });
 
     const planId = planFromSubscription(updated) || target;
+    const updatedCustomer =
+      typeof updated.customer === "string"
+        ? updated.customer
+        : updated.customer?.id || customerId;
 
     await ref.set(
       {
         subscriptionPlan: planId,
         stripeSubscriptionId: updated.id,
-        ...(typeof updated.customer === "string"
-          ? { stripeCustomerId: updated.customer }
-          : {}),
+        ...(updatedCustomer ? { stripeCustomerId: updatedCustomer } : {}),
         updatedAt: new Date().toISOString(),
       },
       { merge: true }
