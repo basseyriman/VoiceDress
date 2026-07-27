@@ -60,20 +60,9 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7 }}
-            className="flex items-center gap-3"
+            className="flex items-center"
           >
-            {/* Quiet couture mark — brand name carries the luxury */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.svg?v=14"
-              alt=""
-              width={36}
-              height={36}
-              className="h-8 w-auto"
-            />
-            <p className="font-display text-xl font-medium tracking-[0.16em] text-ivory sm:text-2xl">
-              Voice<span className="text-champagne">Dress</span>
-            </p>
+            <Logo variant="hero" />
           </motion.div>
           <motion.h1
             initial={{ opacity: 0, y: 18 }}

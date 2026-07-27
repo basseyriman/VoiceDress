@@ -39,48 +39,56 @@ export function Button({
 
 export function Logo({
   className,
-  variant = "default",
+  variant = "header",
 }: {
   className?: string;
-  /** Larger lockup for auth / landing hero */
-  variant?: "default" | "hero";
+  /** header = app nav (premium). hero = auth / landing. compact = tight spaces */
+  variant?: "header" | "hero" | "compact";
 }) {
   const hero = variant === "hero";
+  const compact = variant === "compact";
 
   return (
     <Link
       href="/"
       className={cn(
-        "group inline-flex items-center",
-        hero ? "gap-3.5" : "gap-2.5",
+        "group inline-flex items-center transition-opacity duration-300 hover:opacity-95",
+        hero ? "gap-4" : compact ? "gap-2" : "gap-3.5 sm:gap-4",
         className
       )}
       aria-label="VoiceDress home"
     >
       <span
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-[0.85rem] border border-champagne/25 bg-[#121110] shadow-[inset_0_1px_0_rgba(245,240,232,0.06)]",
-          hero ? "h-12 w-12" : "h-9 w-9"
+          "flex shrink-0 items-center justify-center rounded-[0.9rem] border border-champagne/30 bg-[#121110] shadow-[inset_0_1px_0_rgba(245,240,232,0.08),0_8px_24px_rgba(0,0,0,0.35)]",
+          hero && "h-14 w-14 sm:h-16 sm:w-16",
+          compact && "h-8 w-8 rounded-[0.65rem]",
+          !hero && !compact && "h-11 w-11 sm:h-12 sm:w-12"
         )}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/logo.svg?v=14"
+          src="/logo.svg?v=15"
           alt=""
-          width={hero ? 32 : 26}
-          height={hero ? 32 : 26}
+          width={hero ? 40 : compact ? 22 : 36}
+          height={hero ? 40 : compact ? 22 : 36}
           className={cn(
             "w-auto",
-            hero ? "h-7" : "h-[1.35rem]"
+            hero && "h-9 sm:h-10",
+            compact && "h-[1.15rem]",
+            !hero && !compact && "h-7 sm:h-8"
           )}
         />
       </span>
       <span
         className={cn(
           "font-display font-medium leading-none text-ivory",
-          hero
-            ? "text-[2rem] tracking-[0.14em] sm:text-[2.25rem]"
-            : "text-[1.45rem] tracking-[0.12em]"
+          hero &&
+            "text-[2.15rem] tracking-[0.16em] sm:text-[2.5rem] sm:tracking-[0.18em]",
+          compact && "text-[1.25rem] tracking-[0.1em]",
+          !hero &&
+            !compact &&
+            "text-[1.65rem] tracking-[0.14em] sm:text-[1.85rem] sm:tracking-[0.16em]"
         )}
       >
         Voice

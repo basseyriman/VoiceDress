@@ -22,7 +22,7 @@ export function PwaRegister() {
           keys
             .filter(
               (k) =>
-                k.startsWith("voicedress-shell-") && k !== "voicedress-shell-v14"
+                k.startsWith("voicedress-shell-") && k !== "voicedress-shell-v15"
             )
             .map((k) => caches.delete(k))
         );
