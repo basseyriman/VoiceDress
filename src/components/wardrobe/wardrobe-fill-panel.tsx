@@ -6,6 +6,7 @@ import { Link2, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listCommerceStores } from "@/lib/commerce";
 import { authFetch } from "@/lib/auth-fetch";
+import { prepareWardrobeIngestPhoto } from "@/lib/image";
 import { useAetherStore } from "@/store/aether-store";
 import type { CommerceSource, Garment } from "@/lib/types";
 
@@ -90,31 +91,69 @@ export function WardrobeFillPanel({
     setError("");
     setToast("");
     try {
-      const dataUrl = await fileToDataUrl(file);
-      const res = await authFetch("/api/commerce/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageDataUrl: dataUrl,
-          source: ingestSource,
-        }),
-      });
-      const data = await res.json();
+      const prepared = await prepareWardrobeIngestPhoto(file);
+      if (prepared.error || !prepared.dataUrl) {
+        setError(prepared.error || "Couldn’t read that photo.");
+        return;
+      }
+      // ~3MB JSON ceiling — keeps uploads under typical serverless body limits
+      if (prepared.dataUrl.length > 3_500_000) {
+        setError(
+          "That photo is still too large after compression. Try a screenshot or a closer crop."
+        );
+        return;
+      }
+
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 90_000);
+      let res: Response;
+      try {
+        res = await authFetch("/api/commerce/ingest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            imageDataUrl: prepared.dataUrl,
+            source: ingestSource,
+          }),
+        });
+      } finally {
+        window.clearTimeout(timeout);
+      }
+
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(
-          res.status === 402
-            ? "Your trial has ended — open Billing to continue."
-            : data.error || "Ingest failed"
+          res.status === 413
+            ? "Photo too large for upload. Try a smaller screenshot."
+            : res.status === 422
+              ? data.error ||
+                "Couldn’t find clothing in that image. Try a clearer product shot or receipt."
+              : res.status === 401
+                ? "Sign in again, then retry the upload."
+                : data.error || `Upload failed (${res.status}). Try again.`
         );
         return;
       }
       const items = (data.items || []) as Garment[];
+      if (!items.length) {
+        setError("No pieces found in that image. Try another photo.");
+        return;
+      }
       addGarments(items);
       setToast(
         `Added ${items.length} piece${items.length === 1 ? "" : "s"} to your wardrobe from the upload.`
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      const aborted =
+        err instanceof DOMException && err.name === "AbortError";
+      setError(
+        aborted
+          ? "Upload timed out — check your connection and try a smaller photo."
+          : err instanceof Error
+            ? err.message
+            : "Upload failed"
+      );
     } finally {
       setSyncing(null);
       if (fileRef.current) fileRef.current.value = "";
@@ -267,15 +306,6 @@ export function WardrobeFillPanel({
       </div>
     </div>
   );
-}
-
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error("Couldn’t read file"));
-    reader.readAsDataURL(file);
-  });
 }
 
 function base64UrlDecode(input: string): string {

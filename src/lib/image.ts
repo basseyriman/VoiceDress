@@ -4,6 +4,25 @@ export async function prepareProfilePhoto(file: File): Promise<{
   dataUrl: string;
   error?: string;
 }> {
+  return prepareImageUpload(file, 1800, 0.92);
+}
+
+/**
+ * Receipt / product photos for wardrobe ingest — keep under Vercel body limits
+ * so repeated uploads don’t hang the “Extracting…” button.
+ */
+export async function prepareWardrobeIngestPhoto(file: File): Promise<{
+  dataUrl: string;
+  error?: string;
+}> {
+  return prepareImageUpload(file, 1280, 0.82);
+}
+
+async function prepareImageUpload(
+  file: File,
+  maxEdge: number,
+  quality: number
+): Promise<{ dataUrl: string; error?: string }> {
   const name = file.name.toLowerCase();
   const isHeic =
     name.endsWith(".heic") ||
@@ -29,7 +48,7 @@ export async function prepareProfilePhoto(file: File): Promise<{
       return { dataUrl: "", error: "Please upload a JPG, PNG, WebP, or HEIC photo." };
     }
 
-    return { dataUrl: await compressBlob(source, 1800, 0.92) };
+    return { dataUrl: await compressBlob(source, maxEdge, quality) };
   } catch {
     return {
       dataUrl: "",
