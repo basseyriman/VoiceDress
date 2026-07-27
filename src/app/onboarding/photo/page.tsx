@@ -8,7 +8,7 @@ import { Button, Logo } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { CameraCaptureModal } from "@/components/wardrobe/camera-capture-modal";
 import { processBodyPhotoForTryOn } from "@/lib/image";
-import { needsWardrobeSetup } from "@/lib/onboarding";
+import { needsPhotoOnboarding, needsWardrobeSetup } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import { useAetherStore } from "@/store/aether-store";
 
@@ -49,8 +49,8 @@ export default function PhotoOnboardingPage() {
       router.replace("/login");
       return;
     }
-    // Only auto-skip onboarding if they already finished a photo
-    if (user.avatarStatus === "ready") {
+    // Skip if they already have a body photo (don’t restart setup on login)
+    if (!needsPhotoOnboarding(user)) {
       router.replace(
         needsWardrobeSetup(wardrobe)
           ? "/onboarding/wardrobe"
@@ -105,6 +105,7 @@ export default function PhotoOnboardingPage() {
     setSaving(true);
     setError("");
     try {
+      // Await cloud save so the next sign-in doesn’t restart photo setup
       await setAvatar(preview, "ready");
       window.location.href = "/onboarding/wardrobe";
     } catch {

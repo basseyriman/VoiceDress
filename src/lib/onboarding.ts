@@ -7,6 +7,17 @@ type AvatarFields = Pick<
   "avatarUrl" | "photoURL" | "avatarStatus"
 >;
 
+function hasUsablePhotoUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  if (url === AVATAR_IDB_REF) return true;
+  return (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:") ||
+    url.startsWith("blob:")
+  );
+}
+
 /** True when the user must complete the Wispr-style photo ritual before the app. */
 export function needsPhotoOnboarding(
   user: AvatarFields | null | undefined
@@ -14,16 +25,8 @@ export function needsPhotoOnboarding(
   if (!user) return false;
   // Explicit ready wins — even if persist swapped the data URL for an IDB marker
   if (user.avatarStatus === "ready") return false;
-
-  const url = user.avatarUrl || user.photoURL;
-  if (!url || url === "") return true;
-  if (url === AVATAR_IDB_REF) return false;
-  if (
-    url.startsWith("http://") ||
-    url.startsWith("https://") ||
-    url.startsWith("data:") ||
-    url.startsWith("blob:")
-  ) {
+  // Any durable photo means setup is done (don’t restart on login)
+  if (hasUsablePhotoUrl(user.avatarUrl) || hasUsablePhotoUrl(user.photoURL)) {
     return false;
   }
   return true;
@@ -70,4 +73,30 @@ export async function hasLocalBodyPhoto(): Promise<boolean> {
         blob.startsWith("http") ||
         blob.startsWith("blob:"))
   );
+}
+
+/**
+ * After cloud hydrate, recover a finished photo from IndexedDB when Firestore
+ * hasn’t caught up yet (common on mobile if they left mid-upload).
+ */
+export async function recoverLocalPhotoIfNeeded(
+  user: AvatarFields | null | undefined
+): Promise<Partial<UserProfile> | null> {
+  if (!user || !needsPhotoOnboarding(user)) return null;
+  const blob = await loadAvatarBlob();
+  if (
+    !blob ||
+    !(
+      blob.startsWith("data:") ||
+      blob.startsWith("http") ||
+      blob.startsWith("blob:")
+    )
+  ) {
+    return null;
+  }
+  return {
+    avatarUrl: blob,
+    photoURL: blob.startsWith("http") ? blob : user.photoURL,
+    avatarStatus: "ready",
+  };
 }

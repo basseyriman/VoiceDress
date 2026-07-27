@@ -14,12 +14,18 @@ import {
   signInWithEmailAndPassword,
 } from "@/lib/firebase";
 import { authErrorMessage } from "@/lib/auth-errors";
-import { postAuthPath } from "@/lib/onboarding";
+import {
+  postAuthPath,
+  recoverLocalPhotoIfNeeded,
+} from "@/lib/onboarding";
 
 export default function LoginPage() {
   const router = useRouter();
   const hydrateFromCloud = useAetherStore((s) => s.hydrateFromCloud);
+  const hydrateAvatar = useAetherStore((s) => s.hydrateAvatar);
   const bootstrapCloudUser = useAetherStore((s) => s.bootstrapCloudUser);
+  const updateUser = useAetherStore((s) => s.updateUser);
+  const setAvatar = useAetherStore((s) => s.setAvatar);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -49,6 +55,16 @@ export default function LoginPage() {
           displayName:
             cred.user.displayName || email.split("@")[0] || "VoiceDress Member",
         });
+      }
+      await hydrateAvatar();
+      const recovered = await recoverLocalPhotoIfNeeded(
+        useAetherStore.getState().user
+      );
+      if (recovered?.avatarUrl?.startsWith("data:")) {
+        // Re-upload so cloud profile matches this device
+        await setAvatar(recovered.avatarUrl, "ready");
+      } else if (recovered) {
+        updateUser(recovered);
       }
       const user = useAetherStore.getState().user;
       const wardrobe = useAetherStore.getState().wardrobe;

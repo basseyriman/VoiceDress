@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button, Logo } from "@/components/ui/button";
 import { STYLE_LOOKS } from "@/lib/style-options";
-import { postAuthPath } from "@/lib/onboarding";
+import { needsPhotoOnboarding, postAuthPath } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import { useAetherStore } from "@/store/aether-store";
 
@@ -24,7 +24,7 @@ export default function StyleOnboardingPage() {
       router.replace("/login");
       return;
     }
-    if (user.avatarStatus === "ready") {
+    if (!needsPhotoOnboarding(user)) {
       router.replace(postAuthPath(user, wardrobe));
       return;
     }

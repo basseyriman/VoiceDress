@@ -311,7 +311,13 @@ export const useAetherStore = create<AetherState>()(
             displayName: data.profile.displayName || "VoiceDress Member",
             photoURL: data.profile.photoURL || data.profile.avatarUrl,
             avatarUrl: data.profile.avatarUrl || data.profile.photoURL,
-            avatarStatus: data.profile.avatarStatus || "none",
+            avatarStatus:
+              data.profile.avatarStatus ||
+              ((data.profile.avatarUrl || data.profile.photoURL || "").startsWith(
+                "http"
+              )
+                ? "ready"
+                : "none"),
             city: data.profile.city || "London",
             lat: data.profile.lat ?? 51.5074,
             lon: data.profile.lon ?? -0.1278,
@@ -458,45 +464,49 @@ export const useAetherStore = create<AetherState>()(
         const user = get().user;
         if (!user) return;
 
-        // Local-first: unlock the app immediately, sync to Storage in the background
+        // Local-first: unlock the app immediately, then persist to Storage
         if (url.startsWith("data:")) {
           await saveAvatarBlob(url);
         }
 
-        const next = {
-          ...user,
-          avatarUrl: url.startsWith("data:") ? url : url,
-          photoURL: user.photoURL,
-          avatarStatus: status,
-        };
-        set({ user: next });
+        set({
+          user: {
+            ...user,
+            avatarUrl: url,
+            photoURL: user.photoURL,
+            avatarStatus: status,
+          },
+        });
 
-        if (url.startsWith("data:") && isCloudUid(user.uid)) {
-          void (async () => {
-            try {
-              const cloudUrl = await uploadUserAvatar(user.uid, url);
-              const current = get().user;
-              if (!current || current.uid !== user.uid) return;
-              set({
-                user: {
-                  ...current,
-                  photoURL: cloudUrl,
-                  avatarStatus: status,
-                },
-              });
-              void saveUserProfile(user.uid, {
+        if (!isCloudUid(user.uid)) return;
+
+        if (url.startsWith("data:")) {
+          try {
+            const cloudUrl = await uploadUserAvatar(user.uid, url);
+            const current = get().user;
+            if (!current || current.uid !== user.uid) return;
+            set({
+              user: {
+                ...current,
                 avatarUrl: cloudUrl,
                 photoURL: cloudUrl,
                 avatarStatus: status,
-              }).catch(() => undefined);
-            } catch {
-              void saveUserProfile(user.uid, {
-                avatarStatus: status,
-              }).catch(() => undefined);
-            }
-          })();
-        } else if (isCloudUid(user.uid)) {
-          void saveUserProfile(user.uid, {
+              },
+            });
+            await saveAvatarBlob(cloudUrl);
+            await saveUserProfile(user.uid, {
+              avatarUrl: cloudUrl,
+              photoURL: cloudUrl,
+              avatarStatus: status,
+            });
+          } catch {
+            // Still mark ready in Firestore so login doesn’t restart photo setup
+            await saveUserProfile(user.uid, {
+              avatarStatus: status,
+            }).catch(() => undefined);
+          }
+        } else {
+          await saveUserProfile(user.uid, {
             avatarUrl: url,
             photoURL: url,
             avatarStatus: status,
