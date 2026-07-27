@@ -8,6 +8,7 @@ import { Button, Logo } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/field";
 import { CameraCaptureModal } from "@/components/wardrobe/camera-capture-modal";
 import { processBodyPhotoForTryOn } from "@/lib/image";
+import { needsWardrobeSetup } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import { useAetherStore } from "@/store/aether-store";
 
@@ -30,6 +31,7 @@ export default function PhotoOnboardingPage() {
   const router = useRouter();
   const user = useAetherStore((s) => s.user);
   const hydrated = useAetherStore((s) => s.hydrated);
+  const wardrobe = useAetherStore((s) => s.wardrobe);
   const setAvatar = useAetherStore((s) => s.setAvatar);
 
   const [phase, setPhase] = useState<Phase>("intro");
@@ -49,9 +51,13 @@ export default function PhotoOnboardingPage() {
     }
     // Only auto-skip onboarding if they already finished a photo
     if (user.avatarStatus === "ready") {
-      router.replace("/today");
+      router.replace(
+        needsWardrobeSetup(wardrobe)
+          ? "/onboarding/wardrobe"
+          : "/today"
+      );
     }
-  }, [hydrated, user, router]);
+  }, [hydrated, user, wardrobe, router]);
 
   useEffect(() => {
     if (phase !== "intro") return;
@@ -100,7 +106,7 @@ export default function PhotoOnboardingPage() {
     setError("");
     try {
       await setAvatar(preview, "ready");
-      window.location.href = "/today";
+      window.location.href = "/onboarding/wardrobe";
     } catch {
       setError("Couldn’t save your photo. Please try again.");
       setSaving(false);
@@ -130,9 +136,10 @@ export default function PhotoOnboardingPage() {
       <div className="mx-auto flex w-full min-w-0 max-w-lg flex-1 flex-col">
         <div className="mb-8 flex items-center justify-between gap-4">
           <Logo />
-          <div className="flex items-center gap-1.5" aria-label="Step 2 of 2">
+          <div className="flex items-center gap-1.5" aria-label="Step 2 of 3">
             <span className="h-0.5 w-8 rounded-full bg-champagne" />
             <span className="h-0.5 w-8 rounded-full bg-champagne" />
+            <span className="h-0.5 w-8 rounded-full bg-white/15" />
           </div>
         </div>
 
@@ -145,7 +152,7 @@ export default function PhotoOnboardingPage() {
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-mist">
             We dress looks onto this photo — take a clear full-body shot, then
-            your wardrobe opens.
+            set up your wardrobe.
           </p>
 
           {phase === "intro" && (
@@ -282,17 +289,17 @@ export default function PhotoOnboardingPage() {
                     disabled={!canEnter}
                     onClick={() => void enterApp()}
                   >
-                    {saving ? "Saving…" : "Enter VoiceDress"}
+                    {saving ? "Saving…" : "Continue to wardrobe"}
                   </Button>
                   <button
                     type="button"
                     disabled={saving || processing}
                     onClick={() => {
-                      window.location.href = "/today";
+                      window.location.href = "/onboarding/wardrobe";
                     }}
                     className="w-full text-center text-xs text-mist transition hover:text-ivory-muted"
                   >
-                    Skip for now — open app
+                    Skip for now — set up wardrobe
                   </button>
                 </div>
               </div>

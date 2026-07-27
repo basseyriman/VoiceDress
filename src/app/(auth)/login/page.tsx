@@ -51,7 +51,8 @@ export default function LoginPage() {
         });
       }
       const user = useAetherStore.getState().user;
-      router.push(postAuthPath(user));
+      const wardrobe = useAetherStore.getState().wardrobe;
+      router.push(postAuthPath(user, wardrobe));
     } catch (err) {
       setError(authErrorMessage(err, "Couldn’t sign in. Please try again."));
     } finally {

@@ -6,10 +6,30 @@ import {
 } from "@/lib/commerce";
 import type { Garment } from "@/lib/types";
 
+function safeReturnTo(raw: string | null | undefined): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/connect";
+  const path = raw.split("?")[0] || "/connect";
+  if (path === "/connect" || path === "/onboarding/wardrobe") return path;
+  return "/connect";
+}
+
+function returnPathFromState(stateParam: string | null): string {
+  if (!stateParam) return "/connect";
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(stateParam, "base64url").toString("utf8")
+    ) as { returnTo?: string };
+    return safeReturnTo(parsed.returnTo);
+  } catch {
+    return "/connect";
+  }
+}
+
 /** OAuth callback — exchange code for token, pull recent orders → garments. */
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const shop = req.nextUrl.searchParams.get("shop")?.toLowerCase();
+  const returnTo = returnPathFromState(req.nextUrl.searchParams.get("state"));
   const apiKey = process.env.SHOPIFY_API_KEY?.trim();
   const apiSecret = process.env.SHOPIFY_API_SECRET?.trim();
   const origin =
@@ -17,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   if (!code || !shop || !apiKey || !apiSecret) {
     return NextResponse.redirect(
-      `${origin}/connect?shopify=error&reason=missing_params`
+      `${origin}${returnTo}?shopify=error&reason=missing_params`
     );
   }
 
@@ -33,14 +53,14 @@ export async function GET(req: NextRequest) {
     });
     if (!tokenRes.ok) {
       return NextResponse.redirect(
-        `${origin}/connect?shopify=error&reason=token`
+        `${origin}${returnTo}?shopify=error&reason=token`
       );
     }
     const tokenData = (await tokenRes.json()) as { access_token?: string };
     const accessToken = tokenData.access_token;
     if (!accessToken) {
       return NextResponse.redirect(
-        `${origin}/connect?shopify=error&reason=token`
+        `${origin}${returnTo}?shopify=error&reason=token`
       );
     }
 
@@ -129,11 +149,11 @@ export async function GET(req: NextRequest) {
         : payload;
 
     return NextResponse.redirect(
-      `${origin}/connect?shopify=connected&payload=${safe}`
+      `${origin}${returnTo}?shopify=connected&payload=${safe}`
     );
   } catch {
     return NextResponse.redirect(
-      `${origin}/connect?shopify=error&reason=sync`
+      `${origin}${returnTo}?shopify=error&reason=sync`
     );
   }
 }

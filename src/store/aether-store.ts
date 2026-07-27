@@ -11,7 +11,7 @@ import type {
   UserProfile,
   WeatherSnapshot,
 } from "@/lib/types";
-import { seedWardrobe, WARDROBE_SEED_VERSION } from "@/lib/seed-data";
+import { isSeedWardrobe } from "@/lib/seed-data";
 import { defaultConnections, sanitizeGarmentCategory, sanitizeWardrobe, isHosieryOrSocks, isUnderwearOrLounge } from "@/lib/commerce";
 import {
   applySpokenWeather,
@@ -290,7 +290,7 @@ export const useAetherStore = create<AetherState>()(
           email,
           displayName,
           avatarDataUrl,
-          seedGarments: seedWardrobe(uid),
+          seedGarments: [],
         });
         get().applyCloudSession({
           profile: result.profile,
@@ -332,11 +332,14 @@ export const useAetherStore = create<AetherState>()(
             voiceEnabled: data.profile.voiceEnabled ?? true,
             createdAt: data.profile.createdAt || new Date().toISOString(),
           };
-          // If cloud wardrobe empty (edge), seed once
-          let wardrobe = data.wardrobe;
-          if (!wardrobe.length) {
-            wardrobe = await upsertGarments(uid, seedWardrobe(uid));
-          } else {
+          // Never auto-seed placeholders — new users build a real wardrobe first.
+          let wardrobe = data.wardrobe || [];
+          if (wardrobe.length && isSeedWardrobe(wardrobe)) {
+            for (const g of wardrobe) {
+              void deleteGarmentCloud(uid, g).catch(() => undefined);
+            }
+            wardrobe = [];
+          } else if (wardrobe.length) {
             // Repair localhost / LAN absolute garment URLs so phones can load them
             const { normalizeGarmentPublicUrl } = await import(
               "@/lib/garment-url"
@@ -900,7 +903,6 @@ export const useAetherStore = create<AetherState>()(
         } catch {
           // ignore
         }
-        void WARDROBE_SEED_VERSION;
       },
     }
   )

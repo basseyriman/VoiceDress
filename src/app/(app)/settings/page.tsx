@@ -133,10 +133,10 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-2">
           <Link
             href="/connect"
-            className="rounded-2xl border border-line px-4 py-3.5 text-sm text-ivory transition hover:border-champagne/40 hover:bg-white/[0.02]"
+            className="rounded-2xl border border-champagne/35 bg-champagne/[0.07] px-4 py-3.5 text-sm text-ivory transition hover:border-champagne/50 hover:bg-champagne/10"
           >
-            Connect stores{" "}
-            <span className="text-mist">· Shopify & uploads</span>
+            Add wardrobe pieces{" "}
+            <span className="text-mist">· Connect stores & uploads</span>
           </Link>
           <Link
             href="/billing"

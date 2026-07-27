@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function safeReturnTo(raw: string | null | undefined): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/connect";
+  const path = raw.split("?")[0] || "/connect";
+  if (path === "/connect" || path === "/onboarding/wardrobe") return path;
+  return "/connect";
+}
+
 /** Start Shopify OAuth — requires SHOPIFY_API_KEY + shop domain. */
 export async function GET(req: NextRequest) {
   const shop = req.nextUrl.searchParams.get("shop")?.trim().toLowerCase();
+  const returnTo = safeReturnTo(req.nextUrl.searchParams.get("returnTo"));
   const apiKey = process.env.SHOPIFY_API_KEY?.trim();
   const scopes =
     process.env.SHOPIFY_SCOPES?.trim() || "read_orders,read_products";
@@ -33,7 +41,7 @@ export async function GET(req: NextRequest) {
 
   const redirectUri = `${origin}/api/commerce/shopify/callback`;
   const state = Buffer.from(
-    JSON.stringify({ shop, ts: Date.now() }),
+    JSON.stringify({ shop, returnTo, ts: Date.now() }),
     "utf8"
   ).toString("base64url");
 

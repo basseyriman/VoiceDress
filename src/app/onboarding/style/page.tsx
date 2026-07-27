@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Button, Logo } from "@/components/ui/button";
 import { STYLE_LOOKS } from "@/lib/style-options";
+import { postAuthPath } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
 import { useAetherStore } from "@/store/aether-store";
 
@@ -12,6 +13,7 @@ export default function StyleOnboardingPage() {
   const router = useRouter();
   const user = useAetherStore((s) => s.user);
   const hydrated = useAetherStore((s) => s.hydrated);
+  const wardrobe = useAetherStore((s) => s.wardrobe);
   const updateUser = useAetherStore((s) => s.updateUser);
 
   const [selected, setSelected] = useState<string[]>([]);
@@ -23,13 +25,13 @@ export default function StyleOnboardingPage() {
       return;
     }
     if (user.avatarStatus === "ready") {
-      router.replace("/today");
+      router.replace(postAuthPath(user, wardrobe));
       return;
     }
     if (user.stylePrefs?.length) {
       setSelected(user.stylePrefs);
     }
-  }, [hydrated, user, router]);
+  }, [hydrated, user, wardrobe, router]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -67,8 +69,9 @@ export default function StyleOnboardingPage() {
       <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col">
         <div className="mb-8 flex items-center justify-between">
           <Logo />
-          <div className="flex items-center gap-1.5" aria-label="Step 1 of 2">
+          <div className="flex items-center gap-1.5" aria-label="Step 1 of 3">
             <span className="h-0.5 w-8 rounded-full bg-champagne" />
+            <span className="h-0.5 w-8 rounded-full bg-white/15" />
             <span className="h-0.5 w-8 rounded-full bg-white/15" />
           </div>
         </div>

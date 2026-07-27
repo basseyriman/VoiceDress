@@ -49,7 +49,8 @@ export default function SignupPage() {
         displayName: name || email.split("@")[0],
       });
       const user = useAetherStore.getState().user;
-      router.push(postAuthPath(user));
+      const wardrobe = useAetherStore.getState().wardrobe;
+      router.push(postAuthPath(user, wardrobe));
     } catch (err) {
       setError(
         authErrorMessage(err, "Couldn’t create your account. Please try again.")
@@ -62,7 +63,7 @@ export default function SignupPage() {
   return (
     <AuthShell
       title="Create VoiceDress"
-      subtitle="Create your account. Next, we’ll take one clear photo so we can dress looks on you."
+      subtitle="Create your account. Next: style, photo, then connect your wardrobe."
       footer={
         <>
           Already a member?{" "}

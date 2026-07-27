@@ -1,5 +1,6 @@
 import { AVATAR_IDB_REF, loadAvatarBlob } from "@/lib/avatar-storage";
-import type { UserProfile } from "@/lib/types";
+import { isSeedWardrobe } from "@/lib/seed-data";
+import type { Garment, UserProfile } from "@/lib/types";
 
 type AvatarFields = Pick<
   UserProfile,
@@ -28,14 +29,39 @@ export function needsPhotoOnboarding(
   return true;
 }
 
-export function postAuthPath(
-  user: AvatarFields | null | undefined
-): "/onboarding/style" | "/onboarding/photo" | "/today" {
-  // New users: style DNA first (Wispr-like setup), then photo ritual
-  return needsPhotoOnboarding(user) ? "/onboarding/style" : "/today";
+/** Real closet pieces — not the old placeholder seed set. */
+export function hasRealWardrobe(
+  wardrobe: Garment[] | null | undefined
+): boolean {
+  if (!wardrobe?.length) return false;
+  if (isSeedWardrobe(wardrobe)) return false;
+  return wardrobe.some(
+    (g) => !g.id.startsWith("seed_") && !g.id.startsWith("seed_v")
+  );
 }
 
-/** If IndexedDB has a body photo, treat onboarding as done. */
+export function needsWardrobeSetup(
+  wardrobe: Garment[] | null | undefined
+): boolean {
+  return !hasRealWardrobe(wardrobe);
+}
+
+export type PostAuthPath =
+  | "/onboarding/style"
+  | "/onboarding/photo"
+  | "/onboarding/wardrobe"
+  | "/today";
+
+export function postAuthPath(
+  user: AvatarFields | null | undefined,
+  wardrobe?: Garment[] | null
+): PostAuthPath {
+  if (needsPhotoOnboarding(user)) return "/onboarding/style";
+  if (needsWardrobeSetup(wardrobe)) return "/onboarding/wardrobe";
+  return "/today";
+}
+
+/** If IndexedDB has a body photo, treat photo onboarding as done. */
 export async function hasLocalBodyPhoto(): Promise<boolean> {
   const blob = await loadAvatarBlob();
   return Boolean(
