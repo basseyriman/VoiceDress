@@ -539,7 +539,7 @@ function apparelCategory(
   return null;
 }
 
-/** Finishing order. Accessories that touch the face are opt-in — they morph identity. */
+/** Finishing order. Eyewear last — it morphs the face; client re-locks after. */
 function orderFinishPieces(
   garments: Piece[],
   includeFaceAccessories: boolean
@@ -558,7 +558,8 @@ function orderFinishPieces(
     // Shoes (+ bag) — glasses/watch Kontext passes often rewrite the face and crop the body.
     return [...shoes, ...bags];
   }
-  return [...shoes, ...bags, ...eyewear, ...watches, ...other];
+  // Glasses last so identity restore can run immediately after the batch
+  return [...shoes, ...bags, ...watches, ...other, ...eyewear];
 }
 
 export async function POST(req: NextRequest) {

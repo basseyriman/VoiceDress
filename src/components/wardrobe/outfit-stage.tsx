@@ -834,48 +834,21 @@ export function OutfitStage({
           }
         }
 
-        // 2) Finish extras in batches — same “appear together” feel as clothes.
-        // Non-eyewear first (shoes/watch/bag), then glasses after a face lock.
-        const eyewearFinish = finishQueue.filter((p) => isEyewearPiece(p));
-        const otherFinish = finishQueue.filter((p) => !isEyewearPiece(p));
-        const finishBatches = [
-          ...(otherFinish.length ? [otherFinish] : []),
-          ...(eyewearFinish.length ? [eyewearFinish] : []),
-        ];
-
-        for (let b = 0; b < finishBatches.length; b++) {
+        // 2) All finish extras in one pass — shoes, watch, bag, glasses together
+        if (finishQueue.length) {
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-          const batch = finishBatches[b];
-          const batchIsEye = batch.every((p) => isEyewearPiece(p));
 
-          if (batchIsEye) {
-            setStepLabel("Keeping your real face…");
-            try {
-              current = await lockFaceIdentity(
-                identityPhoto,
-                current,
-                "strong"
-              );
-              setWornUrl(current);
-            } catch {
-              // continue with current
-            }
-          }
-
-          setActivePieceId(batch[0]?.id || null);
-          setApplyingPieceIds(batch.map((p) => p.id));
+          setActivePieceId(finishQueue[0]?.id || null);
+          setApplyingPieceIds(finishQueue.map((p) => p.id));
           setStepLabel(
-            batch.length > 1
-              ? `Adding ${batch.map((p) => p.name).join(" + ")}…`
-              : `Adding ${batch[0].name}…`
+            finishQueue.length > 1
+              ? `Adding ${finishQueue.map((p) => p.name).join(" + ")}…`
+              : `Adding ${finishQueue[0].name}…`
           );
-          // Mark the whole batch as “applying” in the list UI
           setDonePieceIds((ids) =>
-            ids.filter((id) => !batch.some((p) => p.id === id))
+            ids.filter((id) => !finishQueue.some((p) => p.id === id))
           );
-          setProgress(
-            55 + Math.round(((b + 1) / (finishBatches.length + 1)) * 35)
-          );
+          setProgress(62);
 
           const beforeFinish = current;
           const finishRes = await authFetch("/api/tryon/render", {
@@ -886,8 +859,8 @@ export function OutfitStage({
               personImage: current,
               stage: "finish",
               includeFaceAccessories: true,
-              maxPieces: batch.length,
-              garments: batch.map(toPayload),
+              maxPieces: finishQueue.length,
+              garments: finishQueue.map(toPayload),
             }),
           });
           const finishData = await finishRes.json();
@@ -909,10 +882,11 @@ export function OutfitStage({
               current = finishData.imageUrl;
             }
             try {
+              // Strong face restore after the whole accessory pass
               current = await lockFaceIdentity(
                 identityPhoto,
                 current,
-                batchIsEye ? "soft" : "strong"
+                "strong"
               );
             } catch {
               // keep color-stabilized frame
@@ -932,7 +906,7 @@ export function OutfitStage({
                 .map((s: { name?: string }) => s.name)
                 .filter(Boolean) as string[]
             );
-            for (const piece of batch) {
+            for (const piece of finishQueue) {
               const landed =
                 stepIds.size === 0 ||
                 stepIds.has(piece.id) ||
@@ -951,7 +925,7 @@ export function OutfitStage({
             }
           } else {
             setApplyingPieceIds([]);
-            for (const piece of batch) {
+            for (const piece of finishQueue) {
               setMissingIds((ids) =>
                 ids.includes(piece.id) ? ids : [...ids, piece.id]
               );
