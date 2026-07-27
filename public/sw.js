@@ -1,5 +1,5 @@
 /* VoiceDress — installability + light offline shell. Never pin stale JS. */
-const CACHE = "voicedress-shell-v5";
+const CACHE = "voicedress-shell-v6";
 const PRECACHE = ["/", "/manifest.webmanifest", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -29,25 +29,17 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Always prefer network for app navigations and Next bundles
+  // Never cache HTML or Next bundles — stale shells show old billing copy
   if (
     request.mode === "navigate" ||
     url.pathname.startsWith("/_next/")
   ) {
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          if (request.mode === "navigate" && res.ok) {
-            const copy = res.clone();
-            void caches.open(CACHE).then((c) => c.put(request, copy));
-          }
-          return res;
-        })
-        .catch(() =>
-          request.mode === "navigate"
-            ? caches.match(request).then((r) => r || caches.match("/"))
-            : Promise.reject(new Error("offline"))
-        )
+      fetch(request).catch(() =>
+        request.mode === "navigate"
+          ? caches.match("/").then((r) => r || Response.error())
+          : Promise.reject(new Error("offline"))
+      )
     );
     return;
   }
