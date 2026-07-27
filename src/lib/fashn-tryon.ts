@@ -193,7 +193,8 @@ export function finishPromptForPiece(piece: {
       KEEP_FACE,
       `Replace BOTH shoes with these: ${label}.`,
       colors ? `Exact shoe color: ${colors}.` : "Match the product shoe color exactly.",
-      "Change ONLY footwear below the ankles.",
+      "Change ONLY footwear on the feet / below mid-shin. Do not paint boots over a dress or skirt hem.",
+      "Keep the existing dress/clothes hem, color, and fabric unchanged.",
       keepClothes,
       "Keep face, pose, and framing unchanged. Full-body crop — head and feet both visible.",
     ].join(" ");

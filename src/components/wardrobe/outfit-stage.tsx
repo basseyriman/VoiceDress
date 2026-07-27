@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, protectDressedLookAfterShoes, verifyApparelLook, hasTryOnArtifacts, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
@@ -509,7 +509,21 @@ export function OutfitStage({
             try {
               const before = current;
               current = await stabilizeTryOnColors(before, finishData.imageUrl);
-              if (piece.category !== "shoes") {
+              if (piece.category === "shoes") {
+                const protectedLook = await protectDressedLookAfterShoes(
+                  before,
+                  current,
+                  {
+                    hasDress: lookPieces.some((g) => g.category === "dress"),
+                  }
+                );
+                current = protectedLook.url;
+                if (protectedLook.rolledBack) {
+                  setMissingIds((ids) =>
+                    ids.includes(piece.id) ? ids : [...ids, piece.id]
+                  );
+                }
+              } else {
                 current = await preserveLowerBodyFromBase(before, current);
               }
               current = await lockFaceIdentity(
@@ -923,6 +937,10 @@ export function OutfitStage({
             Array.isArray(finishData.steps) &&
             finishData.steps.length > 0
           ) {
+            const finishHadShoes = finishQueue.some(
+              (p) => p.category === "shoes"
+            );
+            let shoesRolledBack = false;
             try {
               current = await stabilizeTryOnColors(
                 beforeFinish,
@@ -931,12 +949,38 @@ export function OutfitStage({
             } catch {
               current = finishData.imageUrl;
             }
-            // Accessory passes sometimes invent jeans — restore trousers from
-            // the dressed clothes frame; leave feet free for shoes.
-            try {
-              current = await preserveLowerBodyFromBase(beforeFinish, current);
-            } catch {
-              // keep color-stabilized frame
+            if (finishHadShoes) {
+              // Keep the good dress/clothes frame; only take feet from shoe AI.
+              try {
+                const protectedLook = await protectDressedLookAfterShoes(
+                  beforeFinish,
+                  current,
+                  {
+                    hasDress: lookPieces.some((g) => g.category === "dress"),
+                  }
+                );
+                current = protectedLook.url;
+                shoesRolledBack = protectedLook.rolledBack;
+                if (protectedLook.rolledBack) {
+                  for (const piece of finishQueue.filter(
+                    (p) => p.category === "shoes"
+                  )) {
+                    setMissingIds((ids) =>
+                      ids.includes(piece.id) ? ids : [...ids, piece.id]
+                    );
+                  }
+                }
+              } catch {
+                current = beforeFinish;
+                shoesRolledBack = true;
+              }
+            } else {
+              // Accessory-only: restore trousers/skirt band; no shoe region needed.
+              try {
+                current = await preserveLowerBodyFromBase(beforeFinish, current);
+              } catch {
+                // keep color-stabilized frame
+              }
             }
             const hasEyewear = finishQueue.some((p) =>
               /glass|frame|optic|sunglass|spec/i.test(
@@ -969,10 +1013,12 @@ export function OutfitStage({
                 .filter(Boolean) as string[]
             );
             for (const piece of finishQueue) {
+              const shoeFailed = shoesRolledBack && piece.category === "shoes";
               const landed =
-                stepIds.size === 0 ||
-                stepIds.has(piece.id) ||
-                stepNames.has(piece.name);
+                !shoeFailed &&
+                (stepIds.size === 0 ||
+                  stepIds.has(piece.id) ||
+                  stepNames.has(piece.name));
               if (landed) {
                 appliedIds.add(piece.id);
                 appliedNames.add(piece.name);

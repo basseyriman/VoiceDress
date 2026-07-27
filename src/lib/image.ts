@@ -830,6 +830,41 @@ export async function keepUpperBlendLower(
 }
 
 /**
+ * After shoe finish: keep the dressed clothes photo above the ankles and only
+ * take feet from the shoe edit. Rolls back to the clean dress if the edit glitches.
+ */
+export async function protectDressedLookAfterShoes(
+  dressedSrc: string,
+  shoeEditSrc: string,
+  opts?: { hasDress?: boolean }
+): Promise<{ url: string; rolledBack: boolean }> {
+  const hasDress = Boolean(opts?.hasDress);
+  // Midi/maxi dresses need a high seam so calf boots can't paint over the hem.
+  const seam = hasDress ? 0.89 : 0.84;
+  const feather = hasDress ? 0.03 : 0.045;
+
+  let blended: string;
+  try {
+    blended = await keepUpperBlendLower(dressedSrc, shoeEditSrc, {
+      seam,
+      feather,
+    });
+  } catch {
+    return { url: dressedSrc, rolledBack: true };
+  }
+
+  try {
+    if (await hasTryOnArtifacts(blended)) {
+      return { url: dressedSrc, rolledBack: true };
+    }
+  } catch {
+    // keep blended
+  }
+
+  return { url: blended, rolledBack: false };
+}
+
+/**
  * Standardize a body photo for outfit try-on: 2:3 framing + soft studio grade.
  * Does not crop the person — pads and grades so garments land cleanly.
  */
