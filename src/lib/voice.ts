@@ -216,12 +216,12 @@ export async function handleVoiceCommandAsync(
         )
       ) {
         const parsed = parseVoiceIntent(transcript);
-        const reply = await applyLocalIntent(
+        const swapParsed: ReturnType<typeof parseVoiceIntent> =
           parsed.intent === "swap_item"
             ? parsed
-            : {
+            : ({
                 ...parsed,
-                intent: "swap_item" as const,
+                intent: "swap_item",
                 entities: {
                   ...parsed.entities,
                   item:
@@ -229,9 +229,8 @@ export async function handleVoiceCommandAsync(
                     inferCategoryFromSpeech(transcript) ||
                     "top",
                 },
-              },
-          actions
-        );
+              } as unknown as ReturnType<typeof parseVoiceIntent>);
+        const reply = await applyLocalIntent(swapParsed, actions);
         return finish(reply, { source: "keyword-swap" as const, parsed });
       }
     }
