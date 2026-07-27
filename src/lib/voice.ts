@@ -22,6 +22,8 @@ let speakGeneration = 0;
 let speakKeepalive: ReturnType<typeof setInterval> | null = null;
 let preferredVoice: SpeechSynthesisVoice | null = null;
 let voicesListenerBound = false;
+let currentAudio: HTMLAudioElement | null = null;
+let audioUnlocked = false;
 
 export function getSpeakGeneration() {
   return speakGeneration;
@@ -34,36 +36,86 @@ function clearSpeakKeepalive() {
   }
 }
 
+function stopCloudAudio() {
+  if (currentAudio) {
+    try {
+      currentAudio.pause();
+      currentAudio.src = "";
+    } catch {
+      // ignore
+    }
+    currentAudio = null;
+  }
+}
+
 /** Stop TTS immediately — call when the user taps Speak. */
 export function stopSpeaking() {
   speakGeneration += 1;
   clearSpeakKeepalive();
+  stopCloudAudio();
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
 }
 
 /**
- * iOS/WebKit only allows speechSynthesis after a user gesture.
+ * iOS/WebKit only allows speechSynthesis / Audio after a user gesture.
  * Call this synchronously inside the Speak tap handler.
  */
 export function unlockSpeech() {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  if (typeof window === "undefined") return;
   try {
     ensureVoicesLoaded();
-    // Prime the engine inside the tap — otherwise later async speak() is silent
-    window.speechSynthesis.cancel();
-    const warm = new SpeechSynthesisUtterance(" ");
-    warm.volume = 0.01;
-    warm.rate = 2;
-    warm.lang = "en-GB";
-    const voice = pickBestVoice();
-    if (voice) warm.voice = voice;
-    window.speechSynthesis.speak(warm);
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.resume();
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      const warm = new SpeechSynthesisUtterance(" ");
+      warm.volume = 0.01;
+      warm.rate = 2;
+      warm.lang = "en-GB";
+      const voice = findGoogleUkEnglishFemale() || pickBestVoice();
+      if (voice) warm.voice = voice;
+      window.speechSynthesis.speak(warm);
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+    }
+    // Unlock HTMLAudio for cloud TTS on iOS
+    if (!audioUnlocked) {
+      const a = new Audio(
+        "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA="
+      );
+      a.volume = 0.01;
+      void a
+        .play()
+        .then(() => {
+          a.pause();
+          audioUnlocked = true;
+        })
+        .catch(() => {
+          // ignore
+        });
+    }
   } catch {
     // ignore
   }
+}
+
+/** Exact Chrome voice the product is tuned to. */
+function findGoogleUkEnglishFemale(): SpeechSynthesisVoice | null {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return preferredVoice?.name.toLowerCase().includes("google uk english female")
+    ? preferredVoice
+    : null;
+  const hit =
+    voices.find((v) => /google uk english female/i.test(v.name)) ||
+    voices.find(
+      (v) =>
+        /google/i.test(v.name) &&
+        /female/i.test(v.name) &&
+        /^en-gb$/i.test(v.lang || "")
+    ) ||
+    null;
+  if (hit) preferredVoice = hit;
+  return hit;
 }
 
 /** Prefer a warm female English voice on every device (desktop + iOS/Android). */
@@ -75,6 +127,9 @@ const MALE_VOICE_HINT =
 
 function pickBestVoice(): SpeechSynthesisVoice | null {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const google = findGoogleUkEnglishFemale();
+  if (google) return google;
+
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return preferredVoice;
 
@@ -83,20 +138,17 @@ function pickBestVoice(): SpeechSynthesisVoice | null {
     const lang = (v.lang || "").toLowerCase();
     let s = 0;
 
-    // Language — British English first (same vibe as desktop)
     if (lang.startsWith("en-gb") || lang === "en_gb") s += 70;
     else if (lang.startsWith("en-au") || lang.startsWith("en-ie")) s += 40;
     else if (lang.startsWith("en-us") || lang === "en_us") s += 28;
     else if (lang.startsWith("en")) s += 15;
 
-    // Hard preference: female over male on every platform
     if (FEMALE_VOICE_HINT.test(name)) s += 120;
     if (MALE_VOICE_HINT.test(name)) s -= 200;
 
-    // Chrome desktop favourite
     if (name.includes("google") && (lang.startsWith("en-gb") || lang === "en_gb")) {
       s += 40;
-      if (name.includes("female")) s += 50;
+      if (name.includes("female")) s += 80;
     }
 
     if (
@@ -109,19 +161,14 @@ function pickBestVoice(): SpeechSynthesisVoice | null {
       s += 18;
     }
 
-    // iOS often exposes gender via name only — boost known soft female defaults
     if (/serena|samantha|karen|moira|libby|sonia/.test(name)) s += 25;
-
     if (v.localService) s += 2;
     if (v.default && FEMALE_VOICE_HINT.test(name)) s += 5;
-    // Never trust OS default if it's a male voice
     if (v.default && MALE_VOICE_HINT.test(name)) s -= 40;
-
     return s;
   };
 
   const ranked = [...voices].sort((a, b) => score(b) - score(a));
-  // Prefer the best female English voice; only fall back if none exist
   const femaleEn = ranked.find(
     (v) =>
       FEMALE_VOICE_HINT.test(v.name) &&
@@ -129,7 +176,11 @@ function pickBestVoice(): SpeechSynthesisVoice | null {
   );
   preferredVoice =
     femaleEn ||
-    ranked.find((v) => !MALE_VOICE_HINT.test(v.name) && (v.lang || "").toLowerCase().startsWith("en")) ||
+    ranked.find(
+      (v) =>
+        !MALE_VOICE_HINT.test(v.name) &&
+        (v.lang || "").toLowerCase().startsWith("en")
+    ) ||
     ranked[0] ||
     null;
   return preferredVoice;
@@ -204,7 +255,7 @@ function speakChunk(
     }
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 0.96;
-    utter.pitch = 1.06;
+    utter.pitch = 1;
     utter.lang = voice?.lang || "en-GB";
     if (voice) utter.voice = voice;
     utter.onend = () => resolve();
@@ -213,8 +264,50 @@ function speakChunk(
   });
 }
 
+async function speakViaCloud(text: string, gen: number): Promise<boolean> {
+  try {
+    const res = await authFetch("/api/voice/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok || gen !== speakGeneration) return false;
+    const blob = await res.blob();
+    if (gen !== speakGeneration) return false;
+    const url = URL.createObjectURL(blob);
+    await new Promise<void>((resolve) => {
+      if (gen !== speakGeneration) {
+        URL.revokeObjectURL(url);
+        resolve();
+        return;
+      }
+      stopCloudAudio();
+      const audio = new Audio(url);
+      currentAudio = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        if (currentAudio === audio) currentAudio = null;
+        resolve();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        if (currentAudio === audio) currentAudio = null;
+        resolve();
+      };
+      void audio.play().catch(() => {
+        URL.revokeObjectURL(url);
+        if (currentAudio === audio) currentAudio = null;
+        resolve();
+      });
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function speak(text: string) {
-  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  if (typeof window === "undefined") return;
 
   const enabled = useAetherStore.getState().user?.voiceEnabled !== false;
   if (!enabled) return;
@@ -224,9 +317,10 @@ export function speak(text: string) {
 
   const gen = speakGeneration;
   clearSpeakKeepalive();
+  stopCloudAudio();
   try {
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.resume();
+    window.speechSynthesis?.cancel();
+    window.speechSynthesis?.resume();
   } catch {
     // ignore
   }
@@ -236,32 +330,47 @@ export function speak(text: string) {
 
   startSpeakKeepalive(gen);
   void (async () => {
-    // iOS often returns [] until voiceschanged — wait so we don’t fall back to male Daniel
-    const voice =
-      (await new Promise<SpeechSynthesisVoice | null>((resolve) => {
-        const existing = pickBestVoice();
-        if (existing) {
-          resolve(existing);
-          return;
-        }
-        let done = false;
-        const finish = () => {
-          if (done) return;
-          done = true;
-          window.speechSynthesis.removeEventListener("voiceschanged", onChange);
-          resolve(pickBestVoice());
-        };
-        const onChange = () => finish();
-        window.speechSynthesis.addEventListener("voiceschanged", onChange);
-        window.speechSynthesis.getVoices();
-        setTimeout(finish, 600);
-      })) || pickBestVoice();
+    // Wait briefly for Chrome voices so we can use Google UK English Female
+    await new Promise<void>((resolve) => {
+      if (findGoogleUkEnglishFemale()) {
+        resolve();
+        return;
+      }
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        window.speechSynthesis?.removeEventListener("voiceschanged", onChange);
+        resolve();
+      };
+      const onChange = () => finish();
+      window.speechSynthesis?.addEventListener("voiceschanged", onChange);
+      window.speechSynthesis?.getVoices();
+      setTimeout(finish, 500);
+    });
 
-    // Small yield helps WebKit attach the next utterance after cancel()
+    const googleFemale = findGoogleUkEnglishFemale();
     await new Promise((r) => setTimeout(r, 40));
-    for (const chunk of chunks) {
-      if (gen !== speakGeneration) break;
-      await speakChunk(chunk, gen, voice);
+
+    if (googleFemale && window.speechSynthesis) {
+      // Desktop Chrome — exact voice you liked
+      for (const chunk of chunks) {
+        if (gen !== speakGeneration) break;
+        await speakChunk(chunk, gen, googleFemale);
+      }
+    } else {
+      // Mobile / no Google voice — British female cloud TTS (same vibe)
+      for (const chunk of chunks) {
+        if (gen !== speakGeneration) break;
+        const ok = await speakViaCloud(chunk, gen);
+        if (!ok) {
+          // Last resort: local female voice (never prefer male Daniel)
+          const fallback = pickBestVoice();
+          if (fallback && !MALE_VOICE_HINT.test(fallback.name)) {
+            await speakChunk(chunk, gen, fallback);
+          }
+        }
+      }
     }
     if (gen === speakGeneration) clearSpeakKeepalive();
   })();
