@@ -99,12 +99,12 @@ export default function WardrobePage() {
       </div>
 
       {pendingDelete && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+        <div className="fixed inset-0 z-[120] flex items-end justify-center bg-black/70 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-garment-title"
-            className="w-full max-w-md rounded-[1.5rem] border border-line bg-ink p-6 shadow-2xl"
+            className="mb-16 w-full max-w-md rounded-[1.5rem] border border-line bg-ink p-6 shadow-2xl sm:mb-0"
           >
             <p className="text-xs uppercase tracking-[0.28em] text-champagne">
               Remove piece
