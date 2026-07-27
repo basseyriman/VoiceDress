@@ -762,15 +762,15 @@ export function OutfitStage({
 
   return (
     <motion.div
-      className="glass shine-border relative overflow-hidden rounded-[2rem] p-5 sm:p-8"
+      className="glass shine-border relative overflow-hidden rounded-[1.5rem] p-3 sm:rounded-[2rem] sm:p-8"
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_400px_at_15%_0%,rgba(201,168,124,0.12),transparent_55%)]" />
 
-      <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_1.05fr]">
-        <div className="relative mx-auto w-full max-w-md">
+      <div className="relative z-10 grid gap-6 sm:gap-8 lg:grid-cols-[1fr_1.05fr]">
+        <div className="relative mx-auto w-full min-w-0 max-w-md">
           <div className="mb-3 space-y-2.5">
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-[10px] uppercase tracking-[0.28em] text-champagne">
                   Your look
                 </p>
@@ -880,51 +880,40 @@ export function OutfitStage({
             <AnimatePresence>
               {hasAvatar && dressing && !showKeyPrompt && !showBillingPrompt && (
                 <motion.div
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-ink via-ink/85 to-transparent p-6 pt-20"
+                  exit={{ opacity: 0, y: 6 }}
+                  className="pointer-events-none absolute inset-x-0 bottom-0 z-30 p-2.5 sm:p-3"
                 >
-                  <div className="flex items-end justify-between gap-3">
-                    <p className="font-display text-xl text-ivory">{stepLabel}</p>
-                    <p className="shrink-0 font-display text-4xl tabular-nums leading-none text-champagne">
-                      {progressPct}
-                      <span className="text-xl">%</span>
-                    </p>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-mist">
-                    <span>
-                      {piecesDone} of {piecesTotal} pieces
-                      {activePieceId ? " · applying" : ""}
-                    </span>
-                    <span>
-                      ~{etaSec < 60 ? `${etaSec}s` : `${Math.ceil(etaSec / 60)}m`}{" "}
-                      left
-                    </span>
-                  </div>
-                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/15 ring-1 ring-white/10">
-                    <motion.div
-                      className="h-full rounded-full bg-champagne shadow-[0_0_12px_rgba(201,168,124,0.45)]"
-                      animate={{ width: `${Math.max(progressPct, 4)}%` }}
-                      transition={{ duration: 0.4 }}
-                    />
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {lookPieces.map((g) => (
-                      <div
-                        key={g.id}
-                        className={cn(
-                          "rounded-full border px-2.5 py-1 text-[10px] transition",
-                          activePieceId === g.id
-                            ? "border-champagne bg-champagne/15 text-champagne"
-                            : donePieceIds.includes(g.id)
-                              ? "border-champagne/40 text-champagne"
-                              : "border-white/10 text-mist"
-                        )}
-                      >
-                        <span className="truncate">{g.name}</span>
+                  {/* Compact status card — keeps the photo visible on mobile */}
+                  <div className="rounded-2xl border border-line/80 bg-ink/90 px-3 py-2.5 shadow-[0_12px_40px_rgba(0,0,0,0.45)] backdrop-blur-md">
+                    <div className="flex items-center gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-display text-sm leading-snug text-ivory sm:text-base">
+                          {stepLabel}
+                        </p>
+                        <p className="mt-0.5 text-[10px] uppercase tracking-wider text-mist">
+                          {piecesDone}/{piecesTotal}
+                          {activePieceId ? " · applying" : ""}
+                          {" · "}~
+                          {etaSec < 60
+                            ? `${etaSec}s`
+                            : `${Math.ceil(etaSec / 60)}m`}{" "}
+                          left
+                        </p>
                       </div>
-                    ))}
+                      <p className="shrink-0 font-display text-2xl tabular-nums leading-none text-champagne sm:text-3xl">
+                        {progressPct}
+                        <span className="text-sm sm:text-base">%</span>
+                      </p>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
+                      <motion.div
+                        className="h-full rounded-full bg-champagne shadow-[0_0_10px_rgba(201,168,124,0.4)]"
+                        animate={{ width: `${Math.max(progressPct, 4)}%` }}
+                        transition={{ duration: 0.4 }}
+                      />
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -1027,13 +1016,36 @@ export function OutfitStage({
               </div>
             )}
           </div>
+
+          {/* Mobile: piece status under the photo (not over it) */}
+          {dressing && lookPieces.length > 0 && (
+            <div className="-mx-1 mt-3 overflow-x-auto pb-1 lg:hidden">
+              <div className="flex w-max gap-2 px-1">
+                {lookPieces.map((g) => (
+                  <div
+                    key={g.id}
+                    className={cn(
+                      "max-w-[9.5rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[10px]",
+                      activePieceId === g.id
+                        ? "border-champagne bg-champagne/15 text-champagne"
+                        : donePieceIds.includes(g.id)
+                          ? "border-champagne/40 text-champagne"
+                          : "border-white/10 text-mist"
+                    )}
+                  >
+                    {g.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div>
+        <div className="min-w-0">
           <p className="text-xs uppercase tracking-[0.28em] text-champagne">
             Today’s look
           </p>
-          <h2 className="mt-2 font-display text-3xl text-ivory sm:text-4xl">
+          <h2 className="mt-2 line-clamp-2 font-display text-2xl text-ivory sm:text-4xl">
             {outfit?.name || "Ready when you are"}
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
