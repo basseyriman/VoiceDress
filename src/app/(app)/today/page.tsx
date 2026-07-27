@@ -20,14 +20,9 @@ import { useRouter } from "next/navigation";
 
 const QUICK_EVENTS = [
   {
-    id: "work",
-    label: "Work",
+    id: "meeting",
+    label: "Meeting",
     occasion: "work meeting",
-  },
-  {
-    id: "in-laws",
-    label: "In-laws",
-    occasion: "meeting the in-laws",
   },
   {
     id: "dinner",
@@ -35,9 +30,14 @@ const QUICK_EVENTS = [
     occasion: "dinner date",
   },
   {
-    id: "wedding",
-    label: "Wedding",
-    occasion: "wedding",
+    id: "drinks",
+    label: "Drinks",
+    occasion: "drinks",
+  },
+  {
+    id: "travel",
+    label: "Travel",
+    occasion: "travel day",
   },
 ] as const;
 
