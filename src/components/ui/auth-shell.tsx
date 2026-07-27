@@ -18,7 +18,7 @@ export function AuthShell({
   className?: string;
 }) {
   return (
-    <div className="grain relative flex min-h-screen flex-col justify-center px-4 py-14">
+    <div className="grain relative flex min-h-screen w-full flex-col justify-center overflow-x-clip px-4 py-14">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
@@ -27,11 +27,11 @@ export function AuthShell({
         <div className="absolute bottom-0 right-0 h-64 w-64 rounded-full bg-ivory/[0.03] blur-[80px]" />
       </div>
 
-      <div className={cn("mx-auto w-full max-w-md", className)}>
+      <div className={cn("mx-auto w-full min-w-0 max-w-md", className)}>
         <div className="mb-10 flex justify-center">
           <Logo variant="hero" />
         </div>
-        <div className="glass shine-border rounded-[1.75rem] p-7 sm:p-8">
+        <div className="glass shine-border w-full min-w-0 rounded-[1.75rem] p-7 sm:p-8">
           <h1 className="font-display text-[2rem] leading-tight tracking-tight text-ivory sm:text-[2.15rem]">
             {title}
           </h1>

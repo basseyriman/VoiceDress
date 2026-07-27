@@ -186,7 +186,7 @@ export default function TodayPage() {
     : null;
 
   return (
-    <div className="space-y-8 pb-24">
+    <div className="min-w-0 space-y-8 overflow-x-clip pb-24">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

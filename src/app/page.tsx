@@ -30,12 +30,15 @@ const pillars = [
 
 export default function LandingPage() {
   return (
-    <div className="grain relative overflow-hidden">
+    <div className="grain relative overflow-x-clip">
       <div className="relative z-10">
-        <header className="mx-auto flex max-w-7xl items-center justify-between px-4 py-6 sm:px-6">
-          <Logo variant="header" />
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm text-mist hover:text-ivory">
+        <header className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-6 sm:gap-4 sm:px-6">
+          <Logo variant="header" className="min-w-0 shrink" />
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+            <Link
+              href="/login"
+              className="whitespace-nowrap text-sm text-mist hover:text-ivory"
+            >
               Sign in
             </Link>
             <Link href="/signup">
@@ -77,16 +80,16 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.85, delay: 0.24 }}
-            className="mt-10 flex flex-wrap gap-3"
+            className="mt-10 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap"
           >
-            <Link href="/signup">
-              <Button size="lg">
+            <Link href="/signup" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto">
                 Start free trial
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-            <Link href="/login">
-              <Button size="lg" variant="outline">
+            <Link href="/login" className="w-full sm:w-auto">
+              <Button size="lg" variant="outline" className="w-full sm:w-auto">
                 Enter wardrobe
               </Button>
             </Link>

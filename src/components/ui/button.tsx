@@ -52,8 +52,8 @@ export function Logo({
     <Link
       href="/"
       className={cn(
-        "group inline-flex items-center transition-opacity duration-300 hover:opacity-95",
-        hero ? "gap-4" : compact ? "gap-2" : "gap-3.5 sm:gap-4",
+        "group inline-flex min-w-0 max-w-full items-center transition-opacity duration-300 hover:opacity-95",
+        hero ? "gap-4" : compact ? "gap-2" : "gap-2.5 sm:gap-4",
         className
       )}
       aria-label="VoiceDress home"
@@ -63,7 +63,7 @@ export function Logo({
           "flex shrink-0 items-center justify-center rounded-[0.9rem] border border-champagne/30 bg-[#121110] shadow-[inset_0_1px_0_rgba(245,240,232,0.08),0_8px_24px_rgba(0,0,0,0.35)]",
           hero && "h-14 w-14 sm:h-16 sm:w-16",
           compact && "h-8 w-8 rounded-[0.65rem]",
-          !hero && !compact && "h-11 w-11 sm:h-12 sm:w-12"
+          !hero && !compact && "h-9 w-9 sm:h-12 sm:w-12"
         )}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -76,7 +76,7 @@ export function Logo({
             "w-auto",
             hero && "h-9 sm:h-10",
             compact && "h-[1.15rem]",
-            !hero && !compact && "h-7 sm:h-8"
+            !hero && !compact && "h-6 sm:h-8"
           )}
         />
       </span>
@@ -84,11 +84,11 @@ export function Logo({
         className={cn(
           "font-display font-medium leading-none text-ivory",
           hero &&
-            "text-[2.15rem] tracking-[0.16em] sm:text-[2.5rem] sm:tracking-[0.18em]",
+            "text-[1.85rem] tracking-[0.12em] sm:text-[2.5rem] sm:tracking-[0.18em]",
           compact && "text-[1.25rem] tracking-[0.1em]",
           !hero &&
             !compact &&
-            "text-[1.65rem] tracking-[0.14em] sm:text-[1.85rem] sm:tracking-[0.16em]"
+            "hidden text-[1.65rem] tracking-[0.14em] sm:inline sm:text-[1.85rem] sm:tracking-[0.16em]"
         )}
       >
         Voice

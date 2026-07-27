@@ -35,11 +35,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const signOutLocal = useAetherStore((s) => s.signOutLocal);
 
   return (
-    <div className="relative min-h-screen pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-16">
+    <div className="relative min-h-screen overflow-x-clip pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-16">
       <header className="sticky top-0 z-[100] isolate border-b border-line/50 bg-ink/80 backdrop-blur-2xl pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between px-4 sm:h-[4.5rem] sm:px-6">
-          <div className="flex min-w-0 items-center gap-6 sm:gap-10">
-            <Logo variant="header" className="shrink-0" />
+        <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between gap-3 px-4 sm:h-[4.5rem] sm:gap-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-4 sm:gap-10">
+            <Logo variant="header" className="min-w-0 shrink" />
             <nav className="relative z-[101] hidden items-center gap-1 md:flex">
               {nav.map((item) => {
                 const Icon = item.icon;
@@ -88,7 +88,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="relative z-0 mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <main className="relative z-0 mx-auto min-w-0 max-w-7xl px-4 py-8 sm:px-6">
         <PageTransition>{children}</PageTransition>
       </main>
 

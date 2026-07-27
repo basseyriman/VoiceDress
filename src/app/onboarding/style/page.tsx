@@ -56,7 +56,7 @@ export default function StyleOnboardingPage() {
   }
 
   return (
-    <div className="grain relative flex min-h-screen flex-col px-5 py-8 sm:px-6">
+    <div className="grain relative flex min-h-screen flex-col overflow-x-clip px-5 py-8 sm:px-6">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
@@ -64,7 +64,7 @@ export default function StyleOnboardingPage() {
         <div className="absolute left-1/2 top-0 h-[28rem] w-[36rem] -translate-x-1/2 rounded-full bg-champagne/[0.07] blur-[100px]" />
       </div>
 
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+      <div className="mx-auto flex w-full min-w-0 max-w-md flex-1 flex-col">
         <div className="mb-8 flex items-center justify-between">
           <Logo />
           <div className="flex items-center gap-1.5" aria-label="Step 1 of 2">

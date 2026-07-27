@@ -119,7 +119,7 @@ export default function PhotoOnboardingPage() {
   }
 
   return (
-    <div className="grain relative flex min-h-screen flex-col px-4 py-10">
+    <div className="grain relative flex min-h-screen flex-col overflow-x-clip px-4 py-10">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
@@ -127,7 +127,7 @@ export default function PhotoOnboardingPage() {
         <div className="absolute left-1/2 top-0 h-[28rem] w-[36rem] -translate-x-1/2 rounded-full bg-champagne/[0.08] blur-[100px]" />
       </div>
 
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col">
+      <div className="mx-auto flex w-full min-w-0 max-w-lg flex-1 flex-col">
         <div className="mb-8 flex items-center justify-between gap-4">
           <Logo />
           <div className="flex items-center gap-1.5" aria-label="Step 2 of 2">
