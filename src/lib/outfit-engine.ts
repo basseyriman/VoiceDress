@@ -246,7 +246,7 @@ function recencyPenalty(g: Garment, taste?: TasteMemory): number {
   if (g.category === "shoes" || g.category === "accessory") {
     return -4;
   }
-  if (g.category === "outerwear") return -6;
+  if (g.category === "outerwear") return -12;
   return -3;
 }
 
@@ -761,14 +761,17 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       lightOuter.length ? lightOuter : outerPool,
       selected
     );
-    // Weather layers when cool; formal events keep a blazer/coat even when mild
+    // Weather layers when cool; dressier events keep a blazer/coat even when mild.
+    // Smart-casual parties only add outerwear when cooler so one navy blazer
+    // doesn’t stick on every mild suggestion.
     const wantOuterForOccasion =
       formalityRank(formality) >= 3 ||
       profile.preferCategories.includes("outerwear");
-    if (
-      outer &&
-      (input.weather.tempC < 19 || wantOuterForOccasion)
-    ) {
+    const coolForOuter =
+      formalityRank(formality) <= 2
+        ? input.weather.tempC < 15
+        : input.weather.tempC < 19;
+    if (outer && (coolForOuter || wantOuterForOccasion)) {
       selected.push(outer);
     }
     const shoes = pick(

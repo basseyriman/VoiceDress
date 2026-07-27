@@ -1,9 +1,9 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Apparel — top+bottom collage + outerwear in one client request.
- *    Outerwear prefers Kontext jacket-layer (suits must not replace trousers);
- *    client always restores lower body from the pre-jacket frame.
+ * 1. Apparel — top+bottom collage + outerwear in one client request (UI marks
+ *    the whole look applying together). Jacket is layered after base clothes
+ *    so suit product shots don’t rewrite trousers.
  * 2. Finish — shoes/watch/bag/glasses in one request; client locks trousers + face.
  */
 

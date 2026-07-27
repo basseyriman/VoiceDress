@@ -1,7 +1,7 @@
 import type { Garment } from "./types";
 
 /** Bump to force-refresh local seed wardrobe images/labels. */
-export const WARDROBE_SEED_VERSION = 13;
+export const WARDROBE_SEED_VERSION = 14;
 
 /**
  * Controlled local garment images — names, colors, and files must match.
@@ -74,11 +74,11 @@ export function seedWardrobe(userId: string): Garment[] {
       hexColors: ["#1B2A41"],
       fabric: "wool",
       texture: "structured",
-      formality: "formal",
+      formality: "business",
       season: ["all"],
       imageUrl: "/garments/navy-blazer.jpg",
       source: "manual",
-      tags: ["boardroom", "formal", "old money", "quiet luxury"],
+      tags: ["boardroom", "smart casual", "old money", "quiet luxury"],
     },
     {
       name: "Ribbed Indigo Jeans",

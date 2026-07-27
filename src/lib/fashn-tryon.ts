@@ -133,28 +133,41 @@ export function apparelPromptForPiece(
   return [KEEP_FACE, strip].filter(Boolean).join(" ") || KEEP_FACE;
 }
 
-/** One-call prompt when top + bottom are combined into a product collage. */
+/** One-call prompt when top + bottom (+ optional jacket) are a product collage. */
 export function collageApparelPrompt(
   pieces: { category: string; name?: string; colors?: string[] }[],
   opts?: { stripOuterwear?: boolean }
 ): string {
+  const hasOuter = pieces.some((p) => p.category === "outerwear");
   const labels = pieces.map((p, i) => {
     const slot =
       i === 0
         ? "left panel"
         : i === 1
-          ? "middle/right panel"
+          ? "middle panel"
           : `panel ${i + 1}`;
     const colors = (p.colors || []).join(", ");
-    return `${slot}: ${p.name || p.category}${colors ? ` (${colors})` : ""}`;
+    const role =
+      p.category === "outerwear"
+        ? " (JACKET ONLY — layer over the top; do not replace trousers)"
+        : p.category === "bottom"
+          ? " (trousers/skirt)"
+          : p.category === "top" || p.category === "dress"
+            ? " (top/dress)"
+            : "";
+    return `${slot}: ${p.name || p.category}${colors ? ` (${colors})` : ""}${role}`;
   });
   return [
     KEEP_FACE,
-    opts?.stripOuterwear ? STRIP_OUTER : "",
+    opts?.stripOuterwear && !hasOuter ? STRIP_OUTER : "",
     "The product image is a collage of multiple garments. Dress the person in ALL of them in one change.",
     `Garments: ${labels.join("; ")}.`,
-    "Match each panel’s exact fabric and color. Replace existing top and bottoms to match the collage.",
-    "Do not invent a jacket unless a jacket panel is in the collage.",
+    hasOuter
+      ? "Apply top and bottoms from their panels, then LAYER the jacket panel only — keep the collage trousers, never invent jeans or suit pants."
+      : "Match each panel’s exact fabric and color. Replace existing top and bottoms to match the collage.",
+    hasOuter
+      ? "Do not lengthen a blazer into a coat."
+      : "Do not invent a jacket unless a jacket panel is in the collage.",
     "Photoreal, clean edges, full-body framing unchanged.",
   ]
     .filter(Boolean)

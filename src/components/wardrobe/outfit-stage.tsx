@@ -539,10 +539,13 @@ export function OutfitStage({
       setMissingIds([]);
       setDonePieceIds([]);
       setActivePieceId(null);
-      setApplyingPieceIds([]);
+      // Show every piece as applying from the start so the blazer/shoes don’t
+      // look “idle” while clothes + finish run in one pipeline.
+      setApplyingPieceIds(lookPieces.map((p) => p.id));
       setNeedsKey(false);
       setNeedsBilling(false);
       setProgress(4);
+      setStepLabel("Dressing your full look…");
       setWornUrl(displayAvatar);
 
       let consumedFreeThisRun = false;
@@ -605,10 +608,11 @@ export function OutfitStage({
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
             setActivePieceId(allApparel[0].id);
-            setApplyingPieceIds(allApparel.map((p) => p.id));
+            // Keep the whole look highlighted — clothes land together in one request
+            setApplyingPieceIds(lookPieces.map((p) => p.id));
             setStepLabel(
               allApparel.length > 1
-                ? `Dressing ${allApparel.map((p) => p.name).join(" + ")}…`
+                ? `Dressing ${allApparel.map((p) => p.name.split(" ").slice(0, 3).join(" ")).join(" · ")}…`
                 : `Dressing ${allApparel[0].name}…`
             );
             setProgress(12);
@@ -704,7 +708,6 @@ export function OutfitStage({
               return;
             setWornUrl(current);
             setKeyConfigured(true);
-            setApplyingPieceIds([]);
             apparelBaseBeforeOuter = trustedBase;
 
             if (apparelData.consumedFreeTryOn) {
@@ -737,6 +740,7 @@ export function OutfitStage({
                     .filter(Boolean)
                 : []
             );
+            const apparelDoneIds: string[] = [];
             for (const piece of allApparel) {
               if (
                 outerPiece &&
@@ -749,15 +753,19 @@ export function OutfitStage({
               }
               if (stepIds.size === 0 || stepIds.has(piece.id)) {
                 markApplied({ id: piece.id, name: piece.name });
-                setDonePieceIds((ids) =>
-                  ids.includes(piece.id) ? ids : [...ids, piece.id]
-                );
+                apparelDoneIds.push(piece.id);
               } else {
                 setMissingIds((ids) =>
                   ids.includes(piece.id) ? ids : [...ids, piece.id]
                 );
               }
             }
+            setDonePieceIds((ids) => [
+              ...ids.filter((id) => !apparelDoneIds.includes(id)),
+              ...apparelDoneIds,
+            ]);
+            // Clothes landed — accessories stay “applying” until finish finishes
+            setApplyingPieceIds(finishQueue.map((p) => p.id));
             setProgress(55);
           }
 

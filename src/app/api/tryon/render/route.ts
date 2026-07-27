@@ -700,7 +700,8 @@ export async function POST(req: NextRequest) {
 
     let baseAppliedViaCollage = false;
 
-    // One FASHN call for top+bottom (API is one product_image — collage them).
+    // One FASHN call for top+bottom. Jacket stays a separate layer pass so
+    // suit/blazer product shots can’t replace the trousers from the collage.
     if (basePieces.length >= 2 && hasFashnApiKey()) {
       try {
         const productImages = await Promise.all(

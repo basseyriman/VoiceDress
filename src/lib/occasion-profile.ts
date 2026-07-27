@@ -157,11 +157,23 @@ export function inferOccasionProfile(
     styleHints.push("minimal", "quiet luxury");
     preferCategories.push("dress", "top", "bottom", "outerwear", "shoes", "bag");
     notes = "Comfort for transit with a polished silhouette.";
+  } else if (o.includes("cocktail") || o.includes("black tie") || o.includes("gala")) {
+    formality = "formal";
+    styleHints.push("romantic", "quiet luxury", "old money");
+    preferCategories.push(
+      "dress",
+      "top",
+      "bottom",
+      "outerwear",
+      "shoes",
+      "accessory",
+      "bag"
+    );
+    notes = "Elevated evening — jacket or dress-forward.";
   } else if (
     o.includes("party") ||
     o.includes("night out") ||
     o.includes("club") ||
-    o.includes("cocktail") ||
     o.includes("drinks") ||
     o.includes("drink with") ||
     o.includes("pub")
