@@ -223,8 +223,11 @@ export function OutfitStage({
           setDressing(false);
           return true;
         }
-        if (data.needsBilling) {
-          setNeedsBilling(true);
+        if (data.needsBilling || data.code === "tryon_busy") {
+          setError(
+            data.message ||
+              "Dressing is busy right now. Tap retry — your wardrobe is fine."
+          );
           setDressing(false);
           return true;
         }
@@ -929,36 +932,45 @@ export function OutfitStage({
             {showBillingPrompt && hasAvatar && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center backdrop-blur-sm">
                 <p className="font-display text-2xl text-ivory">
-                  Try-on credits used up
+                  Dressing is busy
                 </p>
                 <p className="max-w-sm text-xs text-mist">
-                  Top up billing to keep dressing onto your photo. Your wardrobe
-                  is fine.
+                  We couldn’t finish putting this look on your photo. Your
+                  wardrobe is fine — try again in a moment.
                 </p>
-                <a
-                  href="https://fal.ai/dashboard/billing"
-                  target="_blank"
-                  rel="noreferrer"
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNeedsBilling(false);
+                    setError("");
+                    setRetryNonce((n) => n + 1);
+                  }}
                   className="rounded-full bg-champagne px-4 py-2 text-xs font-medium text-ink"
                 >
-                  Top up billing →
-                </a>
+                  Retry dressing
+                </button>
               </div>
             )}
 
             {showKeyPrompt && hasAvatar && !showBillingPrompt && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center backdrop-blur-sm">
                 <p className="font-display text-2xl text-ivory">
-                  Try-on needs credits
+                  Dressing isn’t ready yet
                 </p>
-                <a
-                  href="https://fal.ai/dashboard/billing"
-                  target="_blank"
-                  rel="noreferrer"
+                <p className="max-w-sm text-xs text-mist">
+                  Try again shortly — or switch to Quick to see the outfit tiles
+                  while we catch up.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNeedsKey(false);
+                    setPhotoTryOnPref(false);
+                  }}
                   className="rounded-full bg-champagne px-4 py-2 text-xs font-medium text-ink"
                 >
-                  Check billing →
-                </a>
+                  Use Quick view
+                </button>
               </div>
             )}
 

@@ -39,10 +39,18 @@ function isFalBillingError(detail: string) {
     d.includes("exhausted balance") ||
     d.includes("user is locked") ||
     d.includes("top up your balance") ||
-    d.includes("insufficient") ||
+    d.includes("insufficient credits") ||
+    d.includes("insufficient balance") ||
     d.includes("out of credits") ||
-    d.includes("payment required")
+    d.includes("no credits remaining") ||
+    /\bpayment required\b/.test(d) ||
+    /\bquota exceeded\b/.test(d)
   );
+}
+
+/** Never expose fal/FASHN dashboard links to end users. */
+function userTryOnUnavailableMessage() {
+  return "Dressing is busy right now. Tap retry in a moment — your wardrobe is fine.";
 }
 
 function pieceLook(piece: Piece) {
@@ -598,12 +606,12 @@ export async function POST(req: NextRequest) {
     });
     if (!polished.ok) {
       if (isFalBillingError(polished.detail)) {
+        // Soft-fail style polish — never block the dressed look for users
         return NextResponse.json({
-          ok: false,
-          needsBilling: true,
-          error: "fal.ai balance exhausted",
-          detail: polished.detail,
+          ok: true,
           imageUrl: personImage,
+          steps: [],
+          warnings: ["Style polish skipped — try again later"],
         });
       }
       // Soft-fail: keep the FASHN clothes result
@@ -717,12 +725,12 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({
             ok: false,
             needsBilling: true,
-            error: "FASHN credits exhausted",
+            code: "tryon_busy",
+            error: "Dressing temporarily unavailable",
             detail: collageResult.detail,
             imageUrl: steps.length ? current : undefined,
             steps,
-            message:
-              "Your FASHN credits are used up. Top up at fashn.ai, then retry.",
+            message: userTryOnUnavailableMessage(),
           });
         } else {
           warnings.push(
@@ -798,17 +806,14 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({
             ok: false,
             needsBilling: true,
-            error: hasFashnApiKey()
-              ? "FASHN credits exhausted"
-              : "fal.ai balance exhausted",
+            code: "tryon_busy",
+            error: "Dressing temporarily unavailable",
             detail: result.detail,
             imageUrl: steps.length ? current : undefined,
             apparelBaseUrl:
               g.category === "outerwear" ? apparelBaseUrl : undefined,
             steps,
-            message: hasFashnApiKey()
-              ? "Your FASHN credits are used up. Top up at fashn.ai, then retry."
-              : "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
+            message: userTryOnUnavailableMessage(),
           });
         }
 
@@ -884,16 +889,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({
             ok: false,
             needsBilling: true,
-            error: hasFashnApiKey()
-              ? "FASHN credits exhausted"
-              : "fal.ai balance exhausted",
+            code: "tryon_busy",
+            error: "Dressing temporarily unavailable",
             detail: edited.detail,
             imageUrl: current,
             steps,
             partial: true,
-            message: hasFashnApiKey()
-              ? "Your FASHN credits are used up. Top up at fashn.ai, then retry."
-              : "Your fal.ai credits are used up. Top up at fal.ai/dashboard/billing, then retry.",
+            message: userTryOnUnavailableMessage(),
           });
         }
         console.error(

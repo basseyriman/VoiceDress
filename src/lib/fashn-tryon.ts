@@ -20,14 +20,18 @@ export function hasFashnApiKey() {
 
 function isFashnBillingError(detail: string) {
   const d = detail.toLowerCase();
+  // Only clear out-of-balance signals — avoid matching the word "credit" in
+  // unrelated API text (false "Try-on credits used up" for users).
   return (
-    d.includes("insufficient") ||
-    d.includes("credit") ||
-    d.includes("quota") ||
-    d.includes("payment") ||
-    d.includes("balance") ||
-    d.includes("billing") ||
-    d.includes("402")
+    d.includes("exhausted balance") ||
+    d.includes("insufficient credits") ||
+    d.includes("insufficient balance") ||
+    d.includes("out of credits") ||
+    d.includes("no credits remaining") ||
+    d.includes("top up your balance") ||
+    d.includes("user is locked") ||
+    /\bpayment required\b/.test(d) ||
+    /\bquota exceeded\b/.test(d)
   );
 }
 
