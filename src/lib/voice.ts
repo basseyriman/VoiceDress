@@ -264,6 +264,8 @@ export type VoiceActionHandlers = {
   onNavigate?: (path: string) => void;
   onExplainLook?: () => string | void;
   onWeather?: () => string | void;
+  /** Ensure forecast is in the store (any page — not only Today). */
+  ensureWeather?: () => Promise<unknown>;
   getContext?: () => Record<string, unknown>;
 };
 
@@ -532,7 +534,11 @@ async function applyLocalIntent(
     bag: "bag",
   };
 
-  const suggestBlocked = (): string | null => {
+  const suggestBlocked = async (): Promise<string | null> => {
+    // Weather belongs to the whole app — fetch it here if Today never ran
+    if (actions.ensureWeather) {
+      await actions.ensureWeather();
+    }
     const ctx = actions.getContext?.() || {};
     const wardrobeLen = Array.isArray(ctx.wardrobeFull)
       ? ctx.wardrobeFull.length
@@ -540,7 +546,7 @@ async function applyLocalIntent(
         ? ctx.wardrobe.length
         : 0;
     if (!ctx.weatherFull && !ctx.weather) {
-      return "I need your weather first — open Today and I’ll dress you for the forecast.";
+      return "I couldn’t load the weather just now — check your connection and try again.";
     }
     if (wardrobeLen < 2) {
       actions.onNavigate?.("/wardrobe");
@@ -552,7 +558,7 @@ async function applyLocalIntent(
   switch (parsed.intent) {
     case "swap_item": {
       const cat = catMap[parsed.entities.item || "bottom"] || "bottom";
-      const blocked = suggestBlocked();
+      const blocked = await suggestBlocked();
       if (blocked) return blocked;
       actions.swapFromVoice(
         cat,
@@ -564,7 +570,7 @@ async function applyLocalIntent(
       return parsed.reply;
     }
     case "change_style": {
-      const blocked = suggestBlocked();
+      const blocked = await suggestBlocked();
       if (blocked) return blocked;
       const outfit = (await (actions.generateOutfitAsync ||
         actions.generateOutfit)(
@@ -584,6 +590,7 @@ async function applyLocalIntent(
       actions.onNavigate?.("/wardrobe");
       return parsed.reply;
     case "weather_check": {
+      if (actions.ensureWeather) await actions.ensureWeather();
       const w = actions.onWeather?.();
       if (typeof w === "string" && w) return w;
       return parsed.reply;
@@ -597,7 +604,7 @@ async function applyLocalIntent(
       return runOutfitChat(parsed.transcript, actions);
     case "suggest_outfit":
     default: {
-      const blocked = suggestBlocked();
+      const blocked = await suggestBlocked();
       if (blocked) return blocked;
       const outfit = (await (actions.generateOutfitAsync ||
         actions.generateOutfit)(
@@ -611,7 +618,7 @@ async function applyLocalIntent(
       )) as { stylingGuide?: string; name?: string } | null | undefined;
       if (!outfit) {
         return (
-          suggestBlocked() ||
+          (await suggestBlocked()) ||
           "I couldn’t build a look from your wardrobe yet — add a few more pieces."
         );
       }
@@ -674,6 +681,20 @@ async function applyActions(
           }
         )) as { stylingGuide?: string } | null | undefined;
         if (outfit?.stylingGuide) reply = outfit.stylingGuide;
+        else if (!outfit) {
+          if (actions.ensureWeather) await actions.ensureWeather();
+          const retry = (await (actions.generateOutfitAsync ||
+            actions.generateOutfit)(
+            a.occasion || "today",
+            a.style || undefined,
+            {
+              tempC: a.tempC ?? undefined,
+              freshLook: Boolean(a.freshLook ?? a.tempC != null),
+              transcript: a.transcript ?? undefined,
+            }
+          )) as { stylingGuide?: string } | null | undefined;
+          if (retry?.stylingGuide) reply = retry.stylingGuide;
+        }
         break;
       }
       case "swap_piece":
@@ -703,6 +724,7 @@ async function applyActions(
         break;
       }
       case "check_weather": {
+        if (actions.ensureWeather) await actions.ensureWeather();
         const w = actions.onWeather?.();
         if (typeof w === "string" && w) reply = w;
         break;

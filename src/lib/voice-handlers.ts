@@ -64,6 +64,7 @@ export function buildVoiceHandlers(
       if (!w) return "Weather isn’t loaded yet.";
       return `${Math.round(w.tempC)} degrees, ${w.condition} in ${w.location}. Rain chance ${w.precipChance} percent.`;
     },
+    ensureWeather: () => useAetherStore.getState().ensureWeather(),
     getContext: () => {
       const live = useAetherStore.getState();
       const o = live.currentOutfit;

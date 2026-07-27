@@ -23,6 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const user = useAetherStore((s) => s.user);
   const wardrobe = useAetherStore((s) => s.wardrobe);
   const hydrated = useAetherStore((s) => s.hydrated);
+  const ensureWeather = useAetherStore((s) => s.ensureWeather);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -41,6 +42,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }
     }
   }, [hydrated, user, wardrobe, pathname, router]);
+
+  // Keep forecast warm on every app page so voice can dress anywhere
+  useEffect(() => {
+    if (!hydrated || !user) return;
+    void ensureWeather();
+  }, [hydrated, user?.uid, user?.lat, user?.lon, user?.city, ensureWeather]);
 
   if (!hydrated || !user) {
     return (

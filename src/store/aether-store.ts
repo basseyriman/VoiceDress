@@ -90,6 +90,8 @@ interface AetherState {
   ) => void;
   signOutLocal: () => Promise<void>;
   setWeather: (w: WeatherSnapshot) => void;
+  /** Fetch forecast into the store if missing — used by voice on any page. */
+  ensureWeather: () => Promise<WeatherSnapshot | null>;
   setAvatar: (url: string, status: UserProfile["avatarStatus"]) => Promise<void>;
   generateOutfit: (
     occasion?: string,
@@ -460,6 +462,25 @@ export const useAetherStore = create<AetherState>()(
         });
       },
       setWeather: (w) => set({ weather: w }),
+      ensureWeather: async () => {
+        const existing = get().weather;
+        if (existing) return existing;
+        const user = get().user;
+        const lat = user?.lat ?? 51.5074;
+        const lon = user?.lon ?? -0.1278;
+        const location = user?.city || "London";
+        try {
+          const res = await fetch(
+            `/api/weather?lat=${lat}&lon=${lon}&location=${encodeURIComponent(location)}`
+          );
+          if (!res.ok) return null;
+          const data = (await res.json()) as WeatherSnapshot;
+          set({ weather: data });
+          return data;
+        } catch {
+          return null;
+        }
+      },
       setAvatar: async (url, status) => {
         const user = get().user;
         if (!user) return;
@@ -568,7 +589,10 @@ export const useAetherStore = create<AetherState>()(
         return outfit;
       },
       generateOutfitAsync: async (occasion = "today", style, opts) => {
-        const { wardrobe, weather, user, taste, currentOutfit } = get();
+        let { wardrobe, weather, user, taste, currentOutfit } = get();
+        if (!weather) {
+          weather = await get().ensureWeather();
+        }
         if (!weather || !wardrobe.length) return null;
         const stylePrefs = user?.stylePrefs;
         const primaryStyle = resolvePrimaryStyle(stylePrefs, style);
