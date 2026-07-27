@@ -83,6 +83,8 @@ export function OutfitStage({
   const [stepLabel, setStepLabel] = useState("");
   const [progress, setProgress] = useState(0);
   const [activePieceId, setActivePieceId] = useState<string | null>(null);
+  /** Pieces currently applying together (e.g. shoes + watch batch) */
+  const [applyingPieceIds, setApplyingPieceIds] = useState<string[]>([]);
   const [swapFor, setSwapFor] = useState<Garment["category"] | null>(null);
   const [swapTargetId, setSwapTargetId] = useState<string | null>(null);
   const [keyConfigured, setKeyConfigured] = useState<boolean | null>(null);
@@ -506,6 +508,7 @@ export function OutfitStage({
       setMissingIds([]);
       setDonePieceIds([]);
       setActivePieceId(null);
+      setApplyingPieceIds([]);
       setNeedsKey(false);
       setNeedsBilling(false);
       setProgress(4);
@@ -567,6 +570,7 @@ export function OutfitStage({
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
             setActivePieceId(baseApparel[0].id);
+            setApplyingPieceIds(baseApparel.map((p) => p.id));
             setStepLabel(
               baseApparel.length > 1
                 ? `Dressing ${baseApparel.map((p) => p.name).join(" + ")}…`
@@ -623,6 +627,7 @@ export function OutfitStage({
               return;
             setWornUrl(current);
             setKeyConfigured(true);
+            setApplyingPieceIds([]);
             apparelBaseBeforeOuter = current;
 
             if (apparelData.consumedFreeTryOn) {
@@ -829,14 +834,21 @@ export function OutfitStage({
           }
         }
 
-        // 2) Shoes / watch first, then glasses last (face lock between)
-        for (let i = 0; i < finishQueue.length; i++) {
-          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-          const piece = finishQueue[i];
-          const isEye = isEyewearPiece(piece);
+        // 2) Finish extras in batches — same “appear together” feel as clothes.
+        // Non-eyewear first (shoes/watch/bag), then glasses after a face lock.
+        const eyewearFinish = finishQueue.filter((p) => isEyewearPiece(p));
+        const otherFinish = finishQueue.filter((p) => !isEyewearPiece(p));
+        const finishBatches = [
+          ...(otherFinish.length ? [otherFinish] : []),
+          ...(eyewearFinish.length ? [eyewearFinish] : []),
+        ];
 
-          // Restore your real face before glasses touch the photo
-          if (isEye) {
+        for (let b = 0; b < finishBatches.length; b++) {
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+          const batch = finishBatches[b];
+          const batchIsEye = batch.every((p) => isEyewearPiece(p));
+
+          if (batchIsEye) {
             setStepLabel("Keeping your real face…");
             try {
               current = await lockFaceIdentity(
@@ -850,10 +862,19 @@ export function OutfitStage({
             }
           }
 
-          setActivePieceId(piece.id);
-          setStepLabel(`Adding ${piece.name}…`);
+          setActivePieceId(batch[0]?.id || null);
+          setApplyingPieceIds(batch.map((p) => p.id));
+          setStepLabel(
+            batch.length > 1
+              ? `Adding ${batch.map((p) => p.name).join(" + ")}…`
+              : `Adding ${batch[0].name}…`
+          );
+          // Mark the whole batch as “applying” in the list UI
+          setDonePieceIds((ids) =>
+            ids.filter((id) => !batch.some((p) => p.id === id))
+          );
           setProgress(
-            50 + Math.round(((i + 1) / (finishQueue.length + 1)) * 40)
+            55 + Math.round(((b + 1) / (finishBatches.length + 1)) * 35)
           );
 
           const beforeFinish = current;
@@ -865,7 +886,8 @@ export function OutfitStage({
               personImage: current,
               stage: "finish",
               includeFaceAccessories: true,
-              garments: [toPayload(piece)],
+              maxPieces: batch.length,
+              garments: batch.map(toPayload),
             }),
           });
           const finishData = await finishRes.json();
@@ -879,7 +901,6 @@ export function OutfitStage({
             finishData.steps.length > 0
           ) {
             try {
-              // Pull color grade back toward pre-accessory clothes
               current = await stabilizeTryOnColors(
                 beforeFinish,
                 finishData.imageUrl
@@ -888,28 +909,59 @@ export function OutfitStage({
               current = finishData.imageUrl;
             }
             try {
-              // Always restore your face — watch/glasses Kontext morphs identity
               current = await lockFaceIdentity(
                 identityPhoto,
                 current,
-                isEye ? "soft" : "strong"
+                batchIsEye ? "soft" : "strong"
               );
             } catch {
               // keep color-stabilized frame
             }
             if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
             setWornUrl(current);
-            appliedIds.add(piece.id);
-            appliedNames.add(piece.name);
-            setDonePieceIds((ids) =>
-              ids.includes(piece.id) ? ids : [...ids, piece.id]
-            );
             setKeyConfigured(true);
+            setApplyingPieceIds([]);
+
+            const stepIds = new Set(
+              finishData.steps
+                .map((s: { id?: string }) => s.id)
+                .filter(Boolean) as string[]
+            );
+            const stepNames = new Set(
+              finishData.steps
+                .map((s: { name?: string }) => s.name)
+                .filter(Boolean) as string[]
+            );
+            for (const piece of batch) {
+              const landed =
+                stepIds.size === 0 ||
+                stepIds.has(piece.id) ||
+                stepNames.has(piece.name);
+              if (landed) {
+                appliedIds.add(piece.id);
+                appliedNames.add(piece.name);
+                setDonePieceIds((ids) =>
+                  ids.includes(piece.id) ? ids : [...ids, piece.id]
+                );
+              } else {
+                setMissingIds((ids) =>
+                  ids.includes(piece.id) ? ids : [...ids, piece.id]
+                );
+              }
+            }
+          } else {
+            setApplyingPieceIds([]);
+            for (const piece of batch) {
+              setMissingIds((ids) =>
+                ids.includes(piece.id) ? ids : [...ids, piece.id]
+              );
+            }
           }
         }
 
         // Polish clothes/body first, then restore YOUR face last (never polish the face)
         setStepLabel("Finishing your look…");
+        setApplyingPieceIds([]);
         try {
           current = await polishTryOnResult(current);
         } catch {
@@ -936,6 +988,7 @@ export function OutfitStage({
         if (myId === requestId.current) {
           lookIdsRef.current = nextIds;
           setActivePieceId(null);
+          setApplyingPieceIds([]);
           setStepLabel(missed.length ? "Almost ready" : "Full look on you");
           setProgress(100);
           setDressing(false);
@@ -1278,7 +1331,7 @@ export function OutfitStage({
                     key={g.id}
                     className={cn(
                       "max-w-[8.5rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[10px]",
-                      activePieceId === g.id
+                      activePieceId === g.id || applyingPieceIds.includes(g.id)
                         ? "border-champagne bg-champagne/15 text-champagne"
                         : donePieceIds.includes(g.id)
                           ? "border-champagne/40 text-champagne"
@@ -1334,12 +1387,22 @@ export function OutfitStage({
                 <GarmentTile
                   key={g.id}
                   garment={g}
-                  active={swapTargetId === g.id || activePieceId === g.id}
-                  dressing={dressing && activePieceId === g.id}
+                  active={
+                    swapTargetId === g.id ||
+                    activePieceId === g.id ||
+                    applyingPieceIds.includes(g.id)
+                  }
+                  dressing={
+                    dressing &&
+                    (activePieceId === g.id || applyingPieceIds.includes(g.id))
+                  }
                   done={donePieceIds.includes(g.id)}
                   missing={missingIds.includes(g.id)}
                   progressPct={
-                    dressing && activePieceId === g.id ? progressPct : undefined
+                    dressing &&
+                    (activePieceId === g.id || applyingPieceIds.includes(g.id))
+                      ? progressPct
+                      : undefined
                   }
                   onClick={() => {
                     if (swapTargetId === g.id) {
