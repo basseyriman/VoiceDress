@@ -33,6 +33,53 @@ export const LOOK_TOPUP_PACKS = [
 
 export type LookTopupPackId = (typeof LOOK_TOPUP_PACKS)[number]["id"];
 
+export const CUSTOM_LOOK_TOPUP_ID = "looks_custom";
+export const CUSTOM_LOOK_TOPUP_MIN = 5;
+export const CUSTOM_LOOK_TOPUP_MAX = 100;
+
+/** Pence per look — matches fixed packs (10→£5, 25→£10). */
+export function lookTopupPencePerLook(looks: number): number {
+  return looks >= 25 ? 40 : 50;
+}
+
+export type LookTopupQuote = {
+  looks: number;
+  priceGbp: number;
+  pence: number;
+  packId: string;
+};
+
+/** Server-authoritative quote for any top-up quantity (fixed pack or custom). */
+export function quoteLookTopup(looksInput: number): LookTopupQuote | null {
+  const looks = Math.floor(Number(looksInput));
+  if (!Number.isFinite(looks)) return null;
+  if (looks < CUSTOM_LOOK_TOPUP_MIN || looks > CUSTOM_LOOK_TOPUP_MAX) return null;
+
+  const pack = LOOK_TOPUP_PACKS.find((p) => p.looks === looks);
+  if (pack) {
+    const pence = Math.round(pack.priceGbp * 100);
+    return {
+      looks: pack.looks,
+      priceGbp: pack.priceGbp,
+      pence,
+      packId: pack.id,
+    };
+  }
+
+  const pence = looks * lookTopupPencePerLook(looks);
+  return {
+    looks,
+    priceGbp: pence / 100,
+    pence,
+    packId: CUSTOM_LOOK_TOPUP_ID,
+  };
+}
+
+export function formatGbp(amount: number): string {
+  if (!Number.isFinite(amount)) return "£0";
+  return amount % 1 === 0 ? `£${amount}` : `£${amount.toFixed(2)}`;
+}
+
 export function lookTopupPack(id: string) {
   return LOOK_TOPUP_PACKS.find((p) => p.id === id) || null;
 }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { getStripe, planIdFromStripePrice } from "@/lib/stripe";
+import {
+  getStripe,
+  planIdFromStripePrice,
+  quoteLookTopup,
+} from "@/lib/stripe";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
@@ -102,6 +106,23 @@ export async function POST(req: NextRequest) {
               0,
               Math.floor(Number(session.metadata?.looks || 0))
             );
+            const quote = add > 0 ? quoteLookTopup(add) : null;
+            const expectedPence = Number(
+              session.metadata?.expectedPence || quote?.pence || 0
+            );
+            const paid = session.amount_total;
+            // Refuse credit if paid amount is below the quoted price (metadata tamper / underpay).
+            if (
+              quote &&
+              typeof paid === "number" &&
+              expectedPence > 0 &&
+              paid + 1 < expectedPence
+            ) {
+              console.error(
+                `look_topup amount mismatch uid=${uid} looks=${add} paid=${paid} expected=${expectedPence}`
+              );
+              break;
+            }
             if (add > 0) {
               const db = getAdminDb()!;
               const ref = db.collection("users").doc(uid);

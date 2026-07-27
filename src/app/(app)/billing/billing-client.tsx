@@ -5,10 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  CUSTOM_LOOK_TOPUP_ID,
+  CUSTOM_LOOK_TOPUP_MAX,
+  CUSTOM_LOOK_TOPUP_MIN,
   LIST_PRICE_MONTHLY_GBP,
   LIST_PRICE_YEARLY_GBP,
   LOOK_TOPUP_PACKS,
   PLANS,
+  formatGbp,
+  quoteLookTopup,
 } from "@/lib/stripe";
 import { authFetch } from "@/lib/auth-fetch";
 import { useAetherStore } from "@/store/aether-store";
@@ -40,45 +45,125 @@ function statusCopy(user: UserProfile | null | undefined) {
 function TopUpGrid({
   loading,
   onBuy,
+  onBuyCustom,
   emphasized,
 }: {
   loading: string | null;
   onBuy: (id: string) => void;
+  onBuyCustom: (looks: number) => void;
   emphasized: boolean;
 }) {
+  const [customLooks, setCustomLooks] = useState("15");
+  const parsed = Math.floor(Number(customLooks));
+  const quote =
+    Number.isFinite(parsed) && customLooks.trim() !== ""
+      ? quoteLookTopup(parsed)
+      : null;
+  const customInvalid =
+    customLooks.trim() !== "" &&
+    (!Number.isFinite(parsed) ||
+      parsed < CUSTOM_LOOK_TOPUP_MIN ||
+      parsed > CUSTOM_LOOK_TOPUP_MAX);
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {LOOK_TOPUP_PACKS.map((pack) => (
-        <div
-          key={pack.id}
-          className={
-            emphasized
-              ? "relative rounded-[1.75rem] border border-champagne/30 bg-champagne/[0.07] p-6"
-              : "relative rounded-[1.75rem] border border-line bg-white/[0.02] p-6"
-          }
-        >
-          {"badge" in pack && pack.badge ? (
-            <span className="absolute right-5 top-5 text-[10px] uppercase tracking-[0.2em] text-champagne">
-              {pack.badge}
-            </span>
-          ) : null}
-          <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
-          <p className="mt-3 font-display text-4xl text-ivory">
-            £{pack.priceGbp}
-          </p>
-          <p className="mt-2 text-sm leading-relaxed text-mist">
-            {pack.description}
-          </p>
-          <Button
-            className="mt-6 w-full"
-            variant={emphasized ? "primary" : "outline"}
-            disabled={loading === pack.id}
-            onClick={() => onBuy(pack.id)}
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {LOOK_TOPUP_PACKS.map((pack) => (
+          <div
+            key={pack.id}
+            className={
+              emphasized
+                ? "relative rounded-[1.75rem] border border-champagne/30 bg-champagne/[0.07] p-6"
+                : "relative rounded-[1.75rem] border border-line bg-white/[0.02] p-6"
+            }
           >
-            {loading === pack.id ? "Redirecting…" : `Buy ${pack.looks} looks`}
-          </Button>
+            {"badge" in pack && pack.badge ? (
+              <span className="absolute right-5 top-5 text-[10px] uppercase tracking-[0.2em] text-champagne">
+                {pack.badge}
+              </span>
+            ) : null}
+            <h3 className="font-display text-2xl text-ivory">{pack.label}</h3>
+            <p className="mt-3 font-display text-4xl text-ivory">
+              {formatGbp(pack.priceGbp)}
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-mist">
+              {pack.description}
+            </p>
+            <Button
+              className="mt-6 w-full"
+              variant={emphasized ? "primary" : "outline"}
+              disabled={loading === pack.id}
+              onClick={() => onBuy(pack.id)}
+            >
+              {loading === pack.id ? "Redirecting…" : `Buy ${pack.looks} looks`}
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <div
+        className={
+          emphasized
+            ? "rounded-[1.75rem] border border-champagne/30 bg-champagne/[0.07] p-6"
+            : "rounded-[1.75rem] border border-line bg-white/[0.02] p-6"
+        }
+      >
+        <h3 className="font-display text-2xl text-ivory">Custom amount</h3>
+        <p className="mt-2 text-sm leading-relaxed text-mist">
+          Choose how many on-photo looks you want — banked until you use them.
+          From {CUSTOM_LOOK_TOPUP_MIN} to {CUSTOM_LOOK_TOPUP_MAX}.
+        </p>
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
+          <label className="block flex-1">
+            <span className="text-xs uppercase tracking-[0.2em] text-champagne">
+              Looks
+            </span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={CUSTOM_LOOK_TOPUP_MIN}
+              max={CUSTOM_LOOK_TOPUP_MAX}
+              value={customLooks}
+              onChange={(e) => setCustomLooks(e.target.value)}
+              className="mt-2 w-full rounded-2xl border border-line bg-black/40 px-4 py-3 font-display text-2xl text-ivory outline-none transition focus:border-champagne/50"
+            />
+          </label>
+          <div className="sm:min-w-[8rem]">
+            <p className="text-xs uppercase tracking-[0.2em] text-champagne">
+              Total
+            </p>
+            <p className="mt-2 font-display text-4xl text-ivory">
+              {quote ? formatGbp(quote.priceGbp) : "—"}
+            </p>
+          </div>
         </div>
-      ))}
+        {customInvalid ? (
+          <p className="mt-3 text-sm text-mist">
+            Enter a number between {CUSTOM_LOOK_TOPUP_MIN} and{" "}
+            {CUSTOM_LOOK_TOPUP_MAX}.
+          </p>
+        ) : quote && quote.looks >= 25 ? (
+          <p className="mt-3 text-sm text-mist">
+            Volume rate — {formatGbp(0.4)} per look (same as the 25 pack).
+          </p>
+        ) : quote ? (
+          <p className="mt-3 text-sm text-mist">
+            {formatGbp(0.5)} per look · 25+ drops to {formatGbp(0.4)}.
+          </p>
+        ) : null}
+        <Button
+          className="mt-6 w-full sm:w-auto"
+          variant={emphasized ? "primary" : "outline"}
+          disabled={!quote || loading === CUSTOM_LOOK_TOPUP_ID}
+          onClick={() => quote && onBuyCustom(quote.looks)}
+        >
+          {loading === CUSTOM_LOOK_TOPUP_ID
+            ? "Redirecting…"
+            : quote
+              ? `Buy ${quote.looks} looks · ${formatGbp(quote.priceGbp)}`
+              : "Enter a look count"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -115,14 +200,17 @@ export default function BillingPage() {
     }
   }, [searchParams, user?.uid, hydrateFromCloud]);
 
-  const checkout = async (planId: string) => {
+  const checkout = async (planId: string, looks?: number) => {
     setLoading(planId);
     setMessage("");
     try {
       if (typeof window !== "undefined") {
         const { default: posthog } = await import("posthog-js");
         if (posthog.__loaded) {
-          posthog.capture("billing_checkout_started", { plan_id: planId });
+          posthog.capture("billing_checkout_started", {
+            plan_id: planId,
+            ...(typeof looks === "number" ? { looks } : {}),
+          });
         }
       }
       const res = await authFetch("/api/stripe/checkout", {
@@ -130,6 +218,7 @@ export default function BillingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           planId,
+          ...(typeof looks === "number" ? { looks } : {}),
           email: user?.email,
           name: user?.displayName,
         }),
@@ -378,6 +467,7 @@ export default function BillingPage() {
             <TopUpGrid
               loading={loading}
               onBuy={checkout}
+              onBuyCustom={(looks) => checkout(CUSTOM_LOOK_TOPUP_ID, looks)}
               emphasized={topupUrgent}
             />
           </section>

@@ -3,7 +3,9 @@ import {
   getStripe,
   STRIPE_PRICE_MONTHLY,
   STRIPE_PRICE_YEARLY,
+  CUSTOM_LOOK_TOPUP_ID,
   lookTopupPack,
+  quoteLookTopup,
 } from "@/lib/stripe";
 import { requireAuth, isAuthedUser } from "@/lib/api-auth";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
@@ -42,12 +44,30 @@ export async function POST(req: NextRequest) {
       ? { customer_email: auth.email }
       : {};
 
-  // —— One-time look top-up packs ——
-  const topup = lookTopupPack(planId);
-  if (topup) {
+  // —— One-time look top-up (fixed pack or custom quantity) ——
+  const pack = lookTopupPack(planId);
+  const isCustomTopup = planId === CUSTOM_LOOK_TOPUP_ID;
+  if (pack || isCustomTopup) {
+    const looksRequested = isCustomTopup ? Number(body.looks) : pack!.looks;
+    const quote = quoteLookTopup(looksRequested);
+    if (!quote) {
+      return NextResponse.json(
+        {
+          error:
+            "Choose between 5 and 100 on-photo looks for a custom top-up.",
+        },
+        { status: 400 }
+      );
+    }
+
     try {
-      const envPrice = process.env[topup.priceEnv]?.trim() || "";
+      const envPrice =
+        pack && quote.packId === pack.id
+          ? process.env[pack.priceEnv]?.trim() || ""
+          : "";
       const usePriceId =
+        Boolean(pack) &&
+        quote.packId === pack!.id &&
         envPrice.startsWith("price_") &&
         !/voicedress|vestoir|aether/i.test(envPrice);
 
@@ -61,10 +81,10 @@ export async function POST(req: NextRequest) {
             : {
                 price_data: {
                   currency: "gbp",
-                  unit_amount: Math.round(topup.priceGbp * 100),
+                  unit_amount: quote.pence,
                   product_data: {
-                    name: `VoiceDress — ${topup.label}`,
-                    description: `${topup.looks} extra on-photo looks (banked until used)`,
+                    name: `VoiceDress — ${quote.looks} extra looks`,
+                    description: `${quote.looks} on-photo looks (banked until used)`,
                   },
                 },
                 quantity: 1,
@@ -74,15 +94,21 @@ export async function POST(req: NextRequest) {
         cancel_url: `${origin}/billing?canceled=1`,
         metadata: {
           type: "look_topup",
-          packId: topup.id,
-          looks: String(topup.looks),
+          packId: quote.packId,
+          looks: String(quote.looks),
+          expectedPence: String(quote.pence),
           firebaseUid: auth.uid,
           name: String(body.name || ""),
         },
         allow_promotion_codes: true,
       });
 
-      return NextResponse.json({ url: session.url, packId: topup.id });
+      return NextResponse.json({
+        url: session.url,
+        packId: quote.packId,
+        looks: quote.looks,
+        priceGbp: quote.priceGbp,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Checkout failed";
       console.error("Stripe top-up checkout error", message);
