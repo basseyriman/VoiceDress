@@ -932,74 +932,96 @@ export function OutfitStage({
           }
         }
 
-        // 2) All finish extras in ONE FAL request (shoes + bag + glasses + watch)
+        // 2) Finish extras one request each. Batching them behind premium
+        // models outran the function limit and lost the whole tail of the look;
+        // a piece per request costs a slower bar but nothing gets dropped.
         if (finishQueue.length) {
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
 
-          setActivePieceId(finishQueue[0]?.id || null);
-          setApplyingPieceIds(finishQueue.map((p) => p.id));
-          setStepLabel(
-            finishQueue.length > 1
-              ? `Adding ${finishQueue.map((p) => p.name).join(" + ")}…`
-              : `Adding ${finishQueue[0].name}…`
+          // Glasses last so the identity restore runs right after the frames land
+          const finishRank = (p: (typeof finishQueue)[number]) =>
+            isEyewearPiece(p)
+              ? 4
+              : isRealFootwear(p)
+                ? 0
+                : p.category === "bag"
+                  ? 1
+                  : isWatchPiece(p)
+                    ? 2
+                    : 3;
+          const ordered = [...finishQueue].sort(
+            (a, b) => finishRank(a) - finishRank(b)
           );
+
           setDonePieceIds((ids) =>
-            ids.filter((id) => !finishQueue.some((p) => p.id === id))
+            ids.filter((id) => !ordered.some((p) => p.id === id))
           );
-          setProgress(62);
 
-          const beforeFinish = current;
-          const finishHadShoes = finishQueue.some((p) => isRealFootwear(p));
-          const finishRes = await authFetch("/api/tryon/render", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            signal: ac.signal,
-            body: JSON.stringify({
-              personImage: current,
-              stage: "finish",
-              includeFaceAccessories: true,
-              maxPieces: finishQueue.length,
-              garments: finishQueue.map(toPayload),
-            }),
-          });
-          const finishData = await readJson(finishRes);
-          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-          if (failOrBilling(finishData, finishRes.status)) return;
+          for (let i = 0; i < ordered.length; i++) {
+            const piece = ordered[i];
+            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
 
-          if (
-            finishData.ok &&
-            finishData.imageUrl &&
-            Array.isArray(finishData.steps) &&
-            finishData.steps.length > 0
-          ) {
-            let shoesRolledBack = false;
-            let eyewearRolledBack = false;
-            try {
-              current = await stabilizeTryOnColors(
-                beforeFinish,
-                finishData.imageUrl
+            setActivePieceId(piece.id);
+            setApplyingPieceIds([piece.id]);
+            setStepLabel(`Adding ${piece.name}…`);
+            setProgress(62 + Math.round((i / ordered.length) * 30));
+
+            const beforePiece = current;
+            const pieceRes = await authFetch("/api/tryon/render", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ac.signal,
+              body: JSON.stringify({
+                personImage: current,
+                stage: "finish",
+                includeFaceAccessories: true,
+                maxPieces: 1,
+                garments: [toPayload(piece)],
+              }),
+            });
+            const pieceData = await readJson(pieceRes);
+            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+            if (failOrBilling(pieceData, pieceRes.status)) return;
+
+            const landed =
+              pieceData.ok &&
+              pieceData.imageUrl &&
+              Array.isArray(pieceData.steps) &&
+              pieceData.steps.length > 0;
+
+            if (!landed) {
+              setMissingIds((ids) =>
+                ids.includes(piece.id) ? ids : [...ids, piece.id]
               );
-            } catch {
-              current = finishData.imageUrl;
+              continue;
             }
 
-            const hasEyewear = finishQueue.some((p) => isEyewearPiece(p));
+            let rolledBack = false;
+            try {
+              current = await stabilizeTryOnColors(
+                beforePiece,
+                pieceData.imageUrl
+              );
+            } catch {
+              current = pieceData.imageUrl;
+            }
+
+            const wearsGlasses = isEyewearPiece(piece);
             try {
               current = await lockFaceIdentity(
                 identityPhoto,
                 current,
-                hasEyewear ? "soft" : "strong"
+                wearsGlasses ? "soft" : "strong"
               );
-              // A wiped/blown head means the edit lost the person — take the
-              // dressed frame back rather than shipping a faceless photo.
+              // A wiped head means the edit lost the person — keep the frame we
+              // had rather than shipping a faceless photo.
               if (await faceRegionBlown(current)) {
                 current = await lockFaceIdentity(
                   identityPhoto,
-                  beforeFinish,
+                  beforePiece,
                   "strong"
                 );
-                eyewearRolledBack = hasEyewear;
-                shoesRolledBack = finishHadShoes;
+                rolledBack = true;
               }
             } catch {
               // keep stabilized frame
@@ -1008,47 +1030,21 @@ export function OutfitStage({
             if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
             setWornUrl(current);
             setKeyConfigured(true);
-            setApplyingPieceIds([]);
 
-            const stepIds = new Set(
-              finishData.steps
-                .map((s: { id?: string }) => s.id)
-                .filter(Boolean) as string[]
-            );
-            const stepNames = new Set(
-              finishData.steps
-                .map((s: { name?: string }) => s.name)
-                .filter(Boolean) as string[]
-            );
-            for (const piece of finishQueue) {
-              const shoeFailed = shoesRolledBack && isRealFootwear(piece);
-              const eyeFailed = eyewearRolledBack && isEyewearPiece(piece);
-              const landed =
-                !shoeFailed &&
-                !eyeFailed &&
-                (stepIds.size === 0 ||
-                  stepIds.has(piece.id) ||
-                  stepNames.has(piece.name));
-              if (landed) {
-                appliedIds.add(piece.id);
-                appliedNames.add(piece.name);
-                setDonePieceIds((ids) =>
-                  ids.includes(piece.id) ? ids : [...ids, piece.id]
-                );
-              } else {
-                setMissingIds((ids) =>
-                  ids.includes(piece.id) ? ids : [...ids, piece.id]
-                );
-              }
-            }
-          } else {
-            setApplyingPieceIds([]);
-            for (const piece of finishQueue) {
+            if (rolledBack) {
               setMissingIds((ids) =>
+                ids.includes(piece.id) ? ids : [...ids, piece.id]
+              );
+            } else {
+              appliedIds.add(piece.id);
+              appliedNames.add(piece.name);
+              setDonePieceIds((ids) =>
                 ids.includes(piece.id) ? ids : [...ids, piece.id]
               );
             }
           }
+
+          setApplyingPieceIds([]);
         }
 
         // Polish clothes/body first, then restore YOUR face last (never polish the face)
