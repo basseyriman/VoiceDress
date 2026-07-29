@@ -232,6 +232,24 @@ export function OutfitStage({
           `${p.name || ""} ${(p.tags || []).join(" ")}`
         );
 
+      // A timed-out or crashed function replies with an HTML/text error page.
+      // Parsing that as JSON used to surface raw "Unexpected token" noise.
+      const readJson = async (res: Response) => {
+        const raw = await res.text();
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return {
+            ok: false,
+            error:
+              res.status === 504 || /timed? ?out/i.test(raw)
+                ? "That look took too long to render — try again."
+                : "Dressing service hiccuped — try again.",
+            detail: raw.slice(0, 140),
+          };
+        }
+      };
+
       const failOrBilling = (data: {
         needsKey?: boolean;
         needsBilling?: boolean;
@@ -386,7 +404,7 @@ export function OutfitStage({
                 garments: [toPayload(piece)],
               }),
             });
-            const apparelData = await apparelRes.json();
+            const apparelData = await readJson(apparelRes);
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
             if (failOrBilling(apparelData, apparelRes.status)) return;
@@ -495,7 +513,7 @@ export function OutfitStage({
                 garments: [toPayload(piece)],
               }),
             });
-            const finishData = await finishRes.json();
+            const finishData = await readJson(finishRes);
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
             if (failOrBilling(finishData, finishRes.status)) return;
@@ -679,7 +697,7 @@ export function OutfitStage({
               }),
             });
 
-            const apparelData = await apparelRes.json();
+            const apparelData = await readJson(apparelRes);
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
             if (failOrBilling(apparelData, apparelRes.status)) return;
@@ -887,7 +905,7 @@ export function OutfitStage({
                   stylingPrompt: outfit.stylingTryOnPrompt,
                 }),
               });
-              const styleData = await styleRes.json();
+              const styleData = await readJson(styleRes);
               if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
               if (
                 !failOrBilling(styleData, styleRes.status) &&
@@ -944,7 +962,7 @@ export function OutfitStage({
               garments: finishQueue.map(toPayload),
             }),
           });
-          const finishData = await finishRes.json();
+          const finishData = await readJson(finishRes);
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
           if (failOrBilling(finishData, finishRes.status)) return;
 

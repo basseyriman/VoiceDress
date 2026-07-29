@@ -244,6 +244,8 @@ export async function fashnTryOnMax(opts: {
   modelImage: string;
   productImage: string;
   prompt?: string;
+  /** Stop polling early so one slow piece can't burn the whole request budget. */
+  timeoutMs?: number;
 }): Promise<FashnTryResult> {
   const apiKey = getFashnApiKey();
   if (!apiKey) {
@@ -297,7 +299,7 @@ export async function fashnTryOnMax(opts: {
 
   const predictionId = runData.id;
   const started = Date.now();
-  const timeoutMs = 120_000;
+  const timeoutMs = Math.max(15_000, opts.timeoutMs ?? 120_000);
 
   while (Date.now() - started < timeoutMs) {
     await sleep(2500);

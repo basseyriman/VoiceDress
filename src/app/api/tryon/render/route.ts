@@ -143,6 +143,7 @@ async function applyApparelPiece(opts: {
   garmentImage: string;
   piece: Piece;
   stripOuterwear?: boolean;
+  timeoutMs?: number;
 }): Promise<TryResult & { provider?: string; needsBilling?: boolean }> {
   const prompt = apparelPromptForPiece(opts.piece, {
     stripOuterwear: opts.stripOuterwear,
@@ -153,6 +154,7 @@ async function applyApparelPiece(opts: {
       modelImage: opts.modelImage,
       productImage: opts.garmentImage,
       prompt,
+      timeoutMs: opts.timeoutMs,
     });
     if (max.ok) return { ...max, provider: "fashn-tryon-max" };
     if (max.needsBilling) {
@@ -435,8 +437,9 @@ async function applyFinishPiece(opts: {
   personImage: string;
   productImage: string;
   piece: Piece;
+  timeoutMs?: number;
 }): Promise<TryResult & { provider?: string; needsBilling?: boolean }> {
-  const { falKey, personImage, productImage, piece } = opts;
+  const { falKey, personImage, productImage, piece, timeoutMs } = opts;
   // Premium default: FASHN Try-On Max understands feet and faces. Kontext is a
   // general image editor and pastes product sheets / rewrites heads — fallback only.
   // Set TRYON_FINISH_PROVIDER=kontext to cut cost at the expense of quality.
@@ -460,6 +463,7 @@ async function applyFinishPiece(opts: {
       modelImage: personImage,
       productImage: productImage || personImage,
       prompt: finishPromptForPiece(piece),
+      timeoutMs,
     });
     if (edited.ok && edited.url !== personImage) {
       return { ...edited, provider: "fashn-tryon-max" };
@@ -627,6 +631,12 @@ function orderFinishPieces(
 }
 
 export async function POST(req: NextRequest) {
+  // Premium models are slower. Finish work must stop with time to spare or the
+  // platform kills the function and the client receives an HTML error page.
+  const requestStart = Date.now();
+  const budgetMs = (maxDuration - 25) * 1000;
+  const msLeft = () => budgetMs - (Date.now() - requestStart);
+
   const body = await req.json();
   const garmentsPreview = Array.isArray(body.garments) ? body.garments : [];
   const auth = await requireTryOnAccess(req, {
@@ -776,6 +786,7 @@ export async function POST(req: NextRequest) {
           prompt: collageApparelPrompt(basePieces, {
             stripOuterwear: shouldStrip,
           }),
+          timeoutMs: Math.min(110_000, Math.max(20_000, msLeft() - 25_000)),
         });
 
         if (collageResult.ok) {
@@ -863,6 +874,7 @@ export async function POST(req: NextRequest) {
             garmentImage,
             piece: g,
             stripOuterwear: false,
+            timeoutMs: Math.min(90_000, Math.max(15_000, msLeft() - 20_000)),
           });
         }
       } else {
@@ -872,6 +884,7 @@ export async function POST(req: NextRequest) {
           garmentImage,
           piece: g,
           stripOuterwear: shouldStrip && g.category !== "outerwear",
+          timeoutMs: Math.min(90_000, Math.max(15_000, msLeft() - 20_000)),
         });
 
         // Outerwear only: if Max/fal failed and we still have fal, try Kontext layer
@@ -977,6 +990,10 @@ export async function POST(req: NextRequest) {
     ];
 
     const runOne = async (g: Piece) => {
+      if (msLeft() < 30_000) {
+        warnings.push(`Ran out of time for ${g.name || g.category}`);
+        return;
+      }
       let productImage = "";
       try {
         productImage = await resolveGarmentImageForFal(g.imageUrl);
@@ -994,6 +1011,7 @@ export async function POST(req: NextRequest) {
         personImage: current,
         productImage,
         piece: g,
+        timeoutMs: Math.min(80_000, Math.max(15_000, msLeft() - 20_000)),
       });
 
       if (!edited.ok) {
@@ -1045,7 +1063,7 @@ export async function POST(req: NextRequest) {
 
     // 2) Remaining extras together in one FAL Kontext collage
     let batchApplied = false;
-    if (batchable.length >= 1 && falKey) {
+    if (batchable.length >= 1 && falKey && msLeft() > 30_000) {
       try {
         const productImages = await Promise.all(
           batchable.map((g) => resolveGarmentImageForFal(g.imageUrl))
