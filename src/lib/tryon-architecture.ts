@@ -1,10 +1,10 @@
 /**
  * Virtual try-on architecture (VoiceDress)
  * ------------------------------------
- * 1. Apparel — top+bottom collage + outerwear in one client request (UI marks
- *    the whole look applying together). Jacket is layered after base clothes
- *    so suit product shots don’t rewrite trousers.
- * 2. Finish — shoes/watch/bag/glasses in one request; client locks trousers + face.
+ * 1. Apparel (FASHN) — one client request: top+bottom collage, then outerwear
+ *    layered in the same request so the whole outfit lands together.
+ * 2. Finish (FAL / Kontext) — one client request: shoes + bag + glasses + watch.
+ *    Server prefers one Kontext collage for non-watch extras; watches are text-only.
  */
 
 import { isHosieryOrSocks, isRealFootwear } from "@/lib/commerce";

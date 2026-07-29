@@ -959,7 +959,7 @@ export async function protectDressedLookAfterShoes(
  * Kontext sometimes pastes the shoe product sheet as a floating strip at the
  * bottom instead of putting shoes on the feet. Detect that and roll back.
  */
-async function shoeEditLooksLikeProductPaste(
+export async function shoeEditLooksLikeProductPaste(
   dressedSrc: string,
   shoeEditSrc: string
 ): Promise<boolean> {

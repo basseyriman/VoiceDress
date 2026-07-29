@@ -311,14 +311,23 @@ async function kontextAccessoriesBatch(opts: {
   const labels = opts.pieces
     .map((p) => `${p.name || p.category}${(p.colors || []).length ? ` (${p.colors!.join(", ")})` : ""}`)
     .join("; ");
+  const hasShoes = opts.pieces.some((p) => p.category === "shoes");
+  const hasEyewear = opts.pieces.some(isEyewear);
   const prompt = [
     KEEP_YOU,
     KEEP_FRAMING,
-    `Image 2 is a collage of accessories. Add ALL of them onto the person: ${labels}.`,
-    "Match each product’s exact colors and shapes. Thin realistic glasses frames if present — never invent neon lenses.",
-    "Small natural watch size if a watch is in the collage.",
-    "Do NOT change trousers, jacket, shirt, or shoe colors. Keep face photoreal — no cartoon skin.",
-  ].join(" ");
+    `Image 2 shows the accessories to wear. Add ALL of them onto the person: ${labels}.`,
+    hasShoes
+      ? "Put shoes ON both feet in a natural standing pose — never paste a product strip or collage inset at the bottom of the frame."
+      : "",
+    hasEyewear
+      ? "Place thin realistic glasses frames on the existing face — never invent neon lenses or wipe/regenerate the head."
+      : "",
+    "Match each product’s exact colors and shapes.",
+    "Do NOT change trousers, jacket, or shirt colors. Keep face photoreal — no cartoon skin. Full-body crop with head and feet visible.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const res = await fetch("https://fal.run/fal-ai/flux-pro/kontext/multi", {
     method: "POST",
@@ -955,8 +964,14 @@ export async function POST(req: NextRequest) {
     const otherAccessories = otherFinish.filter(
       (g) => !isWatch(g) && !isEyewear(g) && g.category !== "bag"
     );
-    // Batch bags + small accessories only — never mix eyewear into a collage with junk
-    const batchable = [...bagPieces, ...otherAccessories];
+    // Prefer one FAL/Kontext pass for shoes + bag + glasses + small accessories.
+    // Watches stay text-only (product collage often blobs the dial).
+    const batchable = [
+      ...shoePieces,
+      ...bagPieces,
+      ...otherAccessories,
+      ...eyewearPieces,
+    ];
 
     const runOne = async (g: Piece) => {
       let productImage = "";
@@ -1017,19 +1032,17 @@ export async function POST(req: NextRequest) {
       });
     };
 
-    // 1) Shoes first (feet region) — real footwear only
-    for (const g of shoePieces) {
-      const billed = await runOne(g);
-      if (billed instanceof NextResponse) return billed;
-    }
-
-    // 2) Bags / small accessories (optional collage)
-    if (batchable.length >= 2 && falKey) {
+    // 1) All non-watch extras in one FAL Kontext collage when possible
+    let batchApplied = false;
+    if (batchable.length >= 1 && falKey) {
       try {
         const productImages = await Promise.all(
           batchable.map((g) => resolveGarmentImageForFal(g.imageUrl))
         );
-        const collage = await composeApparelCollage(productImages);
+        const collage =
+          batchable.length === 1
+            ? productImages[0]
+            : await composeApparelCollage(productImages);
         const batched = await kontextAccessoriesBatch({
           falKey,
           personImage: current,
@@ -1038,6 +1051,7 @@ export async function POST(req: NextRequest) {
         });
         if (batched.ok) {
           current = batched.url;
+          batchApplied = true;
           for (const g of batchable) {
             steps.push({
               id: g.id,
@@ -1065,10 +1079,6 @@ export async function POST(req: NextRequest) {
               batched.detail ? `: ${batched.detail.slice(0, 120)}` : ""
             }`
           );
-          for (const g of batchable) {
-            const billed = await runOne(g);
-            if (billed instanceof NextResponse) return billed;
-          }
         }
       } catch (err) {
         warnings.push(
@@ -1076,25 +1086,26 @@ export async function POST(req: NextRequest) {
             err instanceof Error ? err.message.slice(0, 120) : "unknown"
           }`
         );
-        for (const g of batchable) {
-          const billed = await runOne(g);
-          if (billed instanceof NextResponse) return billed;
-        }
       }
-    } else {
-      for (const g of batchable) {
+    }
+
+    // Fallback: apply one-by-one (shoes → bags → glasses) if batch missed
+    if (!batchApplied) {
+      for (const g of shoePieces) {
+        const billed = await runOne(g);
+        if (billed instanceof NextResponse) return billed;
+      }
+      for (const g of [...bagPieces, ...otherAccessories]) {
+        const billed = await runOne(g);
+        if (billed instanceof NextResponse) return billed;
+      }
+      for (const g of eyewearPieces) {
         const billed = await runOne(g);
         if (billed instanceof NextResponse) return billed;
       }
     }
 
-    // 3) Glasses alone — dedicated pass so they aren’t lost in a collage
-    for (const g of eyewearPieces) {
-      const billed = await runOne(g);
-      if (billed instanceof NextResponse) return billed;
-    }
-
-    // 4) Watch text-only last (fast; doesn’t need product image)
+    // 2) Watch text-only (fast; doesn’t need product image)
     for (const g of watchPieces) {
       const billed = await runOne(g);
       if (billed instanceof NextResponse) return billed;

@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, protectDressedLookAfterShoes, verifyApparelLook, hasTryOnArtifacts, faceRegionBlown, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, protectDressedLookAfterShoes, hardFeetComposite, shoeEditLooksLikeProductPaste, verifyApparelLook, hasTryOnArtifacts, faceRegionBlown, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
 import { isRealFootwear } from "@/lib/commerce";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
@@ -928,33 +928,25 @@ export function OutfitStage({
           }
         }
 
-        // 2) Shoes first (protect clothes above ankles), then accessories —
-        //    never one mega-pass that pastes floating product sheets + wipes faces.
-        const shoeQueue = finishQueue.filter((p) => isRealFootwear(p));
-        const accessoryQueue = finishQueue.filter((p) => !isRealFootwear(p));
-        const lookHasDress = lookPieces.some((g) => g.category === "dress");
+        // 2) All finish extras in ONE FAL request (shoes + bag + glasses + watch)
+        if (finishQueue.length) {
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
 
-        const runFinishBatch = async (
-          queue: typeof finishQueue,
-          label: string,
-          mode: "shoes" | "accessories"
-        ): Promise<"ok" | "abort"> => {
-          if (!queue.length) return "ok";
-          if (cancelled || myId !== requestId.current || ac.signal.aborted)
-            return "abort";
-
-          setActivePieceId(queue[0]?.id || null);
-          setApplyingPieceIds(queue.map((p) => p.id));
+          setActivePieceId(finishQueue[0]?.id || null);
+          setApplyingPieceIds(finishQueue.map((p) => p.id));
           setStepLabel(
-            queue.length > 1
-              ? `${label} ${queue.map((p) => p.name).join(" + ")}…`
-              : `${label} ${queue[0].name}…`
+            finishQueue.length > 1
+              ? `Adding ${finishQueue.map((p) => p.name).join(" + ")}…`
+              : `Adding ${finishQueue[0].name}…`
           );
           setDonePieceIds((ids) =>
-            ids.filter((id) => !queue.some((p) => p.id === id))
+            ids.filter((id) => !finishQueue.some((p) => p.id === id))
           );
+          setProgress(62);
 
           const beforeFinish = current;
+          const finishHadShoes = finishQueue.some((p) => isRealFootwear(p));
+          const lookHasDress = lookPieces.some((g) => g.category === "dress");
           const finishRes = await authFetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -962,15 +954,14 @@ export function OutfitStage({
             body: JSON.stringify({
               personImage: current,
               stage: "finish",
-              includeFaceAccessories: mode === "accessories",
-              maxPieces: queue.length,
-              garments: queue.map(toPayload),
+              includeFaceAccessories: true,
+              maxPieces: finishQueue.length,
+              garments: finishQueue.map(toPayload),
             }),
           });
           const finishData = await finishRes.json();
-          if (cancelled || myId !== requestId.current || ac.signal.aborted)
-            return "abort";
-          if (failOrBilling(finishData, finishRes.status)) return "abort";
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+          if (failOrBilling(finishData, finishRes.status)) return;
 
           if (
             finishData.ok &&
@@ -989,40 +980,45 @@ export function OutfitStage({
               current = finishData.imageUrl;
             }
 
-            if (mode === "shoes") {
+            // Keep trousers from the dressed clothes frame, but leave feet +
+            // torso/face from the finish result so shoes/glasses can stay.
+            try {
+              current = await preserveLowerBodyFromBase(
+                beforeFinish,
+                current,
+                { yStart: 0.46, yEnd: finishHadShoes ? 0.72 : 0.78 }
+              );
+            } catch {
+              // keep color-stabilized frame
+            }
+
+            if (finishHadShoes) {
               try {
-                const protectedLook = await protectDressedLookAfterShoes(
-                  beforeFinish,
-                  current,
-                  { hasDress: lookHasDress }
-                );
-                current = protectedLook.url;
-                shoesRolledBack = protectedLook.rolledBack;
+                // Floating product strip → restore original feet, keep glasses/torso
+                if (
+                  await shoeEditLooksLikeProductPaste(
+                    beforeFinish,
+                    finishData.imageUrl
+                  )
+                ) {
+                  current = await hardFeetComposite(
+                    current,
+                    beforeFinish,
+                    lookHasDress ? 0.8 : 0.83
+                  );
+                  shoesRolledBack = true;
+                }
               } catch {
-                current = beforeFinish;
-                shoesRolledBack = true;
-              }
-            } else {
-              try {
-                // Keep trousers; leave more ankle room than the old 0.86 cut
-                // so accessory edits don't restore original boots into the frame.
-                current = await preserveLowerBodyFromBase(
-                  beforeFinish,
-                  current,
-                  { yEnd: 0.78 }
-                );
-              } catch {
-                // keep color-stabilized frame
+                // keep trousers-preserved frame
               }
             }
 
-            const hasEyewear = queue.some((p) => isEyewearPiece(p));
+            const hasEyewear = finishQueue.some((p) => isEyewearPiece(p));
             try {
               if (hasEyewear && (await faceRegionBlown(current))) {
-                // Glasses pass wiped the head — keep dressed face, mark glasses missing
                 current = await lockFaceIdentity(
                   identityPhoto,
-                  beforeFinish,
+                  current,
                   "strong"
                 );
                 eyewearRolledBack = true;
@@ -1038,6 +1034,16 @@ export function OutfitStage({
                     beforeFinish,
                     "strong"
                   );
+                  // Re-apply trousers/feet from the pre-glasses-safe frame
+                  try {
+                    current = await preserveLowerBodyFromBase(
+                      beforeFinish,
+                      current,
+                      { yStart: 0.46, yEnd: finishHadShoes ? 0.72 : 0.78 }
+                    );
+                  } catch {
+                    // keep
+                  }
                   eyewearRolledBack = true;
                 }
               }
@@ -1045,8 +1051,7 @@ export function OutfitStage({
               // keep stabilized frame
             }
 
-            if (cancelled || myId !== requestId.current || ac.signal.aborted)
-              return "abort";
+            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
             setWornUrl(current);
             setKeyConfigured(true);
             setApplyingPieceIds([]);
@@ -1061,7 +1066,7 @@ export function OutfitStage({
                 .map((s: { name?: string }) => s.name)
                 .filter(Boolean) as string[]
             );
-            for (const piece of queue) {
+            for (const piece of finishQueue) {
               const shoeFailed = shoesRolledBack && isRealFootwear(piece);
               const eyeFailed = eyewearRolledBack && isEyewearPiece(piece);
               const landed =
@@ -1084,26 +1089,12 @@ export function OutfitStage({
             }
           } else {
             setApplyingPieceIds([]);
-            for (const piece of queue) {
+            for (const piece of finishQueue) {
               setMissingIds((ids) =>
                 ids.includes(piece.id) ? ids : [...ids, piece.id]
               );
             }
           }
-          return "ok";
-        };
-
-        if (finishQueue.length) {
-          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-          setProgress(62);
-          if ((await runFinishBatch(shoeQueue, "Adding", "shoes")) === "abort")
-            return;
-          setProgress(78);
-          if (
-            (await runFinishBatch(accessoryQueue, "Adding", "accessories")) ===
-            "abort"
-          )
-            return;
         }
 
         // Polish clothes/body first, then restore YOUR face last (never polish the face)
