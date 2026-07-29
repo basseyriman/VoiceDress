@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, protectDressedLookAfterShoes, hardFeetComposite, shoeEditLooksLikeProductPaste, verifyApparelLook, hasTryOnArtifacts, faceRegionBlown, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, verifyApparelLook, hasTryOnArtifacts, faceRegionBlown, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
 import { isRealFootwear } from "@/lib/commerce";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
@@ -515,32 +515,12 @@ export function OutfitStage({
             try {
               const before = current;
               current = await stabilizeTryOnColors(before, finishData.imageUrl);
-              if (piece.category === "shoes" || isRealFootwear(piece)) {
-                const protectedLook = await protectDressedLookAfterShoes(
-                  before,
-                  current,
-                  {
-                    hasDress: lookPieces.some((g) => g.category === "dress"),
-                  }
-                );
-                current = protectedLook.url;
-                if (protectedLook.rolledBack) {
-                  setMissingIds((ids) =>
-                    ids.includes(piece.id) ? ids : [...ids, piece.id]
-                  );
-                }
-              } else {
-                current = await preserveLowerBodyFromBase(before, current, {
-                  yEnd: 0.78,
-                });
-              }
-              const softFace = isEyewearPiece(piece);
               current = await lockFaceIdentity(
                 identityPhoto,
                 current,
-                softFace ? "soft" : "strong"
+                isEyewearPiece(piece) ? "soft" : "strong"
               );
-              if (softFace && (await faceRegionBlown(current))) {
+              if (await faceRegionBlown(current)) {
                 current = await lockFaceIdentity(
                   identityPhoto,
                   before,
@@ -557,11 +537,10 @@ export function OutfitStage({
               return;
             try {
               current = await polishTryOnResult(current);
-              const softFace = isEyewearPiece(piece);
               current = await lockFaceIdentity(
                 identityPhoto,
                 current,
-                softFace ? "soft" : "strong"
+                isEyewearPiece(piece) ? "soft" : "strong"
               );
             } catch {
               // keep
@@ -946,7 +925,6 @@ export function OutfitStage({
 
           const beforeFinish = current;
           const finishHadShoes = finishQueue.some((p) => isRealFootwear(p));
-          const lookHasDress = lookPieces.some((g) => g.category === "dress");
           const finishRes = await authFetch("/api/tryon/render", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -980,72 +958,23 @@ export function OutfitStage({
               current = finishData.imageUrl;
             }
 
-            // Keep trousers from the dressed clothes frame, but leave feet +
-            // torso/face from the finish result so shoes/glasses can stay.
-            try {
-              current = await preserveLowerBodyFromBase(
-                beforeFinish,
-                current,
-                { yStart: 0.46, yEnd: finishHadShoes ? 0.72 : 0.78 }
-              );
-            } catch {
-              // keep color-stabilized frame
-            }
-
-            if (finishHadShoes) {
-              try {
-                // Floating product strip → restore original feet, keep glasses/torso
-                if (
-                  await shoeEditLooksLikeProductPaste(
-                    beforeFinish,
-                    finishData.imageUrl
-                  )
-                ) {
-                  current = await hardFeetComposite(
-                    current,
-                    beforeFinish,
-                    lookHasDress ? 0.8 : 0.83
-                  );
-                  shoesRolledBack = true;
-                }
-              } catch {
-                // keep trousers-preserved frame
-              }
-            }
-
             const hasEyewear = finishQueue.some((p) => isEyewearPiece(p));
             try {
-              if (hasEyewear && (await faceRegionBlown(current))) {
+              current = await lockFaceIdentity(
+                identityPhoto,
+                current,
+                hasEyewear ? "soft" : "strong"
+              );
+              // A wiped/blown head means the edit lost the person — take the
+              // dressed frame back rather than shipping a faceless photo.
+              if (await faceRegionBlown(current)) {
                 current = await lockFaceIdentity(
                   identityPhoto,
-                  current,
+                  beforeFinish,
                   "strong"
                 );
-                eyewearRolledBack = true;
-              } else {
-                current = await lockFaceIdentity(
-                  identityPhoto,
-                  current,
-                  hasEyewear ? "soft" : "strong"
-                );
-                if (hasEyewear && (await faceRegionBlown(current))) {
-                  current = await lockFaceIdentity(
-                    identityPhoto,
-                    beforeFinish,
-                    "strong"
-                  );
-                  // Re-apply trousers/feet from the pre-glasses-safe frame
-                  try {
-                    current = await preserveLowerBodyFromBase(
-                      beforeFinish,
-                      current,
-                      { yStart: 0.46, yEnd: finishHadShoes ? 0.72 : 0.78 }
-                    );
-                  } catch {
-                    // keep
-                  }
-                  eyewearRolledBack = true;
-                }
+                eyewearRolledBack = hasEyewear;
+                shoesRolledBack = finishHadShoes;
               }
             } catch {
               // keep stabilized frame

@@ -437,10 +437,12 @@ async function applyFinishPiece(opts: {
   piece: Piece;
 }): Promise<TryResult & { provider?: string; needsBilling?: boolean }> {
   const { falKey, personImage, productImage, piece } = opts;
-  // Cost model: clothes on FASHN; finish (shoes/watch/bag/glasses) on Kontext.
-  // Override with TRYON_FINISH_PROVIDER=fashn or openai only if you accept the bill.
+  // Premium default: FASHN Try-On Max understands feet and faces. Kontext is a
+  // general image editor and pastes product sheets / rewrites heads — fallback only.
+  // Set TRYON_FINISH_PROVIDER=kontext to cut cost at the expense of quality.
   const prefer =
-    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() || "kontext";
+    process.env.TRYON_FINISH_PROVIDER?.trim().toLowerCase() ||
+    (hasFashnApiKey() ? "fashn" : "kontext");
 
   const tryFashnMax = async (): Promise<
     (TryResult & { provider?: string; needsBilling?: boolean }) | null
@@ -553,6 +555,17 @@ async function applyFinishPiece(opts: {
     return edited;
   };
 
+  // Eyewear: Kontext with a product image matches frames better than Max
+  // (Max often invents neon/lime lenses and cartoonizes the face).
+  if (isEyewear(piece) && falKey && productImage) {
+    const eye = await tryKontext();
+    if (eye.ok) return eye;
+    const maxResult = await tryFashnMax();
+    if (maxResult?.ok) return maxResult;
+    if (maxResult?.needsBilling) return maxResult;
+    return eye;
+  }
+
   if (prefer === "fashn" || prefer === "fashn-max" || prefer === "tryon-max") {
     const maxResult = await tryFashnMax();
     if (maxResult?.ok) return maxResult;
@@ -576,19 +589,6 @@ async function applyFinishPiece(opts: {
       );
     }
     return tryKontext();
-  }
-
-  // Shoes: OpenAI first when available — Kontext often pastes the product sheet
-  // as a floating strip at the bottom instead of re-footing the person.
-  if (piece.category === "shoes" && prefer === "kontext") {
-    const openaiShoes = await tryOpenAI();
-    if (openaiShoes?.ok) return openaiShoes;
-    if (openaiShoes && !openaiShoes.ok) {
-      console.warn(
-        `[tryon] OpenAI shoes failed for ${piece.name || "shoes"}, trying Kontext:`,
-        openaiShoes.detail?.slice(0, 200)
-      );
-    }
   }
 
   return tryKontext();
@@ -964,10 +964,13 @@ export async function POST(req: NextRequest) {
     const otherAccessories = otherFinish.filter(
       (g) => !isWatch(g) && !isEyewear(g) && g.category !== "bag"
     );
-    // Prefer one FAL/Kontext pass for shoes + bag + glasses + small accessories.
-    // Watches stay text-only (product collage often blobs the dial).
+    // One FAL/Kontext collage covers bags, glasses and small extras.
+    // Shoes go through FASHN Try-On Max when available — a collage edit tends to
+    // paste the shoe product sheet at the bottom instead of re-footing the person.
+    // Watches stay text-only (product collage blobs the dial).
+    const premiumFinish = hasFashnApiKey();
     const batchable = [
-      ...shoePieces,
+      ...(premiumFinish ? [] : shoePieces),
       ...bagPieces,
       ...otherAccessories,
       ...eyewearPieces,
@@ -1032,7 +1035,15 @@ export async function POST(req: NextRequest) {
       });
     };
 
-    // 1) All non-watch extras in one FAL Kontext collage when possible
+    // 1) Shoes on the premium try-on model (feet region)
+    if (premiumFinish) {
+      for (const g of shoePieces) {
+        const billed = await runOne(g);
+        if (billed instanceof NextResponse) return billed;
+      }
+    }
+
+    // 2) Remaining extras together in one FAL Kontext collage
     let batchApplied = false;
     if (batchable.length >= 1 && falKey) {
       try {
@@ -1089,23 +1100,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fallback: apply one-by-one (shoes → bags → glasses) if batch missed
+    // Fallback: apply the collage pieces one-by-one if the batch missed
     if (!batchApplied) {
-      for (const g of shoePieces) {
-        const billed = await runOne(g);
-        if (billed instanceof NextResponse) return billed;
-      }
-      for (const g of [...bagPieces, ...otherAccessories]) {
-        const billed = await runOne(g);
-        if (billed instanceof NextResponse) return billed;
-      }
-      for (const g of eyewearPieces) {
+      for (const g of batchable) {
         const billed = await runOne(g);
         if (billed instanceof NextResponse) return billed;
       }
     }
 
-    // 2) Watch text-only (fast; doesn’t need product image)
+    // 3) Watch text-only (fast; doesn’t need product image)
     for (const g of watchPieces) {
       const billed = await runOne(g);
       if (billed instanceof NextResponse) return billed;
@@ -1196,9 +1199,11 @@ export async function GET() {
     fashnMax: hasFashnApiKey(),
     falFallback: Boolean(process.env.FAL_KEY?.trim()),
     openaiImage: hasOpenAIImageKey(),
-    finishProvider: process.env.TRYON_FINISH_PROVIDER?.trim() || "kontext",
+    finishProvider:
+      process.env.TRYON_FINISH_PROVIDER?.trim() ||
+      (hasFashnApiKey() ? "fashn" : "kontext"),
     provider: hasFashnApiKey()
-      ? "fashn tryon-max (clothes); kontext finish"
+      ? "fashn tryon-max (clothes + shoes); kontext accessory batch"
       : "fal-fashn v1.6 fallback",
   });
 }
