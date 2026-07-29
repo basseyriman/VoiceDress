@@ -197,6 +197,188 @@ export async function polishTryOnResult(src: string): Promise<string> {
  * - strong: full head (face + hairline + ears), stops above the collar
  * - soft: real skin/hair with a narrow eye band open so glasses frames can remain
  */
+/** Padding colour painted by letterboxForTryOn around the uploaded photo. */
+const LETTERBOX_PAD = { r: 14, g: 14, b: 13 };
+
+/**
+ * Where the uploaded photo actually sits inside its letterboxed frame.
+ * A 3:4 upload gets ~12% padding top and bottom, so canvas-relative face
+ * constants miss the head entirely.
+ */
+function letterboxContentBox(px: ImageData, w: number, h: number) {
+  const isPad = (x: number, y: number) => {
+    const i = (y * w + x) * 4;
+    return (
+      Math.abs(px.data[i] - LETTERBOX_PAD.r) < 14 &&
+      Math.abs(px.data[i + 1] - LETTERBOX_PAD.g) < 14 &&
+      Math.abs(px.data[i + 2] - LETTERBOX_PAD.b) < 14
+    );
+  };
+  const rowIsPad = (y: number) => {
+    let pad = 0;
+    let n = 0;
+    for (let x = 0; x < w; x += 3) {
+      n++;
+      if (isPad(x, y)) pad++;
+    }
+    return n > 0 && pad / n > 0.96;
+  };
+  const colIsPad = (x: number) => {
+    let pad = 0;
+    let n = 0;
+    for (let y = 0; y < h; y += 3) {
+      n++;
+      if (isPad(x, y)) pad++;
+    }
+    return n > 0 && pad / n > 0.96;
+  };
+
+  let y0 = 0;
+  while (y0 < h * 0.4 && rowIsPad(y0)) y0++;
+  let y1 = h - 1;
+  while (y1 > h * 0.6 && rowIsPad(y1)) y1--;
+  let x0 = 0;
+  while (x0 < w * 0.4 && colIsPad(x0)) x0++;
+  let x1 = w - 1;
+  while (x1 > w * 0.6 && colIsPad(x1)) x1--;
+
+  if (y1 - y0 < h * 0.4 || x1 - x0 < w * 0.4) {
+    return { x0: 0, y0: 0, x1: w - 1, y1: h - 1 };
+  }
+  return { x0, y0, x1, y1 };
+}
+
+/**
+ * Top of the head: first sustained brightness break below the background strip
+ * at the top of the photo. Returns null when nothing separates cleanly.
+ */
+function estimateHeadTop(
+  px: ImageData,
+  w: number,
+  box: { x0: number; y0: number; x1: number; y1: number }
+): number | null {
+  const bw = box.x1 - box.x0;
+  const bh = box.y1 - box.y0;
+  if (bw < 32 || bh < 32) return null;
+
+  const xa = Math.floor(box.x0 + bw * 0.3);
+  const xb = Math.floor(box.x0 + bw * 0.7);
+  const rowMean = (y: number) => {
+    let sum = 0;
+    let n = 0;
+    for (let x = xa; x < xb; x += 2) {
+      const i = (y * w + x) * 4;
+      sum +=
+        0.2126 * px.data[i] + 0.7152 * px.data[i + 1] + 0.0722 * px.data[i + 2];
+      n++;
+    }
+    return n ? sum / n : 0;
+  };
+
+  const bgRows = Math.max(2, Math.floor(bh * 0.05));
+  const scanEnd = Math.floor(box.y0 + bh * 0.5);
+  const strip: number[] = [];
+  for (let y = box.y0; y < box.y0 + bgRows; y++) strip.push(rowMean(y));
+  const bg = strip.reduce((a, b) => a + b, 0) / strip.length;
+  // If the top strip is already busy the subject starts at the frame edge —
+  // there is no background to measure against, so don't guess.
+  if (strip.some((v) => Math.abs(v - bg) > 14)) return null;
+
+  const need = Math.max(3, Math.floor(bh * 0.015));
+  let run = 0;
+  for (let y = box.y0 + bgRows; y < scanEnd; y++) {
+    if (Math.abs(rowMean(y) - bg) > 26) {
+      run++;
+      if (run >= need) return y - run + 1;
+    } else {
+      run = 0;
+    }
+  }
+  return null;
+}
+
+/**
+ * Face oval placement in dressed-canvas coordinates. Proportions match the
+ * previously hand-tuned values, but measured against the photo box (and the
+ * detected head) instead of the padded canvas.
+ */
+function locateHeadInIdentity(
+  identity: HTMLImageElement,
+  opts: {
+    dx: number;
+    dy: number;
+    dw: number;
+    dh: number;
+    strength: "strong" | "soft";
+  }
+) {
+  const { dx, dy, dw, dh, strength } = opts;
+  const cyRel = strength === "strong" ? 0.08 : 0.078;
+  const rxRel = strength === "strong" ? 0.394 : 0.348;
+  const ryRel = strength === "strong" ? 0.232 : 0.203;
+  const maxYRel = strength === "strong" ? 0.338 : 0.291;
+
+  // Fallback: whole drawn image is the photo box, head near the top.
+  let box = { x0: 0, y0: 0, x1: identity.width - 1, y1: identity.height - 1 };
+  let headTopRel: number | null = null;
+
+  try {
+    const sw = Math.min(identity.width, 320);
+    const sh = Math.max(
+      1,
+      Math.round((identity.height / identity.width) * sw)
+    );
+    const c = document.createElement("canvas");
+    c.width = sw;
+    c.height = sh;
+    const cctx = c.getContext("2d");
+    if (cctx) {
+      cctx.drawImage(identity, 0, 0, sw, sh);
+      const px = cctx.getImageData(0, 0, sw, sh);
+      const small = letterboxContentBox(px, sw, sh);
+      box = {
+        x0: (small.x0 / sw) * identity.width,
+        y0: (small.y0 / sh) * identity.height,
+        x1: (small.x1 / sw) * identity.width,
+        y1: (small.y1 / sh) * identity.height,
+      };
+      const top = estimateHeadTop(px, sw, small);
+      if (top != null) {
+        const bh = small.y1 - small.y0;
+        if (bh > 0) headTopRel = (top - small.y0) / bh;
+      }
+    }
+  } catch {
+    // keep fallback box
+  }
+
+  const toX = (ix: number) => dx + (ix / identity.width) * dw;
+  const toY = (iy: number) => dy + (iy / identity.height) * dh;
+
+  const boxX0 = toX(box.x0);
+  const boxX1 = toX(box.x1);
+  const boxY0 = toY(box.y0);
+  const boxY1 = toY(box.y1);
+  const boxW = Math.max(1, boxX1 - boxX0);
+  const boxH = Math.max(1, boxY1 - boxY0);
+
+  // Shift down when the subject does not start at the top of the photo
+  // (hallway ceiling, wide shots). Clamped so a bad read can't fling the oval.
+  let shift = 0;
+  if (headTopRel != null) {
+    const assumedTopRel = cyRel - 0.05;
+    shift = Math.min(0.22, Math.max(0, headTopRel - assumedTopRel));
+  }
+
+  return {
+    cx: boxX0 + boxW * 0.5,
+    cy: boxY0 + boxH * (cyRel + shift),
+    rx: boxW * rxRel,
+    ry: boxH * ryRel,
+    maxY: boxY0 + boxH * (maxYRel + shift),
+  };
+}
+
 export async function lockFaceIdentity(
   identitySrc: string,
   dressedSrc: string,
@@ -218,14 +400,6 @@ export async function lockFaceIdentity(
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(dressed, 0, 0, w, h);
-
-  // Full-body 2:3: head sits in the upper band. Oversized oval so AI skin/hair loses.
-  const cx = w * 0.5;
-  const cy = strength === "strong" ? h * 0.138 : h * 0.136;
-  const rx = strength === "strong" ? w * 0.34 : w * 0.3;
-  const ry = strength === "strong" ? h * 0.2 : h * 0.175;
-  // Never paste below the collar into the shirt
-  const maxY = h * (strength === "strong" ? 0.36 : 0.32);
 
   const faceLayer = document.createElement("canvas");
   faceLayer.width = w;
@@ -254,6 +428,23 @@ export async function lockFaceIdentity(
   }
   fctx.drawImage(identity, dx, dy, dw, dh);
 
+  // The head sits inside the letterboxed photo, not the padded canvas. Anchor
+  // to the real photo box (and the detected head) or a 3:4 upload pastes the
+  // face several percent of frame height above the actual face.
+  const head = locateHeadInIdentity(identity, {
+    dx,
+    dy,
+    dw,
+    dh,
+    strength,
+  });
+  const cx = head.cx;
+  const cy = head.cy;
+  const rx = head.rx;
+  const ry = head.ry;
+  // Never paste below the collar into the shirt
+  const maxY = head.maxY;
+
   const mask = document.createElement("canvas");
   mask.width = w;
   mask.height = h;
@@ -273,18 +464,18 @@ export async function lockFaceIdentity(
   mctx.fill();
 
   // Soft: leave a real eye/frame band so glasses survive identity restore.
-  // (Too-narrow slits bury frames completely.)
+  // Tied to the located head — a fixed slit lands on the forehead and buries frames.
   if (strength === "soft") {
     mctx.globalCompositeOperation = "destination-out";
-    const eyeY = h * 0.1;
-    const eyeH = h * 0.055;
+    const eyeH = ry * 0.42;
+    const eyeY = cy - eyeH * 0.5;
     const eyeGrad = mctx.createLinearGradient(0, eyeY, 0, eyeY + eyeH);
     eyeGrad.addColorStop(0, "rgba(0,0,0,0)");
     eyeGrad.addColorStop(0.2, "rgba(0,0,0,0.72)");
     eyeGrad.addColorStop(0.8, "rgba(0,0,0,0.72)");
     eyeGrad.addColorStop(1, "rgba(0,0,0,0)");
     mctx.fillStyle = eyeGrad;
-    mctx.fillRect(w * 0.28, eyeY, w * 0.44, eyeH);
+    mctx.fillRect(cx - rx * 0.66, eyeY, rx * 1.32, eyeH);
     mctx.globalCompositeOperation = "source-over";
   }
 
@@ -773,8 +964,15 @@ export async function faceRegionBlown(src: string): Promise<boolean> {
 
 /**
  * Detect black blotches / glitch patches common in failed outerwear composites.
+ *
+ * Black clothing is not a glitch: leather, wool and denim keep folds, sheen and
+ * sensor noise. A dead patch is near-pure black AND flat, so texture is what
+ * separates a real black jacket from a hole in the render.
  */
-export async function hasTryOnArtifacts(src: string): Promise<boolean> {
+export async function hasTryOnArtifacts(
+  src: string,
+  opts?: { expectDark?: boolean }
+): Promise<boolean> {
   try {
     const img = await loadHtmlImage(src);
     const canvas = document.createElement("canvas");
@@ -790,23 +988,57 @@ export async function hasTryOnArtifacts(src: string): Promise<boolean> {
     const y1 = Math.floor(h * 0.75);
     const x0 = Math.floor(w * 0.12);
     const x1 = Math.floor(w * 0.88);
-    let dark = 0;
+
+    const lumAt = (x: number, y: number) => {
+      const i = (y * w + x) * 4;
+      return 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+    };
+
+    const step = 4;
+    let flatBlack = 0;
     let total = 0;
     for (let y = y0; y < y1; y += 2) {
       for (let x = x0; x < x1; x += 2) {
-        const i = (y * w + x) * 4;
-        const lum =
-          0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
         total++;
-        if (lum < 18) dark++;
+        if (lumAt(x, y) > 12) continue;
+        // Flat means neighbours are equally dead — fabric always varies
+        let spread = 0;
+        for (const [ox, oy] of [
+          [step, 0],
+          [-step, 0],
+          [0, step],
+          [0, -step],
+        ]) {
+          const nx = Math.min(w - 1, Math.max(0, x + ox));
+          const ny = Math.min(h - 1, Math.max(0, y + oy));
+          spread = Math.max(spread, Math.abs(lumAt(nx, ny) - lumAt(x, y)));
+        }
+        if (spread < 6) flatBlack++;
       }
     }
     if (!total) return false;
-    // >7% near-black in the clothed torso/arms is usually a glitch, not fashion
-    return dark / total > 0.07;
+    const limit = opts?.expectDark ? 0.35 : 0.18;
+    return flatBlack / total > limit;
   } catch {
     return false;
   }
+}
+
+/** True when the piece is described as a dark colour (black leather, navy wool…). */
+export function pieceReadsDark(piece: {
+  colors?: string[];
+  hexColors?: string[];
+  name?: string;
+}): boolean {
+  const blob = `${(piece.colors || []).join(" ")} ${piece.name || ""}`.toLowerCase();
+  if (/black|charcoal|graphite|onyx|jet|navy|midnight|ink|espresso/.test(blob)) {
+    return true;
+  }
+  return (piece.hexColors || []).some((hex) => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return false;
+    return 0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b < 70;
+  });
 }
 
 /**

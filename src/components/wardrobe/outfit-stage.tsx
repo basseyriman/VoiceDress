@@ -12,7 +12,7 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, verifyApparelLook, hasTryOnArtifacts, faceRegionBlown, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, verifyApparelLook, hasTryOnArtifacts, pieceReadsDark, faceRegionBlown, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
 import { isRealFootwear } from "@/lib/commerce";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
@@ -405,7 +405,11 @@ export function OutfitStage({
             let dressedUrl = apparelData.imageUrl as string;
             if (piece.category === "outerwear") {
               try {
-                if (!(await hasTryOnArtifacts(apparelData.imageUrl))) {
+                if (
+                  !(await hasTryOnArtifacts(apparelData.imageUrl, {
+                    expectDark: pieceReadsDark(piece),
+                  }))
+                ) {
                   dressedUrl = await preserveLowerBodyFromBase(
                     baseWorn,
                     apparelData.imageUrl,
@@ -704,13 +708,16 @@ export function OutfitStage({
                 ? apparelData.apparelBaseUrl
                 : apparelBaseBeforeOuter;
 
+            // An all-black look is legitimately dark — don't read it as a glitch
+            const lookReadsDark = allApparel.some(pieceReadsDark);
+
             if (outerPiece) {
               setStepLabel("Keeping your trousers…");
               const outerResult = dressedUrl;
               try {
                 // Prefer clean full outerwear + trousers restore. Color-mask
                 // layering often drops beige blazers and paints brown smudges.
-                if (!(await hasTryOnArtifacts(outerResult))) {
+                if (!(await hasTryOnArtifacts(outerResult, { expectDark: lookReadsDark }))) {
                   dressedUrl = await preserveLowerBodyFromBase(
                     trustedBase,
                     outerResult,
@@ -736,7 +743,7 @@ export function OutfitStage({
               }
             }
 
-            if (await hasTryOnArtifacts(dressedUrl)) {
+            if (await hasTryOnArtifacts(dressedUrl, { expectDark: lookReadsDark })) {
               if (outerPiece && trustedBase !== apparelBaseBeforeOuter) {
                 setNotice(
                   `${outerPiece.name || "Coat"} came out glitched — left it off.`
