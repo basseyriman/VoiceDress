@@ -118,12 +118,22 @@ export function apparelPromptForPiece(
       .join(" ");
   }
   if (piece.category === "bottom") {
+    const suitTrousers =
+      /suit_trousers|suit_set|derived_from_suit/i.test(name) ||
+      /suit\s*trousers/i.test(piece.name || "");
     return [
       KEEP_FACE,
-      `Wear these exact bottoms (trousers, skirt, or shorts): ${piece.name || "garment"}.`,
+      suitTrousers
+        ? `Wear ONLY the trousers from this suit product photo: ${piece.name || "suit trousers"}. Ignore the jacket in the product image — apply trousers only.`
+        : `Wear these exact bottoms (trousers, skirt, or shorts): ${piece.name || "garment"}.`,
       colors ? `Exact color: ${colors}.` : "Keep the exact product color.",
       "Replace the current lower clothing. Keep the top already on the person.",
-    ].join(" ");
+      suitTrousers
+        ? "Do not add the matching jacket from the product — trousers only."
+        : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
   }
   if (colors && /white|ivory|cream|stone|khaki|beige/.test(colors.toLowerCase())) {
     return [KEEP_FACE, strip, `Wear this exact garment. Keep the ${colors} color — do not darken or recolor it.`]

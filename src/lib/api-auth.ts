@@ -51,9 +51,21 @@ export async function requireAuth(
   }
 
   if (!isAdminConfigured()) {
+    // Local/dev: Admin SDK missing — accept signed-in client identity without
+    // verifying the JWT (never enable ALLOW_INSECURE_API in production).
     if (process.env.ALLOW_INSECURE_API === "true") {
-      const uid = req.headers.get("x-voicedress-uid");
-      if (uid) return { uid, email: undefined };
+      const headerUid = req.headers.get("x-voicedress-uid")?.trim();
+      if (headerUid) return { uid: headerUid, email: undefined };
+      // Decode JWT payload for uid when the client forgot the header
+      try {
+        const payload = JSON.parse(
+          Buffer.from(token.split(".")[1] || "", "base64url").toString("utf8")
+        ) as { user_id?: string; sub?: string; email?: string };
+        const uid = payload.user_id || payload.sub;
+        if (uid) return { uid, email: payload.email };
+      } catch {
+        // fall through
+      }
     }
     return NextResponse.json(
       {

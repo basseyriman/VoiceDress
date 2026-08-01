@@ -39,6 +39,12 @@ export interface Garment {
   currency?: string;
   orderId?: string;
   tags: string[];
+  /**
+   * Linked suit / matching set. Jacket + trousers share one setId so the
+   * engine can wear them as a full set or mix either piece separately.
+   */
+  setId?: string;
+  setRole?: "jacket" | "trousers";
   createdAt: string;
   updatedAt: string;
 }

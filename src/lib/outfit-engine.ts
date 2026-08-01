@@ -18,6 +18,7 @@ import {
   resolvePrimaryStyle,
 } from "./style-options";
 import { isHosieryOrSocks, isRealFootwear, ensureLookHasFootwear, sanitizeWardrobe } from "./commerce";
+import { matchingSetMate } from "./suit-set";
 
 export type { OccasionProfile, TasteMemory };
 
@@ -774,6 +775,38 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     if (outer && (coolForOuter || wantOuterForOccasion)) {
       selected.push(outer);
     }
+
+    // Suit sets: default to matching trousers with the jacket (full set).
+    // Swapping the bottom later still lets you mix the jacket with other pants,
+    // or wear the suit trousers with a different top and no jacket.
+    const selectedOuter = selected.find((g) => g.category === "outerwear");
+    if (selectedOuter?.setId && selectedOuter.setRole === "jacket") {
+      const mate = matchingSetMate(selectedOuter, wardrobe);
+      if (mate && mate.category === "bottom") {
+        const otherBottom = selected.find((g) => g.category === "bottom");
+        if (!otherBottom) {
+          selected.push(mate);
+        } else if (otherBottom.setId !== selectedOuter.setId) {
+          selected = selected.map((g) =>
+            g.category === "bottom" ? mate : g
+          );
+        }
+      }
+    } else {
+      // Trousers-only path: if we picked suit trousers and no outer yet, leave
+      // jacket off so the user can mix — only auto-add jacket when formal.
+      const selectedBottom = selected.find((g) => g.category === "bottom");
+      if (
+        selectedBottom?.setRole === "trousers" &&
+        selectedBottom.setId &&
+        !selected.some((g) => g.category === "outerwear") &&
+        formalityRank(formality) >= 3
+      ) {
+        const mate = matchingSetMate(selectedBottom, wardrobe);
+        if (mate && mate.category === "outerwear") selected.push(mate);
+      }
+    }
+
     const shoes = pick(
       byCat("shoes").filter((g) => isRealFootwear(g)),
       selected

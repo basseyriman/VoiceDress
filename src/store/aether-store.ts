@@ -839,7 +839,7 @@ export const useAetherStore = create<AetherState>()(
       },
       addGarments: (items) => {
         const user = get().user;
-        const normalized = items.map(sanitizeGarmentCategory);
+        const normalized = sanitizeWardrobe(items);
         set((state) => {
           const existingKeys = new Set(
             state.wardrobe.map(

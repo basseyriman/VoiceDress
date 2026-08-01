@@ -1,4 +1,5 @@
 import type { Garment, GarmentCategory } from "./types";
+import { expandSuitSets } from "./suit-set";
 
 type Named = {
   name?: string;
@@ -281,7 +282,7 @@ export function sanitizeGarmentCategory<
 export const normalizeGarmentCategory = sanitizeGarmentCategory;
 
 export function sanitizeWardrobe<T extends Garment>(items: T[]): T[] {
-  return items.map((g) => sanitizeGarmentCategory(g));
+  return expandSuitSets(items.map((g) => sanitizeGarmentCategory(g)));
 }
 
 /** Heuristic when LLM unavailable — never returns shoes for socks. */

@@ -11,6 +11,7 @@ export async function authFetch(
   const auth = getFirebaseAuth();
   const user = auth?.currentUser;
   if (user) {
+    headers.set("x-voicedress-uid", user.uid);
     try {
       const token = await user.getIdToken();
       headers.set("Authorization", `Bearer ${token}`);
