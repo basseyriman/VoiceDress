@@ -67,8 +67,17 @@ export async function requireAuth(
 
   // Local / misconfigured Admin: still verify the Firebase ID token via Google JWKS
   if (process.env.ALLOW_INSECURE_API === "true") {
-    const uid = req.headers.get("x-voicedress-uid");
-    if (uid) return { uid, email: undefined };
+    const headerUid = req.headers.get("x-voicedress-uid")?.trim();
+    if (headerUid) return { uid: headerUid, email: undefined };
+    try {
+      const payload = JSON.parse(
+        Buffer.from(token.split(".")[1] || "", "base64url").toString("utf8")
+      ) as { user_id?: string; sub?: string; email?: string };
+      const uid = payload.user_id || payload.sub;
+      if (uid) return { uid, email: payload.email };
+    } catch {
+      // fall through to JWKS
+    }
   }
 
   const verified = await verifyFirebaseIdToken(token);
