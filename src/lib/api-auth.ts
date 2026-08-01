@@ -6,6 +6,7 @@ import {
   PAID_PHOTO_TRYONS_PER_MONTH,
   currentPhotoTryOnMonthKey,
   freePhotoTryOnsUsed,
+  hasMonthlyPhotoTryOnQuota,
   isMembershipActive,
   photoTryOnCredits,
   photoTryOnsUsedThisMonth,
@@ -160,14 +161,23 @@ export type TryOnAccess = AuthedUser & {
   consumedFreeTryOn?: boolean;
 };
 
+function isApparelTryOnStage(stage: string) {
+  return (
+    stage === "apparel" ||
+    stage === "auto" ||
+    stage === "collage" ||
+    stage === "base"
+  );
+}
+
 /**
- * On-photo try-on gate: membership OR one unused free dress (aha moment).
- * Does not consume the free credit — call `consumeFreePhotoTryOn` after a
- * successful apparel response so failed dresses don't burn the gift.
+ * On-photo try-on gate: membership (under monthly full-look cap) OR one unused
+ * free dress. Single-piece apparel swaps skip the monthly cap.
+ * Does not consume credits — call consume helpers after a successful apparel dress.
  */
 export async function requireTryOnAccess(
   req: NextRequest,
-  opts?: { stage?: string }
+  opts?: { stage?: string; garmentCount?: number }
 ): Promise<TryOnAccess | NextResponse> {
   const auth = await requireAuth(req);
   if (!isAuthedUser(auth)) return auth;
@@ -186,21 +196,36 @@ export async function requireTryOnAccess(
   }
 
   const profile = await loadUserProfileAdmin(auth.uid);
-  if (isEntitled(profile, auth)) return auth;
-
-  const used = freePhotoTryOnsUsed(profile);
   const stage = (opts?.stage || "auto").toLowerCase();
-  const isApparelStage =
-    stage === "apparel" ||
-    stage === "auto" ||
-    stage === "collage" ||
-    stage === "base";
+  const isApparelStage = isApparelTryOnStage(stage);
+  const garmentCount = Math.max(0, Number(opts?.garmentCount || 0));
+  // Full looks (2+ garments) burn the monthly quota; surgical swaps do not.
+  const countsTowardMonthlyQuota = isApparelStage && garmentCount >= 2;
+
+  if (isEntitled(profile, auth)) {
+    if (countsTowardMonthlyQuota && !hasMonthlyPhotoTryOnQuota(profile)) {
+      return NextResponse.json(
+        {
+          error:
+            "You’ve used this month’s 30 included looks. Buy a top-up to keep dressing on photo — or wait until next month. Piece swaps still work.",
+          code: "quota_exceeded",
+          used: photoTryOnsUsedThisMonth(profile),
+          limit: PAID_PHOTO_TRYONS_PER_MONTH,
+          credits: photoTryOnCredits(profile),
+          topup: true,
+        },
+        { status: 402 }
+      );
+    }
+    return auth;
+  }
 
   // Finish / style after the free apparel dress must still run
   if (!isApparelStage) {
     return auth;
   }
 
+  const used = freePhotoTryOnsUsed(profile);
   if (used >= FREE_PHOTO_TRYONS) {
     return NextResponse.json(
       {
