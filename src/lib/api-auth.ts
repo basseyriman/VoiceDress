@@ -3,8 +3,12 @@ import { getAdminAuth, getAdminDb, isAdminConfigured } from "@/lib/firebase-admi
 import type { UserProfile } from "@/lib/types";
 import {
   FREE_PHOTO_TRYONS,
+  PAID_PHOTO_TRYONS_PER_MONTH,
+  currentPhotoTryOnMonthKey,
   freePhotoTryOnsUsed,
   isMembershipActive,
+  photoTryOnCredits,
+  photoTryOnsUsedThisMonth,
 } from "@/lib/entitlement";
 import { verifyFirebaseIdToken } from "@/lib/verify-firebase-token";
 
@@ -237,4 +241,75 @@ export async function consumeFreePhotoTryOn(
     { merge: true }
   );
   return { consumed: true, used: next };
+}
+
+/**
+ * After a successful multi-garment apparel dress for trial/paid members:
+ * burn one included monthly look, else one banked top-up credit.
+ */
+export async function consumeMonthlyPhotoTryOn(
+  uid: string,
+  opts?: { email?: string | null }
+): Promise<{
+  consumed: boolean;
+  used: number;
+  monthKey: string;
+  credits?: number;
+  from?: "monthly" | "credit";
+}> {
+  const monthKey = currentPhotoTryOnMonthKey();
+  const db = getAdminDb();
+  if (!db) return { consumed: false, used: 0, monthKey };
+
+  if (isCompedAccount({ uid, email: opts?.email })) {
+    return { consumed: false, used: 0, monthKey };
+  }
+
+  const ref = db.collection("users").doc(uid);
+  const snap = await ref.get();
+  const profile = (snap.data() || {}) as Partial<UserProfile>;
+  if (!isEntitled(profile, { uid, email: opts?.email })) {
+    return { consumed: false, used: 0, monthKey };
+  }
+
+  const used = photoTryOnsUsedThisMonth(profile);
+  if (used < PAID_PHOTO_TRYONS_PER_MONTH) {
+    const next = used + 1;
+    await ref.set(
+      {
+        photoTryOnsMonthKey: monthKey,
+        photoTryOnsThisMonth: next,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+    return {
+      consumed: true,
+      used: next,
+      monthKey,
+      credits: photoTryOnCredits(profile),
+      from: "monthly",
+    };
+  }
+
+  const credits = photoTryOnCredits(profile);
+  if (credits < 1) {
+    return { consumed: false, used, monthKey, credits: 0 };
+  }
+
+  const nextCredits = credits - 1;
+  await ref.set(
+    {
+      photoTryOnCredits: nextCredits,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+  return {
+    consumed: true,
+    used,
+    monthKey,
+    credits: nextCredits,
+    from: "credit",
+  };
 }
