@@ -216,6 +216,27 @@ function isCoatPiece(piece: Piece) {
   );
 }
 
+/**
+ * Soft mid-layers (sweater, cardigan, hoodie, zip knit) transfer faithfully via
+ * FASHN. Only structured blazers/coats need Kontext-first — FASHN "tops" mode
+ * can swap trousers from a full-suit product shot, which doesn't apply here.
+ */
+function isSoftLayer(piece: Piece) {
+  if (isBlazerPiece(piece) || isCoatPiece(piece)) return false;
+  return /sweater|cardigan|hoodie|zip|quarter[- ]?zip|jumper|knit|overshirt|fleece|pullover/i.test(
+    `${piece.name || ""} ${(piece.tags || []).join(" ")}`
+  );
+}
+
+/** Structured outerwear where Kontext layering beats FASHN tops-mode. */
+function needsKontextOuterwearFirst(piece: Piece) {
+  return (
+    piece.category === "outerwear" &&
+    (isBlazerPiece(piece) || isCoatPiece(piece)) &&
+    !isSoftLayer(piece)
+  );
+}
+
 function shoeGlassesPrompt(piece: Piece): string {
   const look = pieceLook(piece);
   if (piece.category === "shoes") {
@@ -229,14 +250,24 @@ function shoeGlassesPrompt(piece: Piece): string {
       "Do not alter face, torso, or pant legs above the shin.",
     ].join(" ");
   }
+  const colorHint =
+    piece.colors?.length || piece.hexColors?.length
+      ? `Frame/lens colors from the product: ${[
+          ...(piece.colors || []),
+          ...(piece.hexColors || []),
+        ].join(", ")}.`
+      : "";
   return [
     KEEP_YOU,
     KEEP_FRAMING,
     `Place ONLY the glasses from image 2 (${look}) on the person's existing face.`,
     "Match frame shape and lens tint from image 2 exactly — never invent neon, lime, or green lenses unless image 2 has them.",
+    colorHint,
     "Do not redesign or regenerate the face. Same eyes, nose, mouth, skin. Only add thin frames.",
     "Do not recolor or restyle clothes, shoes, or background — keep their exact colors. Do not change trousers to jeans.",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /**
@@ -247,19 +278,28 @@ function outerwearLayerPrompt(piece: Piece): string {
   const look = pieceLook(piece);
   const blazer = isBlazerPiece(piece);
   const coat = isCoatPiece(piece) && !blazer;
+  const soft = isSoftLayer(piece);
   const silhouette = blazer
     ? "structured hip-length blazer with notch lapels — NOT a long overcoat, trench, duster, or cape"
     : coat
       ? "full-length coat matching image 2 — same length and color, not a short blazer"
-      : "outer jacket matching image 2 exactly — same length, cut, and color";
+      : soft
+        ? "soft knit mid-layer matching image 2 exactly — same color, zipper/placket, and length (sweater/cardigan/hoodie, not a tailored blazer)"
+        : "outer jacket matching image 2 exactly — same length, cut, and color";
+
+  const colorRule = soft
+    ? "Match the exact color from image 2 — if cream, ivory, white, or light grey, keep it light; never darken into navy or black."
+    : "Match the exact color from image 2 (if navy/midnight blue, keep it deep navy — never cream, ivory, camel, beige, or washed-out grey).";
 
   return [
     KEEP_YOU,
     KEEP_FRAMING,
-    `Layer ONLY the outerwear jacket from image 2 (${look}) over the person's existing top.`,
+    soft
+      ? `Layer ONLY the knit/soft outer layer from image 2 (${look}) over the person's existing top.`
+      : `Layer ONLY the outerwear jacket from image 2 (${look}) over the person's existing top.`,
     `It must be a ${silhouette}.`,
     "If image 2 shows a full suit, use ONLY the jacket — do NOT replace the person's existing trousers with suit pants or jeans.",
-    "Match the exact color from image 2 (if navy/midnight blue, keep it deep navy — never cream, ivory, camel, beige, or washed-out grey).",
+    colorRule,
     "Keep the top underneath visible at the neckline/hem where natural. Do not replace the top with the jacket alone.",
     "Keep lower garments, shoes, hands, face, and background completely unchanged.",
     "Photoreal fabric, natural drape, correct proportions for this body.",
@@ -538,7 +578,11 @@ async function applyFinishPiece(opts: {
       return { ok: false, status: 400, detail: "product image required" };
     }
 
-    const guidance = piece.category === "shoes" ? 5.5 : 4.2;
+    const guidance = isEyewear(piece)
+      ? 6.0
+      : piece.category === "shoes"
+        ? 5.5
+        : 4.2;
     const edited = await kontextProductEdit({
       falKey,
       personImage,
@@ -559,15 +603,24 @@ async function applyFinishPiece(opts: {
     return edited;
   };
 
-  // Eyewear: Kontext with a product image matches frames better than Max
-  // (Max often invents neon/lime lenses and cartoonizes the face).
-  if (isEyewear(piece) && falKey && productImage) {
-    const eye = await tryKontext();
-    if (eye.ok) return eye;
+  // Eyewear: FASHN Max first (faithful product transfer). Kontext reinvents
+  // neon/lime lenses when tried first — keep it as fallback only.
+  if (isEyewear(piece) && productImage) {
     const maxResult = await tryFashnMax();
     if (maxResult?.ok) return maxResult;
     if (maxResult?.needsBilling) return maxResult;
-    return eye;
+    if (falKey) {
+      const eye = await tryKontext();
+      if (eye.ok) return eye;
+      return maxResult || eye;
+    }
+    return (
+      maxResult || {
+        ok: false,
+        status: 503,
+        detail: "No eyewear provider available",
+      }
+    );
   }
 
   if (prefer === "fashn" || prefer === "fashn-max" || prefer === "tryon-max") {
@@ -855,10 +908,11 @@ export async function POST(req: NextRequest) {
         apparelBaseUrl = current;
       }
 
-      // Prefer Kontext for outerwear — FASHN "tops" mode often replaces
-      // trousers with suit pants from a full-suit product shot.
+      // Kontext-first only for structured blazers/coats — FASHN "tops" mode
+      // can swap trousers from a full-suit shot. Soft layers (sweater, zip
+      // knit, cardigan) go FASHN-first so the real product color lands.
       let result: TryResult & { provider?: string; needsBilling?: boolean };
-      if (g.category === "outerwear" && falKey) {
+      if (needsKontextOuterwearFirst(g) && falKey) {
         const kontext = await kontextOuterwearLayer({
           falKey,
           personImage: current,
@@ -887,7 +941,7 @@ export async function POST(req: NextRequest) {
           timeoutMs: Math.min(90_000, Math.max(15_000, msLeft() - 20_000)),
         });
 
-        // Outerwear only: if Max/fal failed and we still have fal, try Kontext layer
+        // Soft outerwear / remaining outerwear: Kontext only if FASHN failed
         if (
           !result.ok &&
           g.category === "outerwear" &&
