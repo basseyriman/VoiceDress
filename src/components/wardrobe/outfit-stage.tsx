@@ -12,19 +12,12 @@ import {
   apparelForTryOn,
 } from "@/lib/tryon-architecture";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
-import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, preserveLowerBodyFromBase, verifyApparelLook, hasTryOnArtifacts, pieceReadsDark, faceRegionBlown, polishTryOnResult, stabilizeTryOnColors } from "@/lib/image";
-import { isRealFootwear } from "@/lib/commerce";
+import { letterboxForTryOn, lockFaceIdentity, layerOuterwearPreserveBase, verifyApparelLook, hasTryOnArtifacts } from "@/lib/image";
 import { resolveDisplayAvatar } from "@/lib/resolve-avatar";
 import { ChangePhotoButton } from "@/components/wardrobe/change-photo-button";
 import { TrialOfferModal } from "@/components/billing/trial-offer-modal";
 import {
   canStartPhotoTryOn,
-  isMembershipActive,
-  PAID_PHOTO_TRYONS_PER_MONTH,
-  photoTryOnCredits,
-  photoTryOnsAvailable,
-  photoTryOnsRemaining,
-  photoTryOnsUsedThisMonth,
   shouldOfferTrial,
 } from "@/lib/entitlement";
 import Link from "next/link";
@@ -90,10 +83,7 @@ export function OutfitStage({
   const [stepLabel, setStepLabel] = useState("");
   const [progress, setProgress] = useState(0);
   const [activePieceId, setActivePieceId] = useState<string | null>(null);
-  /** Pieces currently applying together (e.g. shoes + watch batch) */
-  const [applyingPieceIds, setApplyingPieceIds] = useState<string[]>([]);
   const [swapFor, setSwapFor] = useState<Garment["category"] | null>(null);
-  const [swapTargetId, setSwapTargetId] = useState<string | null>(null);
   const [keyConfigured, setKeyConfigured] = useState<boolean | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const [missingIds, setMissingIds] = useState<string[]>([]);
@@ -102,17 +92,6 @@ export function OutfitStage({
   const [photoTryOn, setPhotoTryOn] = useState(true);
   const requestId = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  /** Last fully/partially dressed photo — used to swap one piece without restarting. */
-  const wornUrlRef = useRef<string | null>(null);
-  /** Piece ids from the last completed (or in-flight) look on wornUrlRef. */
-  const lookIdsRef = useRef<string[]>([]);
-  const lastRetryNonceRef = useRef(0);
-  /** Soft trial CTA — wait until the dressed look is on screen first. */
-  const softTrialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    wornUrlRef.current = wornUrl;
-  }, [wornUrl]);
 
   useEffect(() => {
     try {
@@ -140,19 +119,9 @@ export function OutfitStage({
   const piecesTotal = Math.max(1, lookPieces.length);
   const piecesDone = donePieceIds.length;
   const piecesLeft = Math.max(0, piecesTotal - piecesDone);
-  const looksUsedThisMonth = photoTryOnsUsedThisMonth(user);
-  const looksLeftThisMonth = photoTryOnsRemaining(user);
-  const topupCredits = photoTryOnCredits(user);
-  const looksAvailable = photoTryOnsAvailable(user);
-  const showLookQuota = isMembershipActive(user);
-  // Two stages: clothes (~45s) then accessories (~25s) — not per-piece × 18s
+  // Quality/2k ≈ 15–25s per piece; show a calm estimate
   const etaSec = dressing
-    ? Math.max(
-        10,
-        donePieceIds.length >= apparelPieces.length
-          ? 25 - Math.round(progress / 4)
-          : 50 - Math.round(progress / 2)
-      )
+    ? Math.max(8, piecesLeft * 18 + (activePieceId ? 12 : 0))
     : 0;
 
   const lookKey = lookPieces.map((g) => g.id).join("|");
@@ -170,10 +139,6 @@ export function OutfitStage({
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
-    if (softTrialTimerRef.current) {
-      clearTimeout(softTrialTimerRef.current);
-      softTrialTimerRef.current = null;
-    }
 
     if (!hasAvatar || !displayAvatar) {
       setWornUrl(null);
@@ -181,16 +146,10 @@ export function OutfitStage({
       setMissingIds([]);
       setDonePieceIds([]);
       setActivePieceId(null);
-      lookIdsRef.current = [];
       return () => {
         ac.abort();
       };
     }
-
-    // Snapshot entitlement once — updating freePhotoTryOnsUsed mid-run must NOT
-    // restart this effect (that aborted the finish and popped the trial modal early).
-    const userAtStart = useAetherStore.getState().user;
-    const looksAvailableAtStart = photoTryOnsAvailable(userAtStart);
 
     if (!runTryOn || !lookPieces.length) {
       setWornUrl(displayAvatar);
@@ -211,404 +170,23 @@ export function OutfitStage({
     let cancelled = false;
 
     (async () => {
-      const toPayload = (piece: (typeof lookPieces)[number]) => ({
-        id: piece.id,
-        imageUrl: piece.imageUrl,
-        category: piece.category,
-        name: piece.name,
-        colors: piece.colors,
-        hexColors: piece.hexColors,
-        fabric: piece.fabric,
-        texture: piece.texture,
-        tags: piece.tags,
-      });
-
-      const isWatchPiece = (p: (typeof lookPieces)[number]) =>
-        /watch|wrist|chrono|time/i.test(
-          `${p.name || ""} ${(p.tags || []).join(" ")}`
-        );
-      const isEyewearPiece = (p: (typeof lookPieces)[number]) =>
-        /glass|frame|optic|sunglass|spec/i.test(
-          `${p.name || ""} ${(p.tags || []).join(" ")}`
-        );
-
-      // A timed-out or crashed function replies with an HTML/text error page.
-      // Parsing that as JSON used to surface raw "Unexpected token" noise.
-      const readJson = async (res: Response) => {
-        const raw = await res.text();
-        try {
-          return JSON.parse(raw);
-        } catch {
-          return {
-            ok: false,
-            error:
-              res.status === 504 || /timed? ?out/i.test(raw)
-                ? "That look took too long to render — try again."
-                : "Dressing service hiccuped — try again.",
-            detail: raw.slice(0, 140),
-          };
-        }
-      };
-
-      const failOrBilling = (data: {
-        needsKey?: boolean;
-        needsBilling?: boolean;
-        error?: string;
-        code?: string;
-        detail?: string;
-        imageUrl?: string;
-        message?: string;
-      }, status?: number) => {
-        if (data.needsKey) {
-          setNeedsKey(true);
-          setKeyConfigured(false);
-          setDressing(false);
-          return true;
-        }
-        if (data.code === "quota_exceeded") {
-          setError(
-            data.error ||
-              `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} included looks. Buy a top-up to keep dressing — swaps still work.`
-          );
-          setNeedsBilling(false);
-          setDressing(false);
-          return true;
-        }
-        if (
-          data.code === "trial_required" ||
-          data.code === "entitlement_required"
-        ) {
-          setTrialOffer("hard");
-          setDressing(false);
-          return true;
-        }
-        if (data.needsBilling || data.code === "tryon_busy") {
-          setError(
-            data.message ||
-              "Dressing is busy right now. Tap retry — your wardrobe is fine."
-          );
-          setDressing(false);
-          return true;
-        }
-        if (status === 402) {
-          setTrialOffer("hard");
-          setDressing(false);
-          return true;
-        }
-        if (status === 401 || data.code === "auth_required") {
-          setError("Sign in to run virtual try-on.");
-          setDressing(false);
-          return true;
-        }
-        return false;
-      };
-
-      const nextIds = lookPieces.map((g) => g.id);
-      const prevIds = lookIdsRef.current;
-      const addedIds = nextIds.filter((id) => !prevIds.includes(id));
-      const removedIds = prevIds.filter((id) => !nextIds.includes(id));
-      // Full re-dress only on retry, or when we don't yet have a dressed photo.
-      // Never use empty lookIdsRef alone — that forced every swap to start over.
-      const hasDressedPhoto = Boolean(
-        wornUrlRef.current && wornUrlRef.current !== displayAvatar
-      );
-      const forceFull =
-        retryNonce !== lastRetryNonceRef.current || !hasDressedPhoto;
-      lastRetryNonceRef.current = retryNonce;
-
-      // Same pieces already on the photo — don't restart a full dress
-      if (
-        !forceFull &&
-        addedIds.length === 0 &&
-        removedIds.length === 0 &&
-        nextIds.length > 0 &&
-        nextIds.length === prevIds.length
-      ) {
-        return;
-      }
-
-      const replacePieceOnly =
-        !forceFull &&
-        hasDressedPhoto &&
-        addedIds.length === 1 &&
-        removedIds.length <= 1 &&
-        Math.abs(nextIds.length - prevIds.length) <= 1
-          ? lookPieces.find((g) => g.id === addedIds[0]) || null
-          : null;
-
-      // Full looks need monthly quota / free gift; surgical swaps stay allowed on membership.
-      if (replacePieceOnly && wornUrlRef.current) {
-        if (!isMembershipActive(userAtStart) && !canStartPhotoTryOn(userAtStart)) {
-          setWornUrl(displayAvatar);
-          setDressing(false);
-          setTrialOffer("hard");
-          return;
-        }
-      } else if (!canStartPhotoTryOn(userAtStart)) {
+      // Hard gate before spending try-on credits — free gift already used
+      if (!canStartPhotoTryOn(user)) {
         setWornUrl(displayAvatar);
         setDressing(false);
-        if (isMembershipActive(userAtStart)) {
-          setError(
-            looksAvailableAtStart <= 0
-              ? `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} included looks. Top up for more on-photo dresses — swaps still work.`
-              : `You’ve used this month’s ${PAID_PHOTO_TRYONS_PER_MONTH} included looks. Piece swaps still work — or wait until next month.`
-          );
-        } else {
-          setTrialOffer("hard");
-        }
+        setTrialOffer("hard");
         return;
       }
 
-      // —— Single-piece swap on the already-dressed photo (saves credits) ——
-      if (replacePieceOnly && wornUrlRef.current) {
-        const piece = replacePieceOnly;
-        const baseWorn = wornUrlRef.current;
-        lookIdsRef.current = nextIds;
-
-        setDressing(true);
-        setError("");
-        setNotice("");
-        setNeedsKey(false);
-        setNeedsBilling(false);
-        setMissingIds([]);
-        setWornUrl(baseWorn);
-        setDonePieceIds(nextIds.filter((id) => id !== piece.id));
-        setActivePieceId(piece.id);
-        setStepLabel(`Swapping ${piece.name}…`);
-        setProgress(28);
-
-        let identityPhoto = displayAvatar;
-        try {
-          identityPhoto = await letterboxForTryOn(displayAvatar);
-        } catch {
-          // keep original
-        }
-
-        let current = baseWorn;
-        const isApparel = ["top", "bottom", "dress", "outerwear"].includes(
-          piece.category
-        );
-
-        try {
-          if (isApparel) {
-            const apparelRes = await authFetch("/api/tryon/render", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: ac.signal,
-              body: JSON.stringify({
-                personImage: current,
-                stage: "apparel",
-                maxPieces: 1,
-                // Keep everything already on the photo — only swap this piece
-                stripOuterwear: false,
-                garments: [toPayload(piece)],
-              }),
-            });
-            const apparelData = await readJson(apparelRes);
-            if (cancelled || myId !== requestId.current || ac.signal.aborted)
-              return;
-            if (failOrBilling(apparelData, apparelRes.status)) return;
-
-            if (!apparelData.ok || !apparelData.imageUrl) {
-              setError(
-                apparelData.error ||
-                  `Couldn’t swap ${piece.name || "that piece"}`
-              );
-              setMissingIds([piece.id]);
-              setDressing(false);
-              setActivePieceId(null);
-              return;
-            }
-
-            let dressedUrl = apparelData.imageUrl as string;
-            if (piece.category === "outerwear") {
-              try {
-                if (
-                  !(await hasTryOnArtifacts(apparelData.imageUrl, {
-                    expectDark: pieceReadsDark(piece),
-                  }))
-                ) {
-                  dressedUrl = await preserveLowerBodyFromBase(
-                    baseWorn,
-                    apparelData.imageUrl,
-                    { yEnd: 0.78 }
-                  );
-                } else {
-                  dressedUrl = await layerOuterwearPreserveBase(
-                    baseWorn,
-                    apparelData.imageUrl,
-                    {
-                      hexColors: piece.hexColors,
-                      colors: piece.colors,
-                    }
-                  );
-                  dressedUrl = await preserveLowerBodyFromBase(
-                    baseWorn,
-                    dressedUrl,
-                    { yEnd: 0.78 }
-                  );
-                }
-              } catch {
-                dressedUrl = apparelData.imageUrl;
-              }
-            }
-
-            try {
-              current = await lockFaceIdentity(
-                identityPhoto,
-                dressedUrl,
-                "strong"
-              );
-            } catch {
-              current = dressedUrl;
-            }
-            if (cancelled || myId !== requestId.current || ac.signal.aborted)
-              return;
-            try {
-              // Polish then re-lock face so clarity doesn't cartoonize you
-              current = await polishTryOnResult(current);
-              current = await lockFaceIdentity(
-                identityPhoto,
-                current,
-                "strong"
-              );
-            } catch {
-              // keep locked
-            }
-            setWornUrl(current);
-            setKeyConfigured(true);
-            if (apparelData.consumedFreeTryOn) {
-              updateUser({
-                freePhotoTryOnsUsed: Math.max(
-                  1,
-                  (userAtStart?.freePhotoTryOnsUsed || 0) + 1
-                ),
-              });
-            }
-          } else {
-            // Shoes / glasses / watch / bag — finish stage only
-            if (isEyewearPiece(piece)) {
-              setStepLabel("Keeping your real face…");
-              try {
-                current = await lockFaceIdentity(
-                  identityPhoto,
-                  current,
-                  "strong"
-                );
-                setWornUrl(current);
-              } catch {
-                // continue
-              }
-            }
-
-            setProgress(55);
-            const finishRes = await authFetch("/api/tryon/render", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: ac.signal,
-              body: JSON.stringify({
-                personImage: current,
-                stage: "finish",
-                includeFaceAccessories: true,
-                garments: [toPayload(piece)],
-              }),
-            });
-            const finishData = await readJson(finishRes);
-            if (cancelled || myId !== requestId.current || ac.signal.aborted)
-              return;
-            if (failOrBilling(finishData, finishRes.status)) return;
-
-            if (
-              !finishData.ok ||
-              !finishData.imageUrl ||
-              !Array.isArray(finishData.steps) ||
-              finishData.steps.length === 0
-            ) {
-              setError(
-                finishData.error ||
-                  `Couldn’t swap ${piece.name || "that piece"}`
-              );
-              setMissingIds([piece.id]);
-              setDressing(false);
-              setActivePieceId(null);
-              return;
-            }
-
-            try {
-              const before = current;
-              current = await stabilizeTryOnColors(before, finishData.imageUrl);
-              current = await lockFaceIdentity(
-                identityPhoto,
-                current,
-                isEyewearPiece(piece) ? "soft" : "strong"
-              );
-              if (await faceRegionBlown(current)) {
-                current = await lockFaceIdentity(
-                  identityPhoto,
-                  before,
-                  "strong"
-                );
-                setMissingIds((ids) =>
-                  ids.includes(piece.id) ? ids : [...ids, piece.id]
-                );
-              }
-            } catch {
-              current = finishData.imageUrl;
-            }
-            if (cancelled || myId !== requestId.current || ac.signal.aborted)
-              return;
-            try {
-              current = await polishTryOnResult(current);
-              current = await lockFaceIdentity(
-                identityPhoto,
-                current,
-                isEyewearPiece(piece) ? "soft" : "strong"
-              );
-            } catch {
-              // keep
-            }
-            setWornUrl(current);
-            setKeyConfigured(true);
-          }
-
-          if (myId === requestId.current) {
-            setDonePieceIds(nextIds);
-            setMissingIds([]);
-            setActivePieceId(null);
-            setStepLabel("Updated on you");
-            setProgress(100);
-            setDressing(false);
-            setNotice("");
-            confirmWear(outfit);
-          }
-        } catch (err) {
-          if (cancelled || myId !== requestId.current || ac.signal.aborted)
-            return;
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Swap interrupted — please retry"
-          );
-          setDressing(false);
-          setActivePieceId(null);
-        }
-        return;
-      }
-
-      // —— Full look from your photo ——
       setDressing(true);
       setError("");
       setNotice("");
       setMissingIds([]);
       setDonePieceIds([]);
       setActivePieceId(null);
-      // Show every piece as applying from the start so the blazer/shoes don’t
-      // look “idle” while clothes + finish run in one pipeline.
-      setApplyingPieceIds(lookPieces.map((p) => p.id));
       setNeedsKey(false);
       setNeedsBilling(false);
       setProgress(4);
-      setStepLabel("Dressing your full look…");
       setWornUrl(displayAvatar);
 
       let consumedFreeThisRun = false;
@@ -623,12 +201,84 @@ export function OutfitStage({
         // Keep original if letterbox fails
       }
 
+      const failOrBilling = (data: {
+        needsKey?: boolean;
+        needsBilling?: boolean;
+        error?: string;
+        code?: string;
+        detail?: string;
+        imageUrl?: string;
+      }, status?: number) => {
+        if (data.needsKey) {
+          setNeedsKey(true);
+          setKeyConfigured(false);
+          setDressing(false);
+          return true;
+        }
+        if (
+          data.code === "trial_required" ||
+          data.code === "entitlement_required"
+        ) {
+          setTrialOffer("hard");
+          setDressing(false);
+          return true;
+        }
+        if (data.needsBilling) {
+          setNeedsBilling(true);
+          setDressing(false);
+          return true;
+        }
+        if (status === 402) {
+          setTrialOffer("hard");
+          setDressing(false);
+          return true;
+        }
+        if (status === 401 || data.code === "auth_required") {
+          setError("Sign in to run virtual try-on.");
+          setDressing(false);
+          return true;
+        }
+        if (
+          status === 503 ||
+          data.code === "auth_unavailable" ||
+          data.code === "admin_not_configured"
+        ) {
+          setError(
+            "Couldn’t reach dressing right now. Sign out and back in, then retry."
+          );
+          setDressing(false);
+          return true;
+        }
+        return false;
+      };
+
       try {
+        const toPayload = (piece: (typeof lookPieces)[number]) => ({
+          id: piece.id,
+          imageUrl: piece.imageUrl,
+          category: piece.category,
+          name: piece.name,
+          colors: piece.colors,
+          hexColors: piece.hexColors,
+          fabric: piece.fabric,
+          texture: piece.texture,
+          tags: piece.tags,
+        });
+
         const appliedIds = new Set<string>();
         const appliedNames = new Set<string>();
 
+        const isWatchPiece = (p: (typeof lookPieces)[number]) =>
+          /watch|wrist|chrono|time/i.test(
+            `${p.name || ""} ${(p.tags || []).join(" ")}`
+          );
+        const isEyewearPiece = (p: (typeof lookPieces)[number]) =>
+          /glass|frame|optic|sunglass|spec/i.test(
+            `${p.name || ""} ${(p.tags || []).join(" ")}`
+          );
+
         const finishQueue = [
-          ...styledExtras.filter((p) => isRealFootwear(p)),
+          ...styledExtras.filter((p) => p.category === "shoes"),
           ...styledExtras.filter(
             (p) => p.category === "accessory" && isWatchPiece(p)
           ),
@@ -638,20 +288,18 @@ export function OutfitStage({
               !isEyewearPiece(p) &&
               !isWatchPiece(p)
           ),
-          ...styledExtras.filter((p) => p.category === "bag"),
-          // Glasses last — they rewrite the face; restore identity after
+          // Glasses last — they rewrite the face; restore identity before them
           ...styledExtras.filter(
             (p) => p.category === "accessory" && isEyewearPiece(p)
           ),
         ];
-        // Always run shoes on photo — original avatar boots otherwise stay under the dress.
 
         const markApplied = (step: { id?: string; name?: string }) => {
           if (step.id) appliedIds.add(step.id);
           if (step.name) appliedNames.add(step.name);
         };
 
-        // 1) All clothes in one request (top+bottom collage, then jacket). Accessories next.
+        // 1) Base clothes in one call (top+bottom collage = 1 credit). Outerwear second.
         if (apparelPieces.length) {
           setDonePieceIds([]);
           setProgress(8);
@@ -662,25 +310,17 @@ export function OutfitStage({
           const outerPiece = apparelPieces.find(
             (p) => p.category === "outerwear"
           );
-          const allApparel = [
-            ...baseApparel,
-            ...(outerPiece ? [outerPiece] : []),
-          ];
 
           let apparelBaseBeforeOuter = current;
 
-          if (allApparel.length) {
+          if (baseApparel.length) {
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
-            setActivePieceId(allApparel[0].id);
-            // Keep the whole look highlighted — clothes land together in one request
-            setApplyingPieceIds(lookPieces.map((p) => p.id));
+            setActivePieceId(baseApparel[0].id);
             setStepLabel(
-              outerPiece
-                ? `Dressing clothes + ${outerPiece.name.split(" ").slice(0, 2).join(" ")}…`
-                : allApparel.length > 1
-                  ? `Dressing ${allApparel.map((p) => p.name.split(" ").slice(0, 3).join(" ")).join(" · ")}…`
-                  : `Dressing ${allApparel[0].name}…`
+              baseApparel.length > 1
+                ? `Dressing ${baseApparel.map((p) => p.name).join(" + ")}…`
+                : `Dressing ${baseApparel[0].name}…`
             );
             setProgress(12);
 
@@ -691,88 +331,43 @@ export function OutfitStage({
               body: JSON.stringify({
                 personImage: current,
                 stage: "apparel",
-                maxPieces: allApparel.length,
+                maxPieces: baseApparel.length,
                 stripOuterwear: !outerPiece,
-                garments: allApparel.map(toPayload),
+                garments: baseApparel.map(toPayload),
               }),
             });
 
-            const apparelData = await readJson(apparelRes);
+            const apparelData = await apparelRes.json();
             if (cancelled || myId !== requestId.current || ac.signal.aborted)
               return;
             if (failOrBilling(apparelData, apparelRes.status)) return;
 
             if (!apparelData.ok || !apparelData.imageUrl) {
-              const failedName = allApparel[0]?.name || "clothes";
+              const failedName = baseApparel[0]?.name || "clothes";
+              const rawErr =
+                typeof apparelData.error === "string" ? apparelData.error : "";
+              const friendly =
+                apparelData.code === "admin_not_configured" ||
+                apparelData.code === "auth_unavailable" ||
+                /FIREBASE_CLIENT_EMAIL|FIREBASE_PRIVATE_KEY|admin_not_configured/i.test(
+                  rawErr
+                )
+                  ? "Couldn’t reach dressing right now. Sign out and back in, then retry."
+                  : rawErr || `Couldn’t dress ${failedName}`;
               const detail =
                 typeof apparelData.detail === "string"
                   ? apparelData.detail.slice(0, 180)
                   : "";
               setError(
-                [apparelData.error || `Couldn’t dress ${failedName}`, detail]
-                  .filter(Boolean)
-                  .join(" — ")
+                [friendly, detail].filter(Boolean).join(" — ")
               );
-              setMissingIds(allApparel.map((p) => p.id));
+              setMissingIds(baseApparel.map((p) => p.id));
               setDressing(false);
               setActivePieceId(null);
               return;
             }
 
             let dressedUrl = apparelData.imageUrl as string;
-            const trustedBase =
-              typeof apparelData.apparelBaseUrl === "string" &&
-              apparelData.apparelBaseUrl
-                ? apparelData.apparelBaseUrl
-                : apparelBaseBeforeOuter;
-
-            // An all-black look is legitimately dark — don't read it as a glitch
-            const lookReadsDark = allApparel.some(pieceReadsDark);
-
-            if (outerPiece) {
-              setStepLabel("Keeping your trousers…");
-              const outerResult = dressedUrl;
-              try {
-                // Prefer clean full outerwear + trousers restore. Color-mask
-                // layering often drops beige blazers and paints brown smudges.
-                if (!(await hasTryOnArtifacts(outerResult, { expectDark: lookReadsDark }))) {
-                  dressedUrl = await preserveLowerBodyFromBase(
-                    trustedBase,
-                    outerResult,
-                    { yEnd: 0.78 }
-                  );
-                } else {
-                  dressedUrl = await layerOuterwearPreserveBase(
-                    trustedBase,
-                    outerResult,
-                    {
-                      hexColors: outerPiece.hexColors,
-                      colors: outerPiece.colors,
-                    }
-                  );
-                  dressedUrl = await preserveLowerBodyFromBase(
-                    trustedBase,
-                    dressedUrl,
-                    { yEnd: 0.78 }
-                  );
-                }
-              } catch {
-                // keep FASHN/Kontext result
-              }
-            }
-
-            if (await hasTryOnArtifacts(dressedUrl, { expectDark: lookReadsDark })) {
-              if (outerPiece && trustedBase !== apparelBaseBeforeOuter) {
-                setNotice(
-                  `${outerPiece.name || "Coat"} came out glitched — left it off.`
-                );
-                setMissingIds((ids) =>
-                  ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
-                );
-                dressedUrl = trustedBase;
-              }
-            }
-
             try {
               current = await lockFaceIdentity(
                 identityPhoto,
@@ -786,32 +381,15 @@ export function OutfitStage({
               return;
             setWornUrl(current);
             setKeyConfigured(true);
-            apparelBaseBeforeOuter = trustedBase;
+            apparelBaseBeforeOuter = current;
 
             if (apparelData.consumedFreeTryOn) {
               consumedFreeThisRun = true;
               updateUser({
                 freePhotoTryOnsUsed: Math.max(
                   1,
-                  (userAtStart?.freePhotoTryOnsUsed || 0) + 1
+                  (user?.freePhotoTryOnsUsed || 0) + 1
                 ),
-              });
-            }
-            if (
-              typeof apparelData.photoTryOnsThisMonth === "number" ||
-              typeof apparelData.photoTryOnsMonthKey === "string" ||
-              typeof apparelData.photoTryOnCredits === "number"
-            ) {
-              updateUser({
-                ...(typeof apparelData.photoTryOnsThisMonth === "number"
-                  ? { photoTryOnsThisMonth: apparelData.photoTryOnsThisMonth }
-                  : {}),
-                ...(typeof apparelData.photoTryOnsMonthKey === "string"
-                  ? { photoTryOnsMonthKey: apparelData.photoTryOnsMonthKey }
-                  : {}),
-                ...(typeof apparelData.photoTryOnCredits === "number"
-                  ? { photoTryOnCredits: apparelData.photoTryOnCredits }
-                  : {}),
               });
             }
 
@@ -822,38 +400,114 @@ export function OutfitStage({
                     .filter(Boolean)
                 : []
             );
-            const apparelDoneIds: string[] = [];
-            for (const piece of allApparel) {
-              if (
-                outerPiece &&
-                piece.id === outerPiece.id &&
-                dressedUrl === trustedBase &&
-                apparelData.imageUrl !== trustedBase
-              ) {
-                // outerwear dropped due to artifacts
-                continue;
-              }
+            for (const piece of baseApparel) {
               if (stepIds.size === 0 || stepIds.has(piece.id)) {
                 markApplied({ id: piece.id, name: piece.name });
-                apparelDoneIds.push(piece.id);
+                setDonePieceIds((ids) =>
+                  ids.includes(piece.id) ? ids : [...ids, piece.id]
+                );
               } else {
                 setMissingIds((ids) =>
                   ids.includes(piece.id) ? ids : [...ids, piece.id]
                 );
               }
             }
-            setDonePieceIds((ids) => [
-              ...ids.filter((id) => !apparelDoneIds.includes(id)),
-              ...apparelDoneIds,
-            ]);
-            // Clothes landed — accessories stay “applying” until finish finishes
-            setApplyingPieceIds(finishQueue.map((p) => p.id));
+            setProgress(outerPiece ? 42 : 55);
+          }
+
+          if (outerPiece) {
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            setActivePieceId(outerPiece.id);
+            setStepLabel(`Dressing ${outerPiece.name}…`);
+            setProgress(48);
+
+            const apparelRes = await authFetch("/api/tryon/render", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: ac.signal,
+              body: JSON.stringify({
+                personImage: current,
+                stage: "apparel",
+                maxPieces: 1,
+                garments: [toPayload(outerPiece)],
+              }),
+            });
+
+            const apparelData = await apparelRes.json();
+            if (cancelled || myId !== requestId.current || ac.signal.aborted)
+              return;
+            if (failOrBilling(apparelData, apparelRes.status)) return;
+
+            if (!apparelData.ok || !apparelData.imageUrl) {
+              setNotice(
+                `${outerPiece.name || "Outerwear"} didn’t land — continuing…`
+              );
+              setMissingIds((ids) =>
+                ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
+              );
+            } else {
+              let dressedUrl = apparelData.imageUrl as string;
+              const stepProvider =
+                Array.isArray(apparelData.steps) && apparelData.steps[0]
+                  ? String(apparelData.steps[0].provider || "")
+                  : "";
+              const usedFashnMax = stepProvider.includes("fashn");
+
+              if (!usedFashnMax) {
+                setStepLabel("Keeping your base layers…");
+                try {
+                  dressedUrl = await layerOuterwearPreserveBase(
+                    apparelBaseBeforeOuter,
+                    apparelData.imageUrl,
+                    {
+                      hexColors: outerPiece.hexColors,
+                      colors: outerPiece.colors,
+                    }
+                  );
+                } catch {
+                  dressedUrl = apparelData.imageUrl;
+                }
+              }
+
+              if (await hasTryOnArtifacts(dressedUrl)) {
+                setNotice(
+                  `${outerPiece.name || "Coat"} came out glitched — left it off. Tap to retry.`
+                );
+                setMissingIds((ids) =>
+                  ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
+                );
+                setWornUrl(apparelBaseBeforeOuter);
+                current = apparelBaseBeforeOuter;
+              } else {
+                try {
+                  current = await lockFaceIdentity(
+                    identityPhoto,
+                    dressedUrl,
+                    "strong"
+                  );
+                } catch {
+                  current = dressedUrl;
+                }
+                if (
+                  cancelled ||
+                  myId !== requestId.current ||
+                  ac.signal.aborted
+                )
+                  return;
+                setWornUrl(current);
+                setKeyConfigured(true);
+                markApplied({ id: outerPiece.id, name: outerPiece.name });
+                setDonePieceIds((ids) =>
+                  ids.includes(outerPiece.id) ? ids : [...ids, outerPiece.id]
+                );
+              }
+            }
             setProgress(55);
           }
 
           setActivePieceId(null);
           setSwapFor(null);
-          setSwapTargetId(null);
 
           // Trust gate — skip top checks when a blazer covers the torso.
           const hasOuterwear = apparelPieces.some(
@@ -905,7 +559,7 @@ export function OutfitStage({
                   stylingPrompt: outfit.stylingTryOnPrompt,
                 }),
               });
-              const styleData = await readJson(styleRes);
+              const styleData = await styleRes.json();
               if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
               if (
                 !failOrBilling(styleData, styleRes.status) &&
@@ -932,143 +586,96 @@ export function OutfitStage({
           }
         }
 
-        // 2) Finish extras one request each. Batching them behind premium
-        // models outran the function limit and lost the whole tail of the look;
-        // a piece per request costs a slower bar but nothing gets dropped.
-        if (finishQueue.length) {
+        // 2) Shoes / watch first, then glasses last (face lock between)
+        for (let i = 0; i < finishQueue.length; i++) {
           if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+          const piece = finishQueue[i];
+          const isEye = isEyewearPiece(piece);
 
-          // Glasses last so the identity restore runs right after the frames land
-          const finishRank = (p: (typeof finishQueue)[number]) =>
-            isEyewearPiece(p)
-              ? 4
-              : isRealFootwear(p)
-                ? 0
-                : p.category === "bag"
-                  ? 1
-                  : isWatchPiece(p)
-                    ? 2
-                    : 3;
-          const ordered = [...finishQueue].sort(
-            (a, b) => finishRank(a) - finishRank(b)
-          );
-
-          setDonePieceIds((ids) =>
-            ids.filter((id) => !ordered.some((p) => p.id === id))
-          );
-
-          for (let i = 0; i < ordered.length; i++) {
-            const piece = ordered[i];
-            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-
-            setActivePieceId(piece.id);
-            setApplyingPieceIds([piece.id]);
-            setStepLabel(`Adding ${piece.name}…`);
-            setProgress(62 + Math.round((i / ordered.length) * 30));
-
-            const beforePiece = current;
-            const pieceRes = await authFetch("/api/tryon/render", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              signal: ac.signal,
-              body: JSON.stringify({
-                personImage: current,
-                stage: "finish",
-                includeFaceAccessories: true,
-                maxPieces: 1,
-                garments: [toPayload(piece)],
-              }),
-            });
-            const pieceData = await readJson(pieceRes);
-            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-            if (failOrBilling(pieceData, pieceRes.status)) return;
-
-            const landed =
-              pieceData.ok &&
-              pieceData.imageUrl &&
-              Array.isArray(pieceData.steps) &&
-              pieceData.steps.length > 0;
-
-            if (!landed) {
-              setMissingIds((ids) =>
-                ids.includes(piece.id) ? ids : [...ids, piece.id]
-              );
-              continue;
-            }
-
-            let rolledBack = false;
-            try {
-              current = await stabilizeTryOnColors(
-                beforePiece,
-                pieceData.imageUrl
-              );
-            } catch {
-              current = pieceData.imageUrl;
-            }
-
-            const wearsGlasses = isEyewearPiece(piece);
+          // Restore your real face before glasses touch the photo
+          if (isEye) {
+            setStepLabel("Keeping your real face…");
             try {
               current = await lockFaceIdentity(
                 identityPhoto,
                 current,
-                wearsGlasses ? "soft" : "strong"
+                "strong"
               );
-              // A wiped head means the edit lost the person — keep the frame we
-              // had rather than shipping a faceless photo.
-              if (await faceRegionBlown(current)) {
-                current = await lockFaceIdentity(
-                  identityPhoto,
-                  beforePiece,
-                  "strong"
-                );
-                rolledBack = true;
-              }
+              setWornUrl(current);
             } catch {
-              // keep stabilized frame
-            }
-
-            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-            setWornUrl(current);
-            setKeyConfigured(true);
-
-            if (rolledBack) {
-              setMissingIds((ids) =>
-                ids.includes(piece.id) ? ids : [...ids, piece.id]
-              );
-            } else {
-              appliedIds.add(piece.id);
-              appliedNames.add(piece.name);
-              setDonePieceIds((ids) =>
-                ids.includes(piece.id) ? ids : [...ids, piece.id]
-              );
+              // continue with current
             }
           }
 
-          setApplyingPieceIds([]);
+          setActivePieceId(piece.id);
+          setStepLabel(`Adding ${piece.name}…`);
+          setProgress(
+            50 + Math.round(((i + 1) / (finishQueue.length + 1)) * 40)
+          );
+
+          const finishRes = await authFetch("/api/tryon/render", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            signal: ac.signal,
+            body: JSON.stringify({
+              personImage: current,
+              stage: "finish",
+              includeFaceAccessories: true,
+              garments: [toPayload(piece)],
+            }),
+          });
+          const finishData = await finishRes.json();
+          if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+          if (failOrBilling(finishData, finishRes.status)) return;
+
+          if (
+            finishData.ok &&
+            finishData.imageUrl &&
+            Array.isArray(finishData.steps) &&
+            finishData.steps.length > 0
+          ) {
+            try {
+              if (isEye) {
+                // Soft lock keeps frames; still pulls real skin/eyes back
+                current = await lockFaceIdentity(
+                  identityPhoto,
+                  finishData.imageUrl,
+                  "soft"
+                );
+              } else {
+                current = await lockFaceIdentity(
+                  identityPhoto,
+                  finishData.imageUrl,
+                  "strong"
+                );
+              }
+            } catch {
+              current = finishData.imageUrl;
+            }
+            if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
+            setWornUrl(current);
+            appliedIds.add(piece.id);
+            appliedNames.add(piece.name);
+            setDonePieceIds((ids) =>
+              ids.includes(piece.id) ? ids : [...ids, piece.id]
+            );
+            setKeyConfigured(true);
+          }
         }
 
-        // Polish clothes/body first, then restore YOUR face last (never polish the face)
-        setStepLabel("Finishing your look…");
-        setApplyingPieceIds([]);
+        // Final identity pass — you should look like your original photo
+        setStepLabel("Restoring your face…");
         try {
-          current = await polishTryOnResult(current);
-        } catch {
-          // keep current
-        }
-        const lookHasEyewear = lookPieces.some((p) => isEyewearPiece(p));
-        try {
-          // Soft keeps sunglass frames; strong buries cartoon AI skin when no eyewear
-          let faceStrength: "soft" | "strong" = lookHasEyewear ? "soft" : "strong";
-          if (await faceRegionBlown(current)) faceStrength = "strong";
+          const hadGlasses = finishQueue.some((p) => isEyewearPiece(p));
           current = await lockFaceIdentity(
             identityPhoto,
             current,
-            faceStrength
+            hadGlasses ? "soft" : "strong"
           );
+          setWornUrl(current);
         } catch {
           // keep current
         }
-        setWornUrl(current);
 
         const missed = lookPieces.filter(
           (p) => !appliedIds.has(p.id) && !appliedNames.has(p.name)
@@ -1081,35 +688,31 @@ export function OutfitStage({
         );
 
         if (myId === requestId.current) {
-          lookIdsRef.current = nextIds;
           setActivePieceId(null);
-          setApplyingPieceIds([]);
           setStepLabel(missed.length ? "Almost ready" : "Full look on you");
           setProgress(100);
           setDressing(false);
           if (appliedIds.size > 0 || appliedNames.size > 0) {
             confirmWear(outfit);
           }
-          // Soft paywall after the free aha dress — let them see the result first
+          // Soft paywall after the free aha dress
           const after = {
-            subscriptionStatus: userAtStart?.subscriptionStatus || "none",
-            trialEndsAt: userAtStart?.trialEndsAt,
+            subscriptionStatus: user?.subscriptionStatus || "none",
+            trialEndsAt: user?.trialEndsAt,
             freePhotoTryOnsUsed: consumedFreeThisRun
-              ? Math.max(1, userAtStart?.freePhotoTryOnsUsed || 0)
-              : userAtStart?.freePhotoTryOnsUsed,
+              ? Math.max(1, user?.freePhotoTryOnsUsed || 0)
+              : user?.freePhotoTryOnsUsed,
           };
           if (shouldOfferTrial(after)) {
-            softTrialTimerRef.current = setTimeout(() => {
-              if (myId !== requestId.current) return;
-              setTrialOffer("soft");
-              void import("posthog-js")
-                .then(({ default: posthog }) => {
-                  if (posthog.__loaded) {
-                    posthog.capture("trial_offer_shown", { mode: "soft" });
-                  }
-                })
-                .catch(() => undefined);
-            }, 3200);
+            setTrialOffer("soft");
+            try {
+              const { default: posthog } = await import("posthog-js");
+              if (posthog.__loaded) {
+                posthog.capture("trial_offer_shown", { mode: "soft" });
+              }
+            } catch {
+              // ignore
+            }
           }
         }
       } catch (err) {
@@ -1124,10 +727,6 @@ export function OutfitStage({
     return () => {
       cancelled = true;
       ac.abort();
-      if (softTrialTimerRef.current) {
-        clearTimeout(softTrialTimerRef.current);
-        softTrialTimerRef.current = null;
-      }
     };
   }, [
     hasAvatar,
@@ -1139,6 +738,10 @@ export function OutfitStage({
     outfit,
     confirmWear,
     runTryOn,
+    user?.uid,
+    user?.subscriptionStatus,
+    user?.freePhotoTryOnsUsed,
+    user?.trialEndsAt,
     updateUser,
   ]);
 
@@ -1151,13 +754,8 @@ export function OutfitStage({
 
   const replacePiece = (next: Garment) => {
     if (!outfit) return;
-    // Replace only the tapped piece (important when 2+ accessories share a category)
     const nextGarments = [
-      ...garments.filter((g) =>
-        swapTargetId
-          ? g.id !== swapTargetId
-          : g.category !== next.category
-      ),
+      ...garments.filter((g) => g.category !== next.category),
       next,
     ];
     const order = ["top", "dress", "bottom", "outerwear", "shoes", "accessory"];
@@ -1172,7 +770,6 @@ export function OutfitStage({
       createdAt: new Date().toISOString(),
     });
     setSwapFor(null);
-    setSwapTargetId(null);
   };
 
   const showKeyPrompt = runTryOn && (needsKey || keyConfigured === false);
@@ -1180,15 +777,15 @@ export function OutfitStage({
 
   return (
     <motion.div
-      className="glass shine-border relative w-full min-w-0 overflow-x-clip rounded-[1.5rem] p-3 sm:rounded-[2rem] sm:p-8"
+      className="glass shine-border relative overflow-hidden rounded-[2rem] p-5 sm:p-8"
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_400px_at_15%_0%,rgba(201,168,124,0.12),transparent_55%)]" />
 
-      <div className="relative z-10 grid w-full min-w-0 gap-6 sm:gap-8 lg:grid-cols-[1fr_1.05fr]">
-        <div className="relative mx-auto w-full min-w-0 max-w-md overflow-x-clip">
+      <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_1.05fr]">
+        <div className="relative mx-auto w-full max-w-md">
           <div className="mb-3 space-y-2.5">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div>
                 <p className="text-[10px] uppercase tracking-[0.28em] text-champagne">
                   Your look
                 </p>
@@ -1198,6 +795,11 @@ export function OutfitStage({
                     : "Quick pick — photo optional"}
                 </p>
               </div>
+              {dressing && (
+                <span className="shrink-0 rounded-full border border-champagne/40 bg-champagne/15 px-3 py-1 text-[11px] font-medium tabular-nums tracking-wide text-champagne">
+                  {progressPct}%
+                </span>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {autoTryOn && (
@@ -1240,48 +842,6 @@ export function OutfitStage({
             </div>
           </div>
 
-          {/* Progress sits ABOVE the photo — never covers legs/shoes */}
-          <AnimatePresence>
-            {hasAvatar && dressing && !showKeyPrompt && !showBillingPrompt && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-3 overflow-hidden"
-              >
-                <div className="rounded-2xl border border-line/80 bg-ink/80 px-3 py-2.5 backdrop-blur-md">
-                  <div className="flex items-center gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-display text-sm leading-snug text-ivory sm:text-base">
-                        {stepLabel}
-                      </p>
-                      <p className="mt-0.5 text-[10px] uppercase tracking-wider text-mist">
-                        {piecesDone}/{piecesTotal}
-                        {activePieceId ? " · applying" : ""}
-                        {" · "}~
-                        {etaSec < 60
-                          ? `${etaSec}s`
-                          : `${Math.ceil(etaSec / 60)}m`}{" "}
-                        left
-                      </p>
-                    </div>
-                    <p className="shrink-0 font-display text-2xl tabular-nums leading-none text-champagne sm:text-3xl">
-                      {progressPct}
-                      <span className="text-sm sm:text-base">%</span>
-                    </p>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
-                    <motion.div
-                      className="h-full rounded-full bg-champagne shadow-[0_0_10px_rgba(201,168,124,0.4)]"
-                      animate={{ width: `${Math.max(progressPct, 4)}%` }}
-                      transition={{ duration: 0.4 }}
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           <div className="relative overflow-hidden rounded-[1.75rem] border border-line bg-[#0e0e0d] shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_30%,rgba(201,168,124,0.08),transparent_60%)]" />
 
@@ -1294,7 +854,7 @@ export function OutfitStage({
                   initial={{ opacity: 0.55, filter: "brightness(0.96)" }}
                   animate={{
                     opacity: 1,
-                    filter: dressing ? "brightness(0.96)" : "brightness(1)",
+                    filter: dressing ? "brightness(0.92)" : "brightness(1)",
                   }}
                   transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
                   className="relative z-[1] mx-auto block h-auto max-h-[min(72vh,42rem)] w-full object-contain object-center"
@@ -1332,142 +892,154 @@ export function OutfitStage({
               </div>
             )}
 
+            <AnimatePresence>
+              {hasAvatar && dressing && !showKeyPrompt && !showBillingPrompt && (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-ink via-ink/85 to-transparent p-6 pt-20"
+                >
+                  <div className="flex items-end justify-between gap-3">
+                    <p className="font-display text-xl text-ivory">{stepLabel}</p>
+                    <p className="shrink-0 font-display text-4xl tabular-nums leading-none text-champagne">
+                      {progressPct}
+                      <span className="text-xl">%</span>
+                    </p>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-mist">
+                    <span>
+                      {piecesDone} of {piecesTotal} pieces
+                      {activePieceId ? " · applying" : ""}
+                    </span>
+                    <span>
+                      ~{etaSec < 60 ? `${etaSec}s` : `${Math.ceil(etaSec / 60)}m`}{" "}
+                      left
+                    </span>
+                  </div>
+                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/15 ring-1 ring-white/10">
+                    <motion.div
+                      className="h-full rounded-full bg-champagne shadow-[0_0_12px_rgba(201,168,124,0.45)]"
+                      animate={{ width: `${Math.max(progressPct, 4)}%` }}
+                      transition={{ duration: 0.4 }}
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {lookPieces.map((g) => (
+                      <div
+                        key={g.id}
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 text-[10px] transition",
+                          activePieceId === g.id
+                            ? "border-champagne bg-champagne/15 text-champagne"
+                            : donePieceIds.includes(g.id)
+                              ? "border-champagne/40 text-champagne"
+                              : "border-white/10 text-mist"
+                        )}
+                      >
+                        <span className="truncate">{g.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {showBillingPrompt && hasAvatar && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center backdrop-blur-sm">
                 <p className="font-display text-2xl text-ivory">
-                  Dressing is busy
+                  Try-on credits used up
                 </p>
                 <p className="max-w-sm text-xs text-mist">
-                  We couldn’t finish putting this look on your photo. Your
-                  wardrobe is fine — try again in a moment.
+                  Top up billing to keep dressing onto your photo. Your wardrobe
+                  is fine.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNeedsBilling(false);
-                    setError("");
-                    setRetryNonce((n) => n + 1);
-                  }}
+                <a
+                  href="https://fal.ai/dashboard/billing"
+                  target="_blank"
+                  rel="noreferrer"
                   className="rounded-full bg-champagne px-4 py-2 text-xs font-medium text-ink"
                 >
-                  Retry dressing
-                </button>
+                  Top up billing →
+                </a>
               </div>
             )}
 
             {showKeyPrompt && hasAvatar && !showBillingPrompt && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center backdrop-blur-sm">
                 <p className="font-display text-2xl text-ivory">
-                  Dressing isn’t ready yet
+                  Try-on needs credits
                 </p>
-                <p className="max-w-sm text-xs text-mist">
-                  Try again shortly — or switch to Quick to see the outfit tiles
-                  while we catch up.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNeedsKey(false);
-                    setPhotoTryOnPref(false);
-                  }}
+                <a
+                  href="https://fal.ai/dashboard/billing"
+                  target="_blank"
+                  rel="noreferrer"
                   className="rounded-full bg-champagne px-4 py-2 text-xs font-medium text-ink"
                 >
-                  Use Quick view
-                </button>
+                  Check billing →
+                </a>
               </div>
             )}
 
             {error && (
-              <div className="absolute inset-x-4 top-[4.75rem] z-30 rounded-2xl border border-danger/30 bg-ink/85 px-4 py-3 text-xs text-danger sm:top-[5.25rem]">
+              <div className="absolute inset-x-4 top-4 z-30 rounded-2xl border border-danger/30 bg-ink/85 px-4 py-3 text-xs text-danger">
                 <p>{error}</p>
-                <div className="mt-2 flex flex-wrap gap-3">
-                  {(error.toLowerCase().includes("top-up") ||
-                    error.toLowerCase().includes("top up") ||
-                    (showLookQuota && looksAvailable <= 0)) && (
-                    <Link
-                      href="/billing#topup"
-                      className="text-[11px] uppercase tracking-wider text-champagne hover:underline"
-                    >
-                      Buy more looks
-                    </Link>
-                  )}
-                  <button
-                    type="button"
-                    className="text-[11px] uppercase tracking-wider text-champagne hover:underline"
-                    onClick={() => {
-                      setError("");
-                      setRetryNonce((n) => n + 1);
-                    }}
-                  >
-                    Retry full look
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="mt-2 text-[11px] uppercase tracking-wider text-champagne hover:underline"
+                  onClick={() => {
+                    setError("");
+                    setRetryNonce((n) => n + 1);
+                  }}
+                >
+                  Retry full look
+                </button>
               </div>
             )}
 
-            {/* Status chips live BELOW the photo — never overlay face or shoes */}
-          </div>
+            {!error && notice && (
+              <div className="absolute inset-x-4 top-4 z-30 rounded-2xl border border-line bg-ink/80 px-4 py-3 text-xs text-mist backdrop-blur-md">
+                {notice}
+              </div>
+            )}
 
-          <AnimatePresence>
-            {!dressing && wornUrl && outfit && (
-              <motion.div
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.35 }}
-                className="mt-3 rounded-2xl border border-line bg-ink/60 px-3 py-2"
-              >
+            <AnimatePresence>
+              {!dressing && wornUrl && outfit && !notice && !error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className="pointer-events-none absolute left-4 top-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md"
+                >
+                  <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
+                    Ready · dressed for
+                  </p>
+                  <p className="font-display text-sm text-ivory">
+                    {outfit.occasion}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {!dressing && wornUrl && outfit && (notice || error) && (
+              <div className="pointer-events-none absolute left-4 bottom-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
-                  Ready · dressed for
+                  Dressed for
                 </p>
-                <p className="font-display text-sm text-ivory">{outfit.occasion}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {!error && notice && (
-            <div className="mt-2 rounded-2xl border border-line bg-ink/60 px-3 py-2.5 text-xs text-mist">
-              {notice}
-            </div>
-          )}
-
-          {/* Mobile: piece status under the photo — contained so it never blows page width */}
-          {dressing && lookPieces.length > 0 && (
-            <div className="mt-3 max-w-full overflow-x-auto overscroll-x-contain pb-1 [-webkit-overflow-scrolling:touch] lg:hidden">
-              <div className="flex w-max max-w-none gap-2">
-                {lookPieces.map((g) => {
-                  const pieceDone = donePieceIds.includes(g.id);
-                  const pieceMissing = missingIds.includes(g.id);
-                  const pieceApplying =
-                    dressing && !pieceDone && !pieceMissing;
-                  return (
-                  <div
-                    key={g.id}
-                    className={cn(
-                      "max-w-[8.5rem] shrink-0 truncate rounded-full border px-2.5 py-1 text-[10px]",
-                      pieceApplying
-                        ? "border-champagne bg-champagne/15 text-champagne"
-                        : pieceDone
-                          ? "border-champagne/40 text-champagne"
-                          : pieceMissing
-                            ? "border-champagne/35 text-champagne/80"
-                            : "border-white/10 text-mist"
-                    )}
-                  >
-                    {g.name}
-                  </div>
-                  );
-                })}
+                <p className="font-display text-sm text-ivory">
+                  {outfit.occasion}
+                </p>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        <div className="min-w-0 max-w-full overflow-x-clip">
+        <div>
           <p className="text-xs uppercase tracking-[0.28em] text-champagne">
             Today’s look
           </p>
-          <h2 className="mt-2 line-clamp-2 font-display text-2xl text-ivory sm:text-4xl">
+          <h2 className="mt-2 font-display text-3xl text-ivory sm:text-4xl">
             {outfit?.name || "Ready when you are"}
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-mist">
@@ -1475,56 +1047,16 @@ export function OutfitStage({
               ? "Tap a piece to swap it. Ask by voice how to wear it."
               : "Tell VoiceDress where you’re going — one look from your wardrobe."}
           </p>
-          {showLookQuota && (
-            <p className="mt-3 text-xs text-mist">
-              <span
-                className={cn(
-                  "tabular-nums",
-                  looksAvailable <= 5 ? "text-champagne" : "text-ivory-muted"
-                )}
-              >
-                {looksUsedThisMonth}/{PAID_PHOTO_TRYONS_PER_MONTH}
-              </span>{" "}
-              included looks used this month
-              {topupCredits > 0 ? (
-                <span className="text-ivory-muted">
-                  {" "}
-                  · {topupCredits} top-up
-                  {topupCredits === 1 ? "" : "s"} banked
-                </span>
-              ) : null}
-              {looksAvailable <= 0
-                ? " — "
-                : looksAvailable <= 5
-                  ? ` · ${looksAvailable} left · `
-                  : " · "}
-              {looksAvailable <= 0 ? (
-                <Link
-                  href="/billing#topup"
-                  className="text-champagne underline-offset-2 hover:underline"
-                >
-                  Buy more looks
-                </Link>
-              ) : (
-                <Link
-                  href="/billing"
-                  className="text-champagne/90 underline-offset-2 hover:underline"
-                >
-                  Plan
-                </Link>
-              )}
-            </p>
-          )}
 
-          <div className="mt-6 min-w-0">
-            <div className="mb-2 flex min-w-0 items-end justify-between gap-2">
-              <p className="min-w-0 truncate text-[10px] uppercase tracking-[0.22em] text-champagne">
+          <div className="mt-6">
+            <div className="mb-2 flex items-end justify-between gap-3">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-champagne">
                 Your look
               </p>
               {dressing && (
-                <p className="shrink-0 font-display text-base tabular-nums text-champagne sm:text-lg">
+                <p className="font-display text-lg tabular-nums text-champagne">
                   {progressPct}%
-                  <span className="ml-1.5 text-[10px] uppercase tracking-wider text-mist">
+                  <span className="ml-2 text-[10px] uppercase tracking-wider text-mist">
                     {piecesDone}/{piecesTotal}
                   </span>
                 </p>
@@ -1539,39 +1071,23 @@ export function OutfitStage({
                 />
               </div>
             )}
-            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-              {lookPieces.map((g) => {
-                const pieceDone = donePieceIds.includes(g.id);
-                const pieceMissing = missingIds.includes(g.id);
-                // While dressing, every unfinished piece shows Applying — including
-                // jacket/shoes — so progress never looks “stuck” on top+bottom only.
-                const pieceApplying =
-                  dressing && !pieceDone && !pieceMissing;
-                return (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {lookPieces.map((g) => (
                 <GarmentTile
                   key={g.id}
                   garment={g}
-                  active={
-                    swapTargetId === g.id ||
-                    activePieceId === g.id ||
-                    pieceApplying
+                  active={swapFor === g.category || activePieceId === g.id}
+                  dressing={dressing && activePieceId === g.id}
+                  done={donePieceIds.includes(g.id)}
+                  missing={missingIds.includes(g.id)}
+                  progressPct={
+                    dressing && activePieceId === g.id ? progressPct : undefined
                   }
-                  dressing={pieceApplying}
-                  done={pieceDone}
-                  missing={pieceMissing}
-                  progressPct={pieceApplying ? progressPct : undefined}
-                  onClick={() => {
-                    if (swapTargetId === g.id) {
-                      setSwapFor(null);
-                      setSwapTargetId(null);
-                    } else {
-                      setSwapFor(g.category);
-                      setSwapTargetId(g.id);
-                    }
-                  }}
+                  onClick={() =>
+                    setSwapFor((c) => (c === g.category ? null : g.category))
+                  }
                 />
-                );
-              })}
+              ))}
             </div>
           </div>
 
@@ -1586,15 +1102,12 @@ export function OutfitStage({
                 <div className="rounded-[1.5rem] border border-champagne/25 bg-champagne/5 p-4">
                   <div className="mb-3 flex items-center justify-between">
                     <p className="text-xs text-champagne">
-                      Replace {swapFor} — only this piece is re-dressed
+                      Replace {swapFor} — we’ll dress it into the look
                     </p>
                     <button
                       type="button"
                       className="text-[11px] text-mist"
-                      onClick={() => {
-                        setSwapFor(null);
-                        setSwapTargetId(null);
-                      }}
+                      onClick={() => setSwapFor(null)}
                     >
                       Close
                     </button>
@@ -1621,7 +1134,6 @@ export function OutfitStage({
                     onClick={() => {
                       swapFromVoice(swapFor, outfit?.style, outfit?.occasion);
                       setSwapFor(null);
-                      setSwapTargetId(null);
                     }}
                   >
                     Auto-pick best {swapFor}
@@ -1736,20 +1248,20 @@ export function GarmentTile({
       onClick={onClick}
       aria-busy={dressing || undefined}
       className={cn(
-        "group relative flex w-full min-w-0 max-w-full text-left transition duration-300",
+        "group relative flex w-full text-left transition duration-300",
         large
           ? "flex-col gap-2.5 rounded-[1.25rem] border p-2.5"
-          : "gap-2.5 rounded-2xl border p-2.5 sm:gap-3 sm:p-3",
-        // Ring (not thicker border) so active state never widens the card on mobile.
+          : "gap-3 rounded-2xl border p-3",
+        // Only the piece being applied gets a strong gold border; others stay dim.
         dressing
-          ? "border-champagne bg-champagne/10 ring-2 ring-champagne/70 ring-inset"
+          ? "border-2 border-champagne bg-champagne/10"
           : missing
-            ? "border-champagne/35 bg-champagne/[0.04]"
+            ? "border border-champagne/35 bg-champagne/[0.04]"
             : done
-              ? "border-line bg-champagne/[0.04]"
+              ? "border border-line bg-champagne/[0.04]"
               : active
-                ? "border-champagne/55 bg-champagne/10"
-                : "border-line bg-white/[0.02] hover:border-champagne/40"
+                ? "border border-champagne/55 bg-champagne/10"
+                : "border border-line bg-white/[0.02] hover:border-champagne/40"
       )}
     >
       <div
@@ -1791,11 +1303,11 @@ export function GarmentTile({
               {dressing
                 ? progressPct != null
                   ? `${progressPct}%`
-                  : "…"
+                  : "Dressing"
                 : missing
-                  ? "Soon"
+                  ? "Pending"
                   : done
-                    ? "On"
+                    ? "On you"
                     : badge}
             </span>
           )}

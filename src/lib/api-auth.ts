@@ -3,14 +3,10 @@ import { getAdminAuth, getAdminDb, isAdminConfigured } from "@/lib/firebase-admi
 import type { UserProfile } from "@/lib/types";
 import {
   FREE_PHOTO_TRYONS,
-  PAID_PHOTO_TRYONS_PER_MONTH,
-  currentPhotoTryOnMonthKey,
   freePhotoTryOnsUsed,
-  hasMonthlyPhotoTryOnQuota,
   isMembershipActive,
-  photoTryOnCredits,
-  photoTryOnsUsedThisMonth,
 } from "@/lib/entitlement";
+import { verifyFirebaseIdToken } from "@/lib/verify-firebase-token";
 
 export type AuthedUser = {
   uid: string;
@@ -36,6 +32,9 @@ export function isCompedAccount(user: {
   return false;
 }
 
+const AUTH_UNAVAILABLE =
+  "Dressing is temporarily unavailable. Please try again in a moment.";
+
 /** Verify Firebase ID token from Authorization: Bearer <token>. */
 export async function requireAuth(
   req: NextRequest
@@ -50,42 +49,38 @@ export async function requireAuth(
     );
   }
 
-  if (!isAdminConfigured()) {
-    // Local/dev: Admin SDK missing — accept signed-in client identity without
-    // verifying the JWT (never enable ALLOW_INSECURE_API in production).
-    if (process.env.ALLOW_INSECURE_API === "true") {
-      const headerUid = req.headers.get("x-voicedress-uid")?.trim();
-      if (headerUid) return { uid: headerUid, email: undefined };
-      // Decode JWT payload for uid when the client forgot the header
-      try {
-        const payload = JSON.parse(
-          Buffer.from(token.split(".")[1] || "", "base64url").toString("utf8")
-        ) as { user_id?: string; sub?: string; email?: string };
-        const uid = payload.user_id || payload.sub;
-        if (uid) return { uid, email: payload.email };
-      } catch {
-        // fall through
-      }
+  // Prefer Admin SDK when configured
+  if (isAdminConfigured()) {
+    try {
+      const decoded = await getAdminAuth()!.verifyIdToken(token);
+      return { uid: decoded.uid, email: decoded.email };
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Invalid or expired session. Please sign in again.",
+          code: "auth_invalid",
+        },
+        { status: 401 }
+      );
     }
-    return NextResponse.json(
-      {
-        error:
-          "Server auth is not configured. Set FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY (or FIREBASE_SERVICE_ACCOUNT_JSON).",
-        code: "admin_not_configured",
-      },
-      { status: 503 }
-    );
   }
 
-  try {
-    const decoded = await getAdminAuth()!.verifyIdToken(token);
-    return { uid: decoded.uid, email: decoded.email };
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid or expired session. Please sign in again.", code: "auth_invalid" },
-      { status: 401 }
-    );
+  // Local / misconfigured Admin: still verify the Firebase ID token via Google JWKS
+  if (process.env.ALLOW_INSECURE_API === "true") {
+    const uid = req.headers.get("x-voicedress-uid");
+    if (uid) return { uid, email: undefined };
   }
+
+  const verified = await verifyFirebaseIdToken(token);
+  if (verified) return verified;
+
+  return NextResponse.json(
+    {
+      error: AUTH_UNAVAILABLE,
+      code: "auth_unavailable",
+    },
+    { status: 503 }
+  );
 }
 
 export function isAuthedUser(
@@ -120,18 +115,17 @@ export async function requireEntitled(
   const auth = await requireAuth(req);
   if (!isAuthedUser(auth)) return auth;
 
-  if (!getAdminDb()) {
-    if (process.env.ALLOW_INSECURE_API === "true") return auth;
-    return NextResponse.json(
-      {
-        error: "Membership check unavailable. Configure Firebase Admin.",
-        code: "admin_not_configured",
-      },
-      { status: 503 }
-    );
-  }
-
   if (isCompedAccount(auth)) return auth;
+
+  const db = getAdminDb();
+  if (!db) {
+    // Signed-in user, Admin DB missing — don’t block the product on config
+    console.warn(
+      "[entitlement] Firebase Admin DB missing; allowing authenticated user",
+      auth.uid
+    );
+    return auth;
+  }
 
   const profile = await loadUserProfileAdmin(auth.uid);
   if (!isEntitled(profile, auth)) {
@@ -153,71 +147,47 @@ export type TryOnAccess = AuthedUser & {
   consumedFreeTryOn?: boolean;
 };
 
-function isApparelTryOnStage(stage: string) {
-  return (
-    stage === "apparel" ||
-    stage === "auto" ||
-    stage === "collage" ||
-    stage === "base"
-  );
-}
-
 /**
- * On-photo try-on gate: membership (under monthly full-look cap) OR one unused
- * free dress. Single-piece apparel swaps skip the monthly cap.
- * Does not consume credits — call consume helpers after a successful apparel dress.
+ * On-photo try-on gate: membership OR one unused free dress (aha moment).
+ * Does not consume the free credit — call `consumeFreePhotoTryOn` after a
+ * successful apparel response so failed dresses don't burn the gift.
  */
 export async function requireTryOnAccess(
   req: NextRequest,
-  opts?: { stage?: string; garmentCount?: number }
+  opts?: { stage?: string }
 ): Promise<TryOnAccess | NextResponse> {
   const auth = await requireAuth(req);
   if (!isAuthedUser(auth)) return auth;
 
-  if (!getAdminDb()) {
-    if (process.env.ALLOW_INSECURE_API === "true") return auth;
-    return NextResponse.json(
-      {
-        error: "Membership check unavailable. Configure Firebase Admin.",
-        code: "admin_not_configured",
-      },
-      { status: 503 }
-    );
-  }
-
   if (isCompedAccount(auth)) return auth;
 
-  const profile = await loadUserProfileAdmin(auth.uid);
-  const stage = (opts?.stage || "auto").toLowerCase();
-  const isApparelStage = isApparelTryOnStage(stage);
-  const garmentCount = Math.max(0, Number(opts?.garmentCount || 0));
-  // Full looks (2+ garments) burn the monthly quota; surgical swaps do not.
-  const countsTowardMonthlyQuota = isApparelStage && garmentCount >= 2;
-
-  if (isEntitled(profile, auth)) {
-    if (countsTowardMonthlyQuota && !hasMonthlyPhotoTryOnQuota(profile)) {
-      return NextResponse.json(
-        {
-          error:
-            "You’ve used this month’s 30 included looks. Buy a top-up to keep dressing on photo — or wait until next month. Piece swaps still work.",
-          code: "quota_exceeded",
-          used: photoTryOnsUsedThisMonth(profile),
-          limit: PAID_PHOTO_TRYONS_PER_MONTH,
-          credits: photoTryOnCredits(profile),
-          topup: true,
-        },
-        { status: 402 }
-      );
-    }
+  const db = getAdminDb();
+  if (!db) {
+    // Auth works via JWKS; free-try metering needs Admin. Allow dress so the
+    // live product isn’t blocked by missing service-account env.
+    console.warn(
+      "[try-on] Firebase Admin DB missing; allowing try-on for",
+      auth.uid
+    );
     return auth;
   }
+
+  const profile = await loadUserProfileAdmin(auth.uid);
+  if (isEntitled(profile, auth)) return auth;
+
+  const used = freePhotoTryOnsUsed(profile);
+  const stage = (opts?.stage || "auto").toLowerCase();
+  const isApparelStage =
+    stage === "apparel" ||
+    stage === "auto" ||
+    stage === "collage" ||
+    stage === "base";
 
   // Finish / style after the free apparel dress must still run
   if (!isApparelStage) {
     return auth;
   }
 
-  const used = freePhotoTryOnsUsed(profile);
   if (used >= FREE_PHOTO_TRYONS) {
     return NextResponse.json(
       {
@@ -258,75 +228,4 @@ export async function consumeFreePhotoTryOn(
     { merge: true }
   );
   return { consumed: true, used: next };
-}
-
-/**
- * After a successful multi-garment apparel dress for members:
- * burn one included monthly look, else one banked top-up credit.
- */
-export async function consumeMonthlyPhotoTryOn(
-  uid: string,
-  opts?: { email?: string | null }
-): Promise<{
-  consumed: boolean;
-  used: number;
-  monthKey: string;
-  credits?: number;
-  from?: "monthly" | "credit";
-}> {
-  const monthKey = currentPhotoTryOnMonthKey();
-  const db = getAdminDb();
-  if (!db) return { consumed: false, used: 0, monthKey };
-
-  if (isCompedAccount({ uid, email: opts?.email })) {
-    return { consumed: false, used: 0, monthKey };
-  }
-
-  const ref = db.collection("users").doc(uid);
-  const snap = await ref.get();
-  const profile = (snap.data() || {}) as Partial<UserProfile>;
-  if (!isEntitled(profile, { uid, email: opts?.email })) {
-    return { consumed: false, used: 0, monthKey };
-  }
-
-  const used = photoTryOnsUsedThisMonth(profile);
-  if (used < PAID_PHOTO_TRYONS_PER_MONTH) {
-    const next = used + 1;
-    await ref.set(
-      {
-        photoTryOnsMonthKey: monthKey,
-        photoTryOnsThisMonth: next,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-    return {
-      consumed: true,
-      used: next,
-      monthKey,
-      credits: photoTryOnCredits(profile),
-      from: "monthly",
-    };
-  }
-
-  const credits = photoTryOnCredits(profile);
-  if (credits < 1) {
-    return { consumed: false, used, monthKey, credits: 0 };
-  }
-
-  const nextCredits = credits - 1;
-  await ref.set(
-    {
-      photoTryOnCredits: nextCredits,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true }
-  );
-  return {
-    consumed: true,
-    used,
-    monthKey,
-    credits: nextCredits,
-    from: "credit",
-  };
 }

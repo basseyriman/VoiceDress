@@ -17,7 +17,9 @@ export function getAdminApp(): App | null {
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const json =
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
   try {
     if (json) {
