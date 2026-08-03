@@ -240,7 +240,7 @@ export function WardrobeFillPanel({
             Fill your wardrobe
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-mist">
-            Upload clear photos of your clothes (laid flat or on a hanger) or screenshots of items you want to buy (Shein, Zara, ASOS, etc.) — select
+            Upload clear photos of your clothes (laid flat or on a hanger) or screenshots of items you want to buy (Amazon, Zara, SHEIN, Temu, ASOS, eBay, etc.) — select
             several at once to fill your wardrobe faster.
           </p>
         </div>
