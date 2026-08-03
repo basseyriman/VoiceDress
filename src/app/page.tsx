@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, CloudSun, Mic, Sparkles, UserRound } from "lucide-react";
 import { Button, Logo } from "@/components/ui/button";
+import { VoiceRibbon } from "@/components/ui/voice-ribbon";
 
 const pillars = [
   {
@@ -48,6 +49,8 @@ export default function LandingPage() {
         </header>
 
         <section className="relative mx-auto flex min-h-[88vh] max-w-7xl flex-col justify-center px-4 pb-20 pt-8 sm:px-6">
+          <VoiceRibbon />
+
           <div className="absolute inset-0 -z-10">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
