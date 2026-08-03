@@ -58,8 +58,8 @@ export default function BrandFlyersPage() {
           </div>
           
           {/* Footer URL */}
-          <div className="absolute bottom-8 w-full text-center z-40">
-            <span className="text-ink/60 tracking-[0.3em] uppercase text-xl font-bold">voicedress.com</span>
+          <div className="absolute bottom-12 w-full text-center z-40">
+            <span className="text-white/60 tracking-[0.3em] uppercase text-xl font-medium">voicedress.com</span>
           </div>
         </div>
       </div>
