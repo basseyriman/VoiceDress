@@ -50,8 +50,8 @@ export default function BrandFlyersPage() {
                   className="w-full h-full object-cover scale-[1.2] object-top"
                 />
               </div>
-              {/* Text Label - Vertical on the right side */}
-              <div className="absolute top-1/2 right-4 -translate-y-1/2 z-50 rotate-90 flex items-center bg-[#e3d5c8]/90 backdrop-blur-md text-ink px-4 py-2 rounded-full font-medium tracking-wide shadow-xl text-sm gap-2 whitespace-nowrap">
+              {/* Text Label - Bottom Right */}
+              <div className="absolute bottom-6 right-6 z-50 flex items-center bg-[#e3d5c8]/90 backdrop-blur-md text-ink px-4 py-2 rounded-full font-medium tracking-wide shadow-xl text-sm gap-2 whitespace-nowrap">
                 <div className="w-2 h-2 bg-[#9A5B30] rounded-full animate-pulse"></div>
                 Try on with VoiceDress
               </div>
