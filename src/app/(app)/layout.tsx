@@ -28,7 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     if (!user) {
-      router.replace("/login");
+      router.replace("/");
       return;
     }
     if (needsPhotoOnboarding(user)) {
