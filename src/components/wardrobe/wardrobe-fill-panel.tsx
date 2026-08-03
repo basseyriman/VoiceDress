@@ -240,7 +240,7 @@ export function WardrobeFillPanel({
             Fill your wardrobe
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-mist">
-            Upload receipts or photos of your clothes — select
+            Upload clear photos of your clothes (laid flat or on a hanger) — select
             several at once to fill your wardrobe faster.
           </p>
         </div>
@@ -263,7 +263,7 @@ export function WardrobeFillPanel({
           <h2 className="font-display text-2xl text-ivory">Upload photos</h2>
         </div>
         <p className="mt-2 text-sm text-mist">
-          Select one or many receipts, order screenshots, or product shots —
+          Select one or many photos of your clothes —
           up to {MAX_BATCH} at a time.
         </p>
 
