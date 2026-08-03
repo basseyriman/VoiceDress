@@ -140,7 +140,7 @@ export default function SettingsPage() {
           type="button"
           onClick={() =>
             void signOutLocal().then(() => {
-              window.location.href = "/login";
+              window.location.href = "/";
             })
           }
           className="text-xs uppercase tracking-wide text-danger/70 transition hover:text-danger hover:underline"
