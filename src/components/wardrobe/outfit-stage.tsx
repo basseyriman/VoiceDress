@@ -21,6 +21,7 @@ import {
   shouldOfferTrial,
 } from "@/lib/entitlement";
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 
 type TryOnJson = {
   ok?: boolean;
@@ -766,11 +767,11 @@ export function OutfitStage({
                   key={g.id}
                   garment={g}
                   active={swapFor === g.category || activePieceId === g.id}
-                  dressing={dressing && activePieceId === g.id}
+                  dressing={dressing && (activePieceId === g.id || activePieceId === null)}
                   done={donePieceIds.includes(g.id)}
                   missing={missingIds.includes(g.id)}
                   progressPct={
-                    dressing && activePieceId === g.id ? progressPct : undefined
+                    dressing && (activePieceId === g.id || activePieceId === null) ? progressPct : undefined
                   }
                   onClick={() =>
                     setSwapFor((c) => (c === g.category ? null : g.category))
@@ -979,7 +980,7 @@ export function GarmentTile({
           {(badge || missing || dressing || done) && (
             <span
               className={cn(
-                "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider",
+                "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wider flex items-center gap-1",
                 dressing
                   ? "border-champagne text-champagne"
                   : missing
@@ -989,6 +990,7 @@ export function GarmentTile({
                       : "border-line text-mist"
               )}
             >
+              {dressing && <Sparkles className="h-2.5 w-2.5 animate-[spin_2s_linear_infinite]" />}
               {dressing
                 ? progressPct != null
                   ? `${progressPct}%`
