@@ -40,10 +40,13 @@ export function Button({
 export function Logo({
   className,
   variant = "header",
+  theme = "dark",
 }: {
   className?: string;
   /** header = app nav (premium). hero = auth / landing. compact = tight spaces */
   variant?: "header" | "hero" | "compact";
+  /** dark = light text for dark backgrounds (default). light = dark text for light backgrounds */
+  theme?: "dark" | "light";
 }) {
   const hero = variant === "hero";
   const compact = variant === "compact";
@@ -82,7 +85,8 @@ export function Logo({
       </span>
       <span
         className={cn(
-          "font-display font-medium leading-none text-ivory",
+          "font-display font-medium leading-none",
+          theme === "dark" ? "text-ivory" : "text-ink",
           hero &&
             "text-[1.85rem] tracking-[0.12em] sm:text-[2.5rem] sm:tracking-[0.18em]",
           compact && "text-[1.25rem] tracking-[0.1em]",
