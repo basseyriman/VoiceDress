@@ -54,9 +54,9 @@ export function InstallPrompt() {
           <p className="text-mist text-xs leading-relaxed">
             Install this app to your phone in seconds. Tap{" "}
             <Share className="inline-block h-4 w-4 align-sub text-blue-500" />{" "}
-            (or tap <span className="font-bold">...</span> then Share{" "}
-            <Share className="inline-block h-4 w-4 align-sub text-blue-500" />),{" "}
-            then select <span className="font-medium text-ivory">"Add to Home Screen"</span>{" "}
+            (or the three dots <span className="font-bold">...</span>) below, then select share{" "}
+            <Share className="inline-block h-4 w-4 align-sub text-blue-500" />{" "}
+            then <span className="font-medium text-ivory">"Add to Home Screen"</span>{" "}
             <PlusSquare className="inline-block h-4 w-4 align-sub text-ivory" />.
           </p>
         </div>
