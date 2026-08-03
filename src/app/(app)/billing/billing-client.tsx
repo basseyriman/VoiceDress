@@ -56,7 +56,7 @@ function TopUpGrid({
               </span>
             )}
             <h3 className="font-display text-2xl text-ivory">
-              {pack.looks} Tokens
+              {pack.looks} Credits
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-mist">
               {pack.description}
@@ -80,7 +80,7 @@ function TopUpGrid({
       <div className="glass shine-border rounded-3xl p-6 sm:p-8">
         <h3 className="font-display text-2xl text-ivory">Custom amount</h3>
         <p className="mt-2 text-sm leading-relaxed text-mist">
-          Choose how many tokens you want — banked until you use them.
+          Choose how many Credits you want — banked until you use them.
           From {CUSTOM_LOOK_TOPUP_MIN} to {CUSTOM_LOOK_TOPUP_MAX}.
         </p>
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -104,7 +104,7 @@ function TopUpGrid({
           </p>
         ) : quote && quote.looks >= 25 ? (
           <p className="mt-3 text-sm text-mist">
-            {formatGbp(0.5)} per token · 25+ drops to {formatGbp(0.4)}.
+            {formatGbp(0.5)} per Credit · 25+ drops to {formatGbp(0.4)}.
           </p>
         ) : null}
         <Button
@@ -116,8 +116,8 @@ function TopUpGrid({
           {loading === CUSTOM_LOOK_TOPUP_ID
             ? "Redirecting…"
             : quote
-              ? `Buy ${quote.looks} tokens · ${formatGbp(quote.priceGbp)}`
-              : "Enter a token count"}
+              ? `Buy ${quote.looks} Credits · ${formatGbp(quote.priceGbp)}`
+              : "Enter a Credit count"}
         </Button>
       </div>
     </div>
@@ -141,9 +141,9 @@ export default function BillingPage() {
       return;
     }
     if ((success === "1" || topup === "1") && user?.uid) {
-      setMessage("Top-up received. Refreshing your token balance…");
+      setMessage("Top-up received. Refreshing your Credit balance…");
       void hydrateFromCloud(user.uid).then(() => {
-        setMessage("Tokens banked — dress whenever you’re ready.");
+        setMessage("Credits banked — dress whenever you’re ready.");
       });
     }
   }, [searchParams, user?.uid, hydrateFromCloud]);
@@ -197,20 +197,20 @@ export default function BillingPage() {
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
       <div className="mb-12">
         <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-          Tokens
+          Credits
         </p>
         <h1 className="mt-4 font-display text-4xl text-ivory sm:text-5xl">
-          Purchase Tokens
+          Purchase Credits
         </h1>
         <p className="mt-4 max-w-xl text-mist">
-          Each outfit generation or piece swap costs 1 token. Bank your tokens and use them whenever you need to see a new look.
+          Each outfit generation or piece swap costs 1 Credit. Bank your Credits and use them whenever you need to see a new look.
         </p>
 
         {user && (
           <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-champagne/30 bg-champagne/10 px-5 py-2">
             <span className="text-sm text-mist">Your Balance:</span>
             <span className="font-display text-lg text-champagne">
-              {credits} {credits === 1 ? "token" : "tokens"}
+              {credits} {credits === 1 ? "Credit" : "Credits"}
             </span>
           </div>
         )}

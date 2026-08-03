@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
               product_data: {
                 name: pack
                   ? pack.label
-                  : \`\${quote.looks} VoiceDress Try-ons\`,
+                  : `${quote.looks} VoiceDress Try-ons`,
                 description: pack?.description,
               },
               unit_amount: quote.pence,
@@ -72,8 +72,8 @@ export async function POST(req: NextRequest) {
             quantity: 1,
           },
         ],
-        success_url: \`\${origin}/billing?topup=1\`,
-        cancel_url: \`\${origin}/billing?canceled=1\`,
+        success_url: `${origin}/billing?topup=1`,
+        cancel_url: `${origin}/billing?canceled=1`,
         metadata: {
           type: "look_topup",
           looks: quote.looks.toString(),

@@ -2,7 +2,7 @@ import Stripe from "stripe";
 
 
 
-/** Create these in Stripe Dashboard as GBP recurring prices: £19/mo and £149/yr. */
+
 
 
 export const TRIAL_DAYS = 7;
@@ -14,7 +14,7 @@ export const LOOK_TOPUP_PACKS = [
     looks: 10,
     priceGbp: 5,
     label: "10 extra looks",
-    description: "Top up when you’ve used this month’s 30.",
+    description: "A quick top-up to try out new outfits.",
     priceEnv: "STRIPE_PRICE_ID_LOOKS_10",
   },
   {
