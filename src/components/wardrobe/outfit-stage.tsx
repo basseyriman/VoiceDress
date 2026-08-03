@@ -122,6 +122,19 @@ export function OutfitStage({
   const requestId = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Simulate progress so the user doesn't think it hung
+  useEffect(() => {
+    if (!dressing || progress >= 95) return;
+    const timer = setInterval(() => {
+      setProgress((p) => {
+        // Slow down as it gets closer to 95
+        const increment = p < 50 ? 2 : p < 80 ? 1 : 0.5;
+        return Math.min(95, p + increment);
+      });
+    }, 400);
+    return () => clearInterval(timer);
+  }, [dressing, progress]);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem("voicedress_photo_tryon");
