@@ -41,6 +41,17 @@ export default function BrandFlyersPage() {
               <iframe src="/" className="w-[430px] h-[932px] border-0 scale-[1.0] origin-top-left pointer-events-none" />
             </div>
 
+            {/* Floating Clothes Hanger on the Left */}
+            <div className="absolute -left-64 top-40 w-[400px] aspect-square bg-white p-4 shadow-2xl -rotate-[6deg] rounded-lg z-20">
+              <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden relative">
+                <img 
+                  src="/hanger.png" 
+                  alt="Clothes Hanger" 
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+
             {/* Overlapping Floating Polaroid/Photo */}
             <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 pb-20 shadow-2xl rotate-[12deg] rounded-lg z-30">
               <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden pb-0 relative">
