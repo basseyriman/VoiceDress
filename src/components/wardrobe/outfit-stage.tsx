@@ -700,12 +700,12 @@ export function OutfitStage({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  className="pointer-events-none absolute left-4 top-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md"
+                  className="pointer-events-none absolute left-4 top-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-4 py-2.5 backdrop-blur-md"
                 >
                   <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
-                    Ready · dressed for
+                    Dressed for
                   </p>
-                  <p className="font-display text-sm text-ivory">
+                  <p className="mt-0.5 font-display text-sm capitalize text-ivory">
                     {outfit.occasion}
                   </p>
                 </motion.div>
@@ -713,11 +713,11 @@ export function OutfitStage({
             </AnimatePresence>
 
             {!dressing && wornUrl && outfit && (notice || error) && (
-              <div className="pointer-events-none absolute left-4 bottom-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-3 py-2 backdrop-blur-md">
+              <div className="pointer-events-none absolute left-4 bottom-4 z-10 max-w-[75%] rounded-2xl border border-line bg-ink/70 px-4 py-2.5 backdrop-blur-md">
                 <p className="text-[10px] uppercase tracking-[0.25em] text-champagne">
                   Dressed for
                 </p>
-                <p className="font-display text-sm text-ivory">
+                <p className="mt-0.5 font-display text-sm capitalize text-ivory">
                   {outfit.occasion}
                 </p>
               </div>
