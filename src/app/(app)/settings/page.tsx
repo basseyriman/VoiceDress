@@ -87,23 +87,20 @@ export default function SettingsPage() {
             })}
           </div>
         </div>
-        <div className="flex flex-wrap gap-3 pt-1">
-          <Button
-            variant="outline"
+        <div className="mt-4 flex items-center justify-between border-t border-line/50 pt-4">
+          <p className="text-sm text-ivory-muted">Voice styling</p>
+          <button
+            type="button"
             onClick={() => updateUser({ voiceEnabled: !user.voiceEnabled })}
+            className={cn(
+              "rounded-full px-4 py-1.5 text-xs font-medium transition",
+              user.voiceEnabled
+                ? "bg-champagne text-ink"
+                : "bg-white/5 text-mist hover:bg-white/10"
+            )}
           >
-            Voice {user.voiceEnabled ? "on" : "paused"}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() =>
-              void signOutLocal().then(() => {
-                window.location.href = "/login";
-              })
-            }
-          >
-            Sign out
-          </Button>
+            {user.voiceEnabled ? "Enabled" : "Paused"}
+          </button>
         </div>
       </div>
 
@@ -111,19 +108,9 @@ export default function SettingsPage() {
         <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-mist">
           Install as an app
         </p>
-        <p className="text-sm leading-relaxed text-mist">
-          Add VoiceDress to your home screen for a full-screen feel.
+        <p className="text-sm leading-relaxed text-ivory-muted">
+          Install this app to your phone in seconds. Tap 📤 (or the three dots ...) below, select share 📤 then "Add to Home Screen" ➕.
         </p>
-        <ul className="space-y-2 text-sm text-ivory-muted">
-          <li>
-            <span className="text-champagne">iPhone:</span> Safari → Share → Add
-            to Home Screen
-          </li>
-          <li>
-            <span className="text-champagne">Android:</span> Chrome → menu →
-            Install app / Add to Home screen
-          </li>
-        </ul>
       </div>
 
       <div className="glass shine-border space-y-3 rounded-[1.75rem] p-7 sm:p-8">
@@ -140,11 +127,26 @@ export default function SettingsPage() {
           </Link>
           <Link
             href="/billing"
-            className="rounded-2xl border border-line px-4 py-3.5 text-sm text-ivory transition hover:border-champagne/40 hover:bg-white/[0.02]"
+            className="flex flex-col rounded-2xl border border-line px-4 py-3.5 transition hover:border-champagne/40 hover:bg-white/[0.02]"
           >
-            Membership
+            <span className="text-sm text-ivory">Credits & Billing</span>
+            <span className="mt-0.5 text-xs text-mist">Top up your try-ons</span>
           </Link>
         </div>
+      </div>
+
+      <div className="flex justify-center pb-24 pt-4">
+        <button
+          type="button"
+          onClick={() =>
+            void signOutLocal().then(() => {
+              window.location.href = "/login";
+            })
+          }
+          className="text-xs uppercase tracking-wide text-danger/70 transition hover:text-danger hover:underline"
+        >
+          Sign out
+        </button>
       </div>
     </div>
   );
