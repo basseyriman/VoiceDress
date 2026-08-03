@@ -257,7 +257,51 @@ export function WardrobeFillPanel({
         </div>
       )}
 
+      <div className="glass shine-border rounded-3xl p-6">
+        <div className="flex items-center gap-2">
+          <Upload className="h-4 w-4 text-champagne" />
+          <h2 className="font-display text-2xl text-ivory">Upload photos</h2>
+        </div>
+        <p className="mt-2 text-sm text-mist">
+          Select one or many receipts, order screenshots, or product shots —
+          up to {MAX_BATCH} at a time.
+        </p>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+          multiple
+          className="hidden"
+          onChange={(e) => void onIngestFiles(e.target.files)}
+        />
+        <Button
+          className="mt-6 w-full sm:w-auto"
+          disabled={!!syncing}
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload className="h-4 w-4" />
+          {progressLabel || "Select files"}
+        </Button>
+        {uploadProgress && uploadProgress.total > 1 && (
+          <div className="mt-4">
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-champagne transition-all duration-300"
+                style={{
+                  width: `${Math.round(
+                    (uploadProgress.done / uploadProgress.total) * 100
+                  )}%`,
+                }}
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-mist">
+              {uploadProgress.done} of {uploadProgress.total} photos processed
+            </p>
+          </div>
+        )}
       </div>
+    </div>
   );
 }
 
