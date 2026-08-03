@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Outfit } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { PwaRegister } from "@/components/pwa-register";
+import { InstallPrompt } from "@/components/install-prompt";
 
 /** Editorial fashion display — couture, not tech-default */
 const cormorant = Cormorant_Garamond({
@@ -76,6 +77,7 @@ export default function RootLayout({
       <body className="min-h-full antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
         <PwaRegister />
+        <InstallPrompt />
       </body>
     </html>
   );
