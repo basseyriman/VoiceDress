@@ -20,7 +20,7 @@ export default function BrandFlyersPage() {
           {/* Header Text */}
           <div className="relative z-20 flex flex-col items-center text-center px-12 mb-20 text-[#1C2621]">
             <div className="flex items-center gap-3 mb-8">
-              <Logo variant="hero" />
+              <Logo variant="hero" className="brightness-0" />
             </div>
             
             <h2 className="font-display text-[4.5rem] leading-[1.1] font-bold tracking-tight mb-6">
