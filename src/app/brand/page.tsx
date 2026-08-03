@@ -21,14 +21,13 @@ export default function BrandFlyersPage() {
           <div className="relative z-20 flex flex-col items-center text-center px-12 mb-20 text-[#1C2621]">
             <div className="flex items-center gap-3 mb-8">
               <Logo variant="hero" className="text-[#1C2621]" />
-              <span className="font-display text-4xl font-bold tracking-wider uppercase">VoiceDress</span>
             </div>
             
             <h2 className="font-display text-[4.5rem] leading-[1.1] font-bold tracking-tight mb-6">
-              Improve Your Outfits<br/>With Voice AI!
+              Improve Your Outfits<br/>With VoiceDress!
             </h2>
             <p className="text-2xl font-light max-w-2xl opacity-80">
-              Let our AI generate the perfect outfit based on your wardrobe, just by speaking to it.
+              Let VoiceDress pull out or suggest the perfect outfit based on your wardrobe, just by speaking to it.
             </p>
           </div>
 
@@ -45,7 +44,7 @@ export default function BrandFlyersPage() {
             {/* Overlapping Floating Polaroid/Photo (like Essembl) */}
             <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 shadow-2xl rotate-[12deg] rounded-lg">
               <img 
-                src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80" 
+                src="/bassey-photo.png" 
                 alt="Fashion Model" 
                 className="w-full h-full object-cover"
               />
