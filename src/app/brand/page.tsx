@@ -45,7 +45,7 @@ export default function BrandFlyersPage() {
             <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 shadow-2xl rotate-[12deg] rounded-lg z-30">
               <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden pb-0">
                 <img 
-                  src="https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&q=80" 
+                  src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=800&q=80" 
                   alt="Fashion Model" 
                   className="w-full h-full object-cover"
                 />
