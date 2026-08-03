@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { Check } from "lucide-react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Check, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   CUSTOM_LOOK_TOPUP_ID,
@@ -125,6 +125,7 @@ function TopUpGrid({
 }
 
 export default function BillingPage() {
+  const router = useRouter();
   const user = useAetherStore((s) => s.user);
   const hydrateFromCloud = useAetherStore((s) => s.hydrateFromCloud);
   const updateUser = useAetherStore((s) => s.updateUser);
@@ -195,6 +196,14 @@ export default function BillingPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
+      <button
+        onClick={() => router.back()}
+        className="mb-8 inline-flex items-center gap-2 text-sm text-mist transition hover:text-ivory"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </button>
+
       <div className="mb-12">
         <p className="text-xs uppercase tracking-[0.28em] text-champagne">
           Credits
