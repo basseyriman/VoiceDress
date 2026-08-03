@@ -73,7 +73,7 @@ export default function LandingPage() {
             transition={{ duration: 0.85, delay: 0.16 }}
             className="mt-6 max-w-2xl text-base leading-relaxed text-ivory-muted sm:text-lg"
           >
-            Just tell us where you're going and VoiceDress has you covered. Like your personal stylist, it pulls the right outfit for the occasion—perfectly matched to the weather—and styles it directly onto your photo so you see exactly how it looks on your body. Tap the mic to chat or swap pieces instantly.
+            Just tell us where you're going and VoiceDress has you covered. Like your personal stylist, it pulls the right outfit from your wardrobe for the occasion—perfectly matched to the weather—and styles it directly onto your photo so you see exactly how it looks on your body. Tap the mic to chat or swap pieces instantly.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 18 }}
