@@ -84,7 +84,7 @@ export default function LandingPage() {
           >
             <Link href="/signup" className="w-full sm:w-auto">
               <Button size="lg" className="w-full sm:w-auto">
-                Start free trial
+                Try VoiceDress
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
@@ -105,8 +105,7 @@ export default function LandingPage() {
               Decision fatigue ends here.
             </h2>
             <p className="mt-4 text-mist">
-              No manual tagging. No photographing every shirt. Commerce sync,
-              weather intelligence, and voice styling carry the load.
+              Weather intelligence, cutting-edge AI, and voice styling carry the load.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
