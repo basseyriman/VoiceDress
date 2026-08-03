@@ -234,7 +234,7 @@ export function WardrobeFillPanel({
       {!compact && (
         <div>
           <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-            Commerce
+            Wardrobe
           </p>
           <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
             Fill your wardrobe
