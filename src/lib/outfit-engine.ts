@@ -183,9 +183,12 @@ function weatherFit(g: Garment, weather: WeatherSnapshot): number {
     if (isLightLayer) score += 1;
     if (isAiry) score += 1;
   } else {
+    // Hot weather (>22C / 71F)
     if (isAiry) score += 3;
-    if (isCoat) score -= 4;
-    if (isKnit && !isAiry) score -= 1;
+    // Hard penalty for coats/jackets in hot weather
+    if (isCoat || g.category === "outerwear") score -= 20; 
+    // Hard penalty for heavy knits / turtlenecks in hot weather
+    if (isKnit && !isAiry) score -= 10;
     if (g.season.includes("summer") || g.season.includes("all")) score += 1;
   }
   if (weather.precipChance > 50 && g.category === "shoes") {

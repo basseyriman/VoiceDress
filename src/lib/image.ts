@@ -270,6 +270,24 @@ export async function lockFaceIdentity(
   mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
   mctx.fill();
 
+  // Soft: leave a real eye/frame band so glasses survive identity restore.
+  if (strength === "soft") {
+    mctx.globalCompositeOperation = "destination-out";
+    const eyeY = faceBox ? faceBox.y + faceBox.h * 0.25 : h * 0.1;
+    const eyeH = faceBox ? faceBox.h * 0.35 : h * 0.055;
+    const eyeW = faceBox ? faceBox.w * 0.9 : w * 0.44;
+    const eyeX = faceBox ? faceBox.x + faceBox.w * 0.05 : w * 0.28;
+    
+    const eyeGrad = mctx.createLinearGradient(0, eyeY, 0, eyeY + eyeH);
+    eyeGrad.addColorStop(0, "rgba(0,0,0,0)");
+    eyeGrad.addColorStop(0.2, "rgba(0,0,0,0.85)");
+    eyeGrad.addColorStop(0.8, "rgba(0,0,0,0.85)");
+    eyeGrad.addColorStop(1, "rgba(0,0,0,0)");
+    mctx.fillStyle = eyeGrad;
+    mctx.fillRect(eyeX, eyeY, eyeW, eyeH);
+    mctx.globalCompositeOperation = "source-over";
+  }
+
   // Clip anything below the collar line
   mctx.globalCompositeOperation = "destination-in";
   mctx.fillStyle = "#000";

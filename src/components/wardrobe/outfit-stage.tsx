@@ -359,11 +359,18 @@ export function OutfitStage({
           current = allData.imageUrl as string;
           
           try {
+            // If the user is wearing glasses, use 'soft' face locking to leave the eyes visible.
+            // Otherwise use 'strong' to perfectly paste the whole face.
+            const hasEyewear = lookPieces.some(p => 
+              /glass|frame|optic|sunglass|spec/i.test(p.name + p.category)
+            );
+            const lockStrength = hasEyewear ? "soft" : "strong";
+            
             // Restore exact original face perfectly, using dynamic face scanner box if available
             current = await lockFaceIdentity(
               identityPhoto, 
               current, 
-              "strong", 
+              lockStrength, 
               user?.avatarFaceBox
             );
           } catch (e) {

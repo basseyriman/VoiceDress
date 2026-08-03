@@ -793,7 +793,7 @@ export async function POST(req: NextRequest) {
     .filter(Boolean) as Piece[];
   const finish = orderFinishPieces(
     garments,
-    includeFaceAccessories || stage === "finish"
+    includeFaceAccessories || stage === "finish" || stage === "all"
   );
 
   let current = personImage;
