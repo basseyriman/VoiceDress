@@ -41,9 +41,9 @@ export default function BrandFlyersPage() {
               <iframe src="/" className="w-[430px] h-[932px] border-0 scale-[1.0] origin-top-left pointer-events-none" />
             </div>
 
-            {/* Overlapping Floating Polaroid/Photo */}
-            <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 shadow-2xl rotate-[12deg] rounded-lg z-30">
-              <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden pb-0 relative">
+            {/* Overlapping Floating Photo (No Borders) */}
+            <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] shadow-2xl rotate-[12deg] rounded-lg z-30 overflow-hidden">
+              <div className="w-full h-full bg-gray-100 relative">
                 <img 
                   src="/model-outfit.jpg" 
                   alt="Fashion Model" 
@@ -58,8 +58,8 @@ export default function BrandFlyersPage() {
           </div>
           
           {/* Footer URL */}
-          <div className="absolute bottom-12 left-12 z-40">
-            <span className="text-[#1C2621]/40 tracking-[0.3em] uppercase text-xl font-medium">voicedress.com</span>
+          <div className="absolute bottom-12 w-full text-center z-40">
+            <span className="text-white/60 tracking-[0.3em] uppercase text-xl font-medium">voicedress.com</span>
           </div>
         </div>
       </div>
