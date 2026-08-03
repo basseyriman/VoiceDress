@@ -42,16 +42,16 @@ export default function BrandFlyersPage() {
             </div>
 
             {/* Overlapping Floating Polaroid/Photo */}
-            <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 shadow-2xl rotate-[12deg] rounded-lg z-30">
+            <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 pb-20 shadow-2xl rotate-[12deg] rounded-lg z-30">
               <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden pb-0 relative">
                 <img 
-                  src="/model-brown-dress.png" 
+                  src="/model-outfit.jpg" 
                   alt="Fashion Model" 
-                  className="w-full h-full object-cover scale-[1.35] object-[center_20%]"
+                  className="w-full h-full object-cover scale-[1.2] object-top"
                 />
               </div>
               <div className="absolute top-8 left-8 bg-white/90 backdrop-blur-sm text-ink px-4 py-2 rounded-full font-medium tracking-wide shadow-md text-sm flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-[#9A5B30] rounded-full animate-pulse"></div>
                 Try on with VoiceDress
               </div>
             </div>
