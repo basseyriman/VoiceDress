@@ -104,7 +104,7 @@ export default function LandingPage() {
               Decision fatigue ends here.
             </h2>
             <p className="mt-4 text-mist text-base leading-relaxed">
-              Easily upload your clothes, press the mic to say where you're going, and get the perfect outfit and colors for any event. Weather intelligence, cutting-edge AI, and conversational voice styling carry the load.
+              Easily upload your clothes, press the mic to say where you're going, and get the perfect outfit and colors from your wardrobe for any event. Weather intelligence, cutting-edge AI, and conversational voice styling carry the load.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
