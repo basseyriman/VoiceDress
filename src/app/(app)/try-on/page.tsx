@@ -76,15 +76,14 @@ export default function TryOnPage() {
             See yourself dressed
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
-            Full-body photo — head to shoes. Looks dress on Today after you pick
-            an occasion.
+            Full-body photo — head to shoes. This is the photo you will see yourself dressed in when you pick an occasion.
           </p>
           {error && <p className="mt-2 text-xs text-danger">{error}</p>}
           {displayAvatar && !error && (
             <p className="mt-2 text-xs text-mist">
               {currentOutfit
-                ? "Photo ready — your Today look can dress onto it."
-                : "Photo ready — open Today and name the occasion."}
+                ? "Photo ready — your look will be styled onto it."
+                : "Photo ready — open the Today tab and name the occasion."}
             </p>
           )}
         </div>

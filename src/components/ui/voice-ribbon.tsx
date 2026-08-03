@@ -1,14 +1,8 @@
-export function VoiceRibbon({ position = "bottom" }: { position?: "top" | "bottom" }) {
-  const isTop = position === "top";
-
+export function VoiceRibbon() {
   return (
-    <div
-      className={`pointer-events-none absolute left-0 right-0 h-96 overflow-hidden opacity-40 select-none ${
-        isTop ? "top-16" : "-bottom-32"
-      }`}
-    >
+    <div className="pointer-events-none absolute -bottom-32 left-0 right-0 h-96 overflow-hidden opacity-40 select-none">
       <svg
-        className={`h-full w-[250vw] ${isTop ? "rotate-180" : ""}`}
+        className="h-full w-[250vw]"
         viewBox="0 0 2500 300"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
@@ -16,7 +10,7 @@ export function VoiceRibbon({ position = "bottom" }: { position?: "top" | "botto
       >
         <path
           id="voice-path"
-          d="M -100,250 Q 1200,-100 2600,250"
+          d="M -100,250 C 400,-100 800,400 1300,150 C 1800,-100 2200,400 2600,150"
         />
         <text className="font-display text-4xl italic fill-champagne tracking-[0.1em]">
           <textPath href="#voice-path" startOffset="0%">

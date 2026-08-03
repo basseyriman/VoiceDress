@@ -49,7 +49,7 @@ export default function LandingPage() {
         </header>
 
         <section className="relative mx-auto flex min-h-[88vh] max-w-7xl flex-col justify-center px-4 pb-20 pt-8 sm:px-6">
-          <VoiceRibbon position="bottom" />
+          <VoiceRibbon />
 
           <div className="absolute inset-0 -z-10">
             {/* eslint-disable-next-line @next/next/no-img-element */}
