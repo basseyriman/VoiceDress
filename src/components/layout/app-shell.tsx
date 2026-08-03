@@ -77,7 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => {
-                void signOutLocal().then(() => router.push("/login"));
+                void signOutLocal().then(() => router.push("/"));
               }}
               className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-xs text-mist transition hover:text-ivory sm:px-3"
             >
