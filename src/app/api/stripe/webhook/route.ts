@@ -2,30 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import {
   getStripe,
-  planIdFromStripePrice,
   quoteLookTopup,
 } from "@/lib/stripe";
 import { getAdminDb, isAdminConfigured } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
-
-async function setUserSubscription(
-  uid: string,
-  patch: Record<string, unknown>
-) {
-  const db = getAdminDb();
-  if (!db) throw new Error("Firebase Admin not configured");
-  await db
-    .collection("users")
-    .doc(uid)
-    .set(
-      {
-        ...patch,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
-}
 
 function uidFromSession(session: Stripe.Checkout.Session): string | null {
   return (
@@ -33,17 +14,6 @@ function uidFromSession(session: Stripe.Checkout.Session): string | null {
     session.metadata?.firebaseUid ||
     null
   );
-}
-
-function mapStripeStatus(
-  status: Stripe.Subscription.Status | null | undefined
-): "trialing" | "active" | "canceled" | "none" {
-  if (status === "trialing") return "trialing";
-  if (status === "active") return "active";
-  if (status === "canceled" || status === "unpaid" || status === "incomplete_expired")
-    return "canceled";
-  if (status === "past_due" || status === "incomplete") return "active"; // grace
-  return "none";
 }
 
 export async function POST(req: NextRequest) {
@@ -91,12 +61,8 @@ export async function POST(req: NextRequest) {
             typeof session.customer === "string"
               ? session.customer
               : session.customer?.id;
-          const subscriptionId =
-            typeof session.subscription === "string"
-              ? session.subscription
-              : session.subscription?.id;
 
-          // One-time look top-up — bank credits; do not touch subscription status
+          // One-time look top-up
           const isLookTopup =
             session.mode === "payment" &&
             (session.metadata?.type === "look_topup" ||
@@ -111,7 +77,6 @@ export async function POST(req: NextRequest) {
               session.metadata?.expectedPence || quote?.pence || 0
             );
             const paid = session.amount_total;
-            // Refuse credit if paid amount is below the quoted price (metadata tamper / underpay).
             if (
               quote &&
               typeof paid === "number" &&
@@ -145,79 +110,6 @@ export async function POST(req: NextRequest) {
             }
             break;
           }
-
-          if (!subscriptionId && session.mode !== "subscription") {
-            break;
-          }
-
-          let status: "trialing" | "active" = "active";
-          let trialEndsAt: string | undefined;
-          let subscriptionPlan =
-            session.metadata?.planId === "yearly" ||
-            session.metadata?.planId === "monthly"
-              ? session.metadata.planId
-              : null;
-          if (subscriptionId) {
-            const sub = await stripe.subscriptions.retrieve(subscriptionId);
-            status =
-              mapStripeStatus(sub.status) === "trialing" ? "trialing" : "active";
-            if (sub.trial_end) {
-              trialEndsAt = new Date(sub.trial_end * 1000).toISOString();
-            }
-            const fromPrice = planIdFromStripePrice(
-              sub.items.data[0]?.price.id
-            );
-            const fromMeta =
-              sub.metadata?.planId === "yearly" ||
-              sub.metadata?.planId === "monthly"
-                ? sub.metadata.planId
-                : null;
-            subscriptionPlan = fromPrice || fromMeta || subscriptionPlan;
-          }
-
-          await setUserSubscription(uid, {
-            subscriptionStatus: status,
-            ...(customerId ? { stripeCustomerId: customerId } : {}),
-            ...(subscriptionId ? { stripeSubscriptionId: subscriptionId } : {}),
-            ...(trialEndsAt ? { trialEndsAt } : {}),
-            ...(subscriptionPlan ? { subscriptionPlan } : {}),
-          });
-          break;
-        }
-        case "customer.subscription.updated":
-        case "customer.subscription.deleted": {
-          const sub = event.data.object as Stripe.Subscription;
-          const customerId =
-            typeof sub.customer === "string" ? sub.customer : sub.customer?.id;
-          const uid =
-            sub.metadata?.firebaseUid ||
-            (customerId ? await findUidByCustomer(customerId) : null);
-          if (!uid) {
-            console.warn(
-              `${event.type} missing firebase uid for customer ${customerId || "unknown"}`
-            );
-            break;
-          }
-          const status = mapStripeStatus(
-            event.type === "customer.subscription.deleted"
-              ? "canceled"
-              : sub.status
-          );
-          const subscriptionPlan =
-            planIdFromStripePrice(sub.items.data[0]?.price.id) ||
-            (sub.metadata?.planId === "yearly" ||
-            sub.metadata?.planId === "monthly"
-              ? sub.metadata.planId
-              : null);
-          await setUserSubscription(uid, {
-            subscriptionStatus: status,
-            stripeSubscriptionId: sub.id,
-            ...(customerId ? { stripeCustomerId: customerId } : {}),
-            ...(sub.trial_end
-              ? { trialEndsAt: new Date(sub.trial_end * 1000).toISOString() }
-              : {}),
-            ...(subscriptionPlan ? { subscriptionPlan } : {}),
-          });
           break;
         }
         default:
@@ -235,19 +127,3 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function findUidByCustomer(customerId: string): Promise<string | null> {
-  try {
-    const db = getAdminDb();
-    if (!db) return null;
-    const q = await db
-      .collection("users")
-      .where("stripeCustomerId", "==", customerId)
-      .limit(1)
-      .get();
-    if (q.empty) return null;
-    return q.docs[0]!.id;
-  } catch (err) {
-    console.error("findUidByCustomer failed", err);
-    return null;
-  }
-}
