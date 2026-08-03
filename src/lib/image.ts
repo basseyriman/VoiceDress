@@ -203,11 +203,83 @@ export async function lockFaceIdentity(
   strength: "strong" | "soft" = "strong",
   faceBox?: { x: number; y: number; w: number; h: number }
 ): Promise<string> {
-  // FASHN Try-On Max perfectly preserves the identity and background natively.
-  // Manually pasting the original face over the result creates unnatural seams 
-  // on the neck/collar due to lighting shifts. 
-  // Since all try-on steps now use FASHN, we bypass this manual mask.
-  return dressedSrc;
+  const [identity, dressed] = await Promise.all([
+    loadHtmlImage(identitySrc),
+    loadHtmlImage(dressedSrc),
+  ]);
+
+  const w = dressed.width;
+  const h = dressed.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dressedSrc;
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(dressed, 0, 0, w, h);
+
+  const faceLayer = document.createElement("canvas");
+  faceLayer.width = w;
+  faceLayer.height = h;
+  const fctx = faceLayer.getContext("2d");
+  if (!fctx) return dressedSrc;
+  fctx.imageSmoothingEnabled = true;
+  fctx.imageSmoothingQuality = "high";
+
+  // Draw identity with the same letterbox framing as the dressed canvas
+  const idRatio = identity.width / identity.height;
+  const canvasRatio = w / h;
+  let dw = w;
+  let dh = h;
+  let dx = 0;
+  let dy = 0;
+  if (idRatio > canvasRatio) {
+    dw = w;
+    dh = Math.round(w / idRatio);
+    dy = Math.round((h - dh) / 2);
+  } else {
+    dh = h;
+    dw = Math.round(h * idRatio);
+    dx = Math.round((w - dw) / 2);
+  }
+  fctx.drawImage(identity, dx, dy, dw, dh);
+
+  // Dynamic face box support
+  const cx = faceBox ? faceBox.x + faceBox.w / 2 : w * 0.5;
+  const cy = faceBox ? faceBox.y + faceBox.h / 2 : h * 0.138;
+  const rx = faceBox ? faceBox.w * 0.7 : w * 0.34;
+  const ry = faceBox ? faceBox.h * 0.8 : h * 0.2;
+  const maxY = faceBox ? faceBox.y + faceBox.h * 1.5 : h * 0.36;
+
+  const mask = document.createElement("canvas");
+  mask.width = w;
+  mask.height = h;
+  const mctx = mask.getContext("2d");
+  if (!mctx) return dressedSrc;
+
+  const inner = ry * 0.55;
+  const grad = mctx.createRadialGradient(cx, cy, inner, cx, cy, ry);
+  grad.addColorStop(0, "rgba(0,0,0,1)");
+  grad.addColorStop(0.72, "rgba(0,0,0,1)");
+  grad.addColorStop(0.9, "rgba(0,0,0,0.96)");
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  mctx.fillStyle = grad;
+  mctx.beginPath();
+  mctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  mctx.fill();
+
+  // Clip anything below the collar line
+  mctx.globalCompositeOperation = "destination-in";
+  mctx.fillStyle = "#000";
+  mctx.fillRect(0, 0, w, Math.floor(maxY));
+
+  fctx.globalCompositeOperation = "destination-in";
+  fctx.drawImage(mask, 0, 0);
+
+  ctx.drawImage(faceLayer, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.98);
 }
 
 /**

@@ -357,6 +357,19 @@ export function OutfitStage({
           }
 
           current = allData.imageUrl as string;
+          
+          try {
+            // Restore exact original face perfectly, using dynamic face scanner box if available
+            current = await lockFaceIdentity(
+              identityPhoto, 
+              current, 
+              "strong", 
+              user?.avatarFaceBox
+            );
+          } catch (e) {
+            console.warn("Face locking failed, using base try-on image", e);
+          }
+          
           setWornUrl(current);
           setKeyConfigured(true);
 
@@ -599,58 +612,7 @@ export function OutfitStage({
               </div>
             )}
 
-            <AnimatePresence>
-              {hasAvatar && dressing && !showKeyPrompt && !showBillingPrompt && (
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-ink via-ink/85 to-transparent p-6 pt-20"
-                >
-                  <div className="flex items-end justify-between gap-3">
-                    <p className="font-display text-xl text-ivory">{stepLabel}</p>
-                    <p className="shrink-0 font-display text-4xl tabular-nums leading-none text-champagne">
-                      {progressPct}
-                      <span className="text-xl">%</span>
-                    </p>
-                  </div>
-                  <div className="mt-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-mist">
-                    <span>
-                      {piecesDone} of {piecesTotal} pieces
-                      {activePieceId ? " · applying" : ""}
-                    </span>
-                    <span>
-                      ~{etaSec < 60 ? `${etaSec}s` : `${Math.ceil(etaSec / 60)}m`}{" "}
-                      left
-                    </span>
-                  </div>
-                  <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/15 ring-1 ring-white/10">
-                    <motion.div
-                      className="h-full rounded-full bg-champagne shadow-[0_0_12px_rgba(201,168,124,0.45)]"
-                      animate={{ width: `${Math.max(progressPct, 4)}%` }}
-                      transition={{ duration: 0.4 }}
-                    />
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {lookPieces.map((g) => (
-                      <div
-                        key={g.id}
-                        className={cn(
-                          "rounded-full border px-2.5 py-1 text-[10px] transition",
-                          activePieceId === g.id
-                            ? "border-champagne bg-champagne/15 text-champagne"
-                            : donePieceIds.includes(g.id)
-                              ? "border-champagne/40 text-champagne"
-                              : "border-white/10 text-mist"
-                        )}
-                      >
-                        <span className="truncate">{g.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+
 
             {showBillingPrompt && hasAvatar && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-ink/75 p-6 text-center backdrop-blur-sm">

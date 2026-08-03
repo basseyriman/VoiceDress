@@ -793,7 +793,7 @@ export async function POST(req: NextRequest) {
     .filter(Boolean) as Piece[];
   const finish = orderFinishPieces(
     garments,
-    includeFaceAccessories || stage === "finish" || stage === "all"
+    includeFaceAccessories || stage === "finish"
   );
 
   let current = personImage;
@@ -825,7 +825,7 @@ export async function POST(req: NextRequest) {
           return `${g.category}: ${g.name || g.category}`;
         }).join(", ");
 
-        const prompt = `The person must wear all of these items from the collage: ${promptPieces}. Keep the face perfectly identical. Keep the background completely unchanged. Do not alter the person's body or skin tone. Put the exact items from the collage onto the person.`;
+        const prompt = `The person must wear all of these items from the collage: ${promptPieces}. Keep the face perfectly identical. Keep the background completely unchanged. Do not alter the person's body or skin tone. Put the exact items from the collage onto the person. IMPORTANT: ONLY apply the specific items listed. DO NOT copy undergarments, ties, inner shirts, or other extra clothing worn by the models in the product images unless they are explicitly listed.`;
 
         const allResult = await fashnTryOnMax({
           modelImage: current,
