@@ -27,7 +27,7 @@ export default function BrandFlyersPage() {
               Improve Your Outfits<br/>With VoiceDress!
             </h2>
             <p className="text-2xl font-light max-w-2xl opacity-80">
-              Let VoiceDress pull out or suggest the perfect outfit based on your wardrobe, just by speaking to it.
+              Let VoiceDress suggest the perfect outfit based on your wardrobe, just by speaking to it.
             </p>
           </div>
 
