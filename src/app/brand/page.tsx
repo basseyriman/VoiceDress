@@ -51,7 +51,7 @@ export default function BrandFlyersPage() {
                 />
               </div>
               {/* Text Label - Bag Area */}
-              <div className="absolute bottom-12 left-12 z-50 flex items-center bg-[#e3d5c8]/90 backdrop-blur-md text-ink px-4 py-2 rounded-full font-medium tracking-wide shadow-xl text-sm gap-2 whitespace-nowrap">
+              <div className="absolute bottom-24 left-16 z-50 flex items-center bg-[#e3d5c8]/90 backdrop-blur-md text-ink px-4 py-2 rounded-full font-medium tracking-wide shadow-xl text-sm gap-2 whitespace-nowrap">
                 <div className="w-2 h-2 bg-[#9A5B30] rounded-full animate-pulse"></div>
                 Try on with VoiceDress
               </div>
