@@ -11,7 +11,7 @@ import { useAetherStore } from "@/store/aether-store";
 import type { CommerceSource, Garment } from "@/lib/types";
 
 type Props = {
-  /** Where Shopify OAuth should return (relative path). */
+  
   returnTo?: string;
   /** Hide the large page intro when embedded in onboarding. */
   compact?: boolean;

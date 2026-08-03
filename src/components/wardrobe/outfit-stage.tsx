@@ -791,7 +791,7 @@ export function OutfitStage({
                   {alternatives.length === 0 ? (
                     <p className="text-xs text-mist">
                       No {swapFor} in your wardrobe — add one via Connect (upload
-                      a photo or sync Shopify).
+                      a photo).
                     </p>
                   ) : (
                     <div className="grid gap-2 sm:grid-cols-2">
