@@ -71,10 +71,9 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.85, delay: 0.16 }}
-            className="mt-6 max-w-xl text-base leading-relaxed text-ivory-muted sm:text-lg"
+            className="mt-6 max-w-2xl text-base leading-relaxed text-ivory-muted sm:text-lg"
           >
-            Speak the day — VoiceDress dresses the full look on your photo.
-            Weather-aware. One suggestion. Swap by voice.
+            Just tell us where you're going and VoiceDress has you covered. Like your personal stylist, it pulls the right outfit for the occasion—perfectly matched to the weather—and styles it directly onto your photo so you see exactly how it looks on your body. Tap the mic to chat or swap pieces instantly.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 18 }}
@@ -104,8 +103,8 @@ export default function LandingPage() {
             <h2 className="mt-3 font-display text-4xl text-ivory">
               Decision fatigue ends here.
             </h2>
-            <p className="mt-4 text-mist">
-              Weather intelligence, cutting-edge AI, and voice styling carry the load.
+            <p className="mt-4 text-mist text-base leading-relaxed">
+              Easily upload your clothes, press the mic, and get the perfect outfit and colors for any event. Weather intelligence, cutting-edge AI, and conversational voice styling carry the load.
             </p>
           </div>
           <div className="grid gap-6 md:grid-cols-2">
