@@ -93,6 +93,7 @@ export interface UserProfile {
   photoURL?: string;
   avatarUrl?: string;
   avatarStatus?: "none" | "generating" | "ready" | "failed";
+  avatarFaceBox?: { x: number; y: number; w: number; h: number };
   city?: string;
   lat?: number;
   lon?: number;

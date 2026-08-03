@@ -132,7 +132,6 @@ export default function TryOnPage() {
         outfit={currentOutfit}
         avatarUrl={displayAvatar}
         generating={busy}
-        autoTryOn={false}
       />
       {/* Voice lives on Today — keep Photo light so nav never freezes */}
     </div>

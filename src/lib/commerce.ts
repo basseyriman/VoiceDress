@@ -9,6 +9,8 @@ export {
   isRealFootwear,
   isUnderwearOrLounge,
   isApparelMislabeledAsShoes,
+  isSoftKnitLayer,
+  isStructuredOuterwear,
   normalizeGarmentCategory,
   sanitizeGarmentCategory,
   sanitizeWardrobe,

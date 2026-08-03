@@ -3,14 +3,16 @@ import { getAdminAuth, getAdminDb, isAdminConfigured } from "@/lib/firebase-admi
 import type { UserProfile } from "@/lib/types";
 import {
   FREE_PHOTO_TRYONS,
+  freePhotoTryOnsUsed,
+  isMembershipActive,
+} from "@/lib/entitlement";
+import {
   PAID_PHOTO_TRYONS_PER_MONTH,
   currentPhotoTryOnMonthKey,
-  freePhotoTryOnsUsed,
   hasMonthlyPhotoTryOnQuota,
-  isMembershipActive,
   photoTryOnCredits,
   photoTryOnsUsedThisMonth,
-} from "@/lib/entitlement";
+} from "@/lib/photo-tryon-quota";
 import { verifyFirebaseIdToken } from "@/lib/verify-firebase-token";
 
 export type AuthedUser = {
@@ -54,10 +56,12 @@ export async function requireAuth(
     );
   }
 
-  // Prefer Admin SDK when configured
-  if (isAdminConfigured()) {
+  // Prefer Admin SDK when it loads. firebase-admin/auth → jwks-rsa → jose often
+  // crashes under Turbopack (ERR_REQUIRE_ESM) — fall through to JWKS then.
+  const adminAuth = getAdminAuth();
+  if (adminAuth) {
     try {
-      const decoded = await getAdminAuth()!.verifyIdToken(token);
+      const decoded = await adminAuth.verifyIdToken(token);
       return { uid: decoded.uid, email: decoded.email };
     } catch {
       return NextResponse.json(
@@ -92,6 +96,9 @@ export async function requireAuth(
     {
       error: AUTH_UNAVAILABLE,
       code: "auth_unavailable",
+      detail: isAdminConfigured()
+        ? "Admin auth module failed to load; JWKS token verify also failed."
+        : undefined,
     },
     { status: 503 }
   );
@@ -246,7 +253,12 @@ export async function consumeFreePhotoTryOn(
   uid: string
 ): Promise<{ consumed: boolean; used: number }> {
   const db = getAdminDb();
-  if (!db) return { consumed: false, used: 0 };
+  if (!db) {
+    if (process.env.ALLOW_INSECURE_API === "true") {
+      return { consumed: true, used: 1 };
+    }
+    return { consumed: false, used: 0 };
+  }
   const ref = db.collection("users").doc(uid);
   const snap = await ref.get();
   const profile = (snap.data() || {}) as Partial<UserProfile>;

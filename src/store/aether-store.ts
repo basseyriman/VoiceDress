@@ -92,7 +92,11 @@ interface AetherState {
   setWeather: (w: WeatherSnapshot) => void;
   /** Fetch forecast into the store if missing — used by voice on any page. */
   ensureWeather: () => Promise<WeatherSnapshot | null>;
-  setAvatar: (url: string, status: UserProfile["avatarStatus"]) => Promise<void>;
+  setAvatar: (
+    url: string,
+    status: UserProfile["avatarStatus"],
+    faceBox?: { x: number; y: number; w: number; h: number }
+  ) => Promise<void>;
   generateOutfit: (
     occasion?: string,
     style?: string,
@@ -481,7 +485,7 @@ export const useAetherStore = create<AetherState>()(
           return null;
         }
       },
-      setAvatar: async (url, status) => {
+      setAvatar: async (url, status, faceBox) => {
         const user = get().user;
         if (!user) return;
 
@@ -496,6 +500,7 @@ export const useAetherStore = create<AetherState>()(
             avatarUrl: url,
             photoURL: user.photoURL,
             avatarStatus: status,
+            ...(faceBox !== undefined && { avatarFaceBox: faceBox }),
           },
         });
 
@@ -512,6 +517,7 @@ export const useAetherStore = create<AetherState>()(
                 avatarUrl: cloudUrl,
                 photoURL: cloudUrl,
                 avatarStatus: status,
+                ...(faceBox !== undefined && { avatarFaceBox: faceBox }),
               },
             });
             await saveAvatarBlob(cloudUrl);
@@ -519,11 +525,13 @@ export const useAetherStore = create<AetherState>()(
               avatarUrl: cloudUrl,
               photoURL: cloudUrl,
               avatarStatus: status,
+              ...(faceBox !== undefined && { avatarFaceBox: faceBox }),
             });
           } catch {
             // Still mark ready in Firestore so login doesn’t restart photo setup
             await saveUserProfile(user.uid, {
               avatarStatus: status,
+              ...(faceBox !== undefined && { avatarFaceBox: faceBox }),
             }).catch(() => undefined);
           }
         } else {
@@ -531,6 +539,7 @@ export const useAetherStore = create<AetherState>()(
             avatarUrl: url,
             photoURL: url,
             avatarStatus: status,
+            ...(faceBox !== undefined && { avatarFaceBox: faceBox }),
           }).catch(() => undefined);
         }
       },

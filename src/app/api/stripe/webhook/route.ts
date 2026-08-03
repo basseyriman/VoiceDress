@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
             if (add > 0) {
               const db = getAdminDb()!;
               const ref = db.collection("users").doc(uid);
-              await db.runTransaction(async (tx) => {
+              await db.runTransaction(async (tx: any) => {
                 const snap = await tx.get(ref);
                 const prev = Math.max(
                   0,

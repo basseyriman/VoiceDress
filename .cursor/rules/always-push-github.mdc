@@ -1,0 +1,13 @@
+---
+description: Always commit meaningful work and push to GitHub
+alwaysApply: true
+---
+
+# Always push to GitHub
+
+After completing meaningful code changes in this repo:
+
+1. Commit (exclude secrets like `.env.local`)
+2. Push to `origin` on the current branch (`git push -u origin HEAD` when needed)
+
+Do this without waiting for the user to ask again. Do not force-push to main/master.

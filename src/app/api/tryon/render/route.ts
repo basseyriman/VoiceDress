@@ -230,11 +230,9 @@ function isSoftLayer(piece: Piece) {
 
 /** Structured outerwear where Kontext layering beats FASHN tops-mode. */
 function needsKontextOuterwearFirst(piece: Piece) {
-  return (
-    piece.category === "outerwear" &&
-    (isBlazerPiece(piece) || isCoatPiece(piece)) &&
-    !isSoftLayer(piece)
-  );
+  // Disabled: Kontext multi-image layering (Flux Pro) completely destroys the person's face/body 
+  // when layering a blazer from a full-suit product shot. FASHN handles this much better.
+  return false;
 }
 
 function shoeGlassesPrompt(piece: Piece): string {
@@ -243,11 +241,11 @@ function shoeGlassesPrompt(piece: Piece): string {
     return [
       KEEP_YOU,
       KEEP_FRAMING,
-      `Change ONLY the footwear on BOTH feet using image 2 (${look}).`,
-      "Put the shoes ON the person's feet in a natural standing pose — never paste the product photo as a floating strip, collage, or inset at the bottom of the frame.",
-      "Completely replace the existing shoes. Match shoe color and silhouette from image 2 exactly.",
-      "Keep trousers/pants and everything from the knees up completely unchanged — do not invent denim or change pant color.",
-      "Do not alter face, torso, or pant legs above the shin.",
+      `The person is wearing the shoes from image 2 on their feet.`,
+      "The shoes must be worn naturally on BOTH feet. Photorealistic.",
+      "Completely replace the existing shoes with the ones from image 2.",
+      "Keep trousers, pants, and everything from the knees up completely unchanged.",
+      "Do not alter the face, torso, background, or lighting.",
     ].join(" ");
   }
   const colorHint =
@@ -280,16 +278,16 @@ function outerwearLayerPrompt(piece: Piece): string {
   const coat = isCoatPiece(piece) && !blazer;
   const soft = isSoftLayer(piece);
   const silhouette = blazer
-    ? "structured hip-length blazer with notch lapels — NOT a long overcoat, trench, duster, or cape"
+    ? "structured hip-length blazer with notch lapels. The jacket must end at the hips."
     : coat
-      ? "full-length coat matching image 2 — same length and color, not a short blazer"
+      ? "full-length coat matching image 2 — same length and color"
       : soft
-        ? "soft knit mid-layer matching image 2 exactly — same color, zipper/placket, and length (sweater/cardigan/hoodie, not a tailored blazer)"
+        ? "soft knit mid-layer matching image 2 exactly — same color, zipper/placket, and length"
         : "outer jacket matching image 2 exactly — same length, cut, and color";
 
   const colorRule = soft
     ? "Match the exact color from image 2 — if cream, ivory, white, or light grey, keep it light; never darken into navy or black."
-    : "Match the exact color from image 2 (if navy/midnight blue, keep it deep navy — never cream, ivory, camel, beige, or washed-out grey).";
+    : "Match the exact color, fabric, and pattern of the jacket in image 2. Do not invent a new color.";
 
   return [
     KEEP_YOU,
@@ -298,9 +296,9 @@ function outerwearLayerPrompt(piece: Piece): string {
       ? `Layer ONLY the knit/soft outer layer from image 2 (${look}) over the person's existing top.`
       : `Layer ONLY the outerwear jacket from image 2 (${look}) over the person's existing top.`,
     `It must be a ${silhouette}.`,
-    "If image 2 shows a full suit, use ONLY the jacket — do NOT replace the person's existing trousers with suit pants or jeans.",
+    "If image 2 shows a full suit, use ONLY the jacket.",
     colorRule,
-    "Keep the top underneath visible at the neckline/hem where natural. Do not replace the top with the jacket alone.",
+    "Keep the top underneath visible at the neckline/hem. The top underneath MUST retain its original color (e.g. if white, keep it white). Do not tint the shirt to match the jacket.",
     "Keep lower garments, shoes, hands, face, and background completely unchanged.",
     "Photoreal fabric, natural drape, correct proportions for this body.",
   ].join(" ");
@@ -358,15 +356,16 @@ async function kontextAccessoriesBatch(opts: {
   const prompt = [
     KEEP_YOU,
     KEEP_FRAMING,
-    `Image 2 shows the accessories to wear. Add ALL of them onto the person: ${labels}.`,
+    `RAW PHOTOREALISTIC EDIT. Image 2 shows the accessories to wear. Add ALL of them onto the person: ${labels}.`,
     hasShoes
-      ? "Put shoes ON both feet in a natural standing pose — never paste a product strip or collage inset at the bottom of the frame."
+      ? "You MUST completely replace the person's existing shoes with the new shoes. Put them ON both feet in a natural standing pose — never paste a product strip or collage inset at the bottom of the frame."
       : "",
     hasEyewear
       ? "Place thin realistic glasses frames on the existing face — never invent neon lenses or wipe/regenerate the head."
       : "",
     "Match each product’s exact colors and shapes.",
-    "Do NOT change trousers, jacket, or shirt colors. Keep face photoreal — no cartoon skin. Full-body crop with head and feet visible.",
+    "CRITICAL: MUST REMAIN RAW PHOTOGRAPHY. Keep face perfectly photorealistic, real human skin texture, highly detailed.",
+    "NO cartoon skin, NO AI smoothing, NO painting effect. Do NOT change trousers, jacket, or shirt colors. Full-body crop with head and feet visible.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -734,7 +733,7 @@ export async function POST(req: NextRequest) {
     const polished = await kontextStylePolish({
       falKey,
       personImage,
-      prompt: stylingPrompt,
+      prompt: `${KEEP_YOU} ${KEEP_FRAMING} Styling polish: ${stylingPrompt}. Ensure photoreal clothing drape. DO NOT change the face, background, or body shape under any circumstances.`,
     });
     if (!polished.ok) {
       if (isFalBillingError(polished.detail)) {
@@ -794,7 +793,7 @@ export async function POST(req: NextRequest) {
     .filter(Boolean) as Piece[];
   const finish = orderFinishPieces(
     garments,
-    includeFaceAccessories || stage === "finish"
+    includeFaceAccessories || stage === "finish" || stage === "all"
   );
 
   let current = personImage;
@@ -810,6 +809,65 @@ export async function POST(req: NextRequest) {
 
   const runApparel = stage === "auto" || stage === "apparel";
   const runFinish = stage === "auto" || stage === "finish";
+
+  if (stage === "all" && hasFashnApiKey()) {
+    const allPieces = [...apparel, ...finish];
+    if (allPieces.length > 0) {
+      try {
+        const productImages = await Promise.all(
+          allPieces.map((g) => resolveGarmentImageForFal(g.imageUrl))
+        );
+        const collage = await composeApparelCollage(productImages);
+        
+        let promptPieces = allPieces.map(g => {
+          if (g.category === "shoes") return `shoes: ${g.name || "shoes"}`;
+          if (g.category === "accessory") return `accessory: ${g.name || "accessory"}`;
+          return `${g.category}: ${g.name || g.category}`;
+        }).join(", ");
+
+        const prompt = `The person must wear all of these items from the collage: ${promptPieces}. Keep the face perfectly identical. Keep the background completely unchanged. Do not alter the person's body or skin tone. Put the exact items from the collage onto the person.`;
+
+        const allResult = await fashnTryOnMax({
+          modelImage: current,
+          productImage: collage,
+          prompt,
+          timeoutMs: Math.min(110_000, Math.max(20_000, msLeft() - 25_000)),
+        });
+
+        if (allResult.ok) {
+          current = allResult.url;
+          for (const g of allPieces) {
+            steps.push({
+              id: g.id,
+              category: g.category,
+              name: g.name,
+              url: current,
+              provider: "fashn-tryon-max-all",
+            });
+          }
+        } else if (allResult.needsBilling) {
+          return NextResponse.json({
+            ok: false,
+            needsBilling: true,
+            error: "FASHN Trial ended.",
+            code: "billing_required",
+          });
+        } else {
+          warnings.push("FASHN all-pass failed: " + allResult.detail);
+        }
+      } catch (err) {
+        warnings.push("Error preparing all-pass collage: " + (err instanceof Error ? err.message : String(err)));
+      }
+    }
+    
+    return NextResponse.json({
+      ok: true,
+      imageUrl: current,
+      steps,
+      warnings,
+      consumedFreeTryOn,
+    });
+  }
 
   if (runApparel) {
     // Base clothes first, outerwear last
@@ -1036,12 +1094,14 @@ export async function POST(req: NextRequest) {
     // paste the shoe product sheet at the bottom instead of re-footing the person.
     // Watches stay text-only (product collage blobs the dial).
     const premiumFinish = hasFashnApiKey();
-    const batchable = [
-      ...(premiumFinish ? [] : shoePieces),
-      ...bagPieces,
-      ...otherAccessories,
-      ...eyewearPieces,
-    ];
+    const batchable = premiumFinish 
+      ? [] 
+      : [
+          ...shoePieces,
+          ...bagPieces,
+          ...otherAccessories,
+          ...eyewearPieces,
+        ];
 
     const runOne = async (g: Piece) => {
       if (msLeft() < 30_000) {

@@ -1,8 +1,21 @@
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
 
 let app: App | null = null;
+
+/**
+ * Env present for Admin — does not load firebase-admin/auth (jose / jwks-rsa
+ * crashes under Turbopack with ERR_REQUIRE_ESM if auth is imported at top level).
+ */
+export function isAdminConfigured(): boolean {
+  const json =
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim() ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
+  if (json) return true;
+  return Boolean(
+    process.env.FIREBASE_CLIENT_EMAIL?.trim() &&
+      process.env.FIREBASE_PRIVATE_KEY?.trim()
+  );
+}
 
 /** Server-only Firebase Admin — required for Stripe webhooks + API auth. */
 export function getAdminApp(): App | null {
@@ -57,16 +70,45 @@ export function getAdminApp(): App | null {
   return null;
 }
 
-export function getAdminAuth() {
+let authLoadFailed = false;
+
+/** Lazy-load auth so try-on routes can fall back to JWKS when jose breaks. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getAdminAuth(): any | null {
+  if (authLoadFailed) return null;
   const a = getAdminApp();
-  return a ? getAuth(a) : null;
+  if (!a) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getAuth } = require("firebase-admin/auth") as typeof import("firebase-admin/auth");
+    return getAuth(a);
+  } catch (err) {
+    authLoadFailed = true;
+    console.warn(
+      "[firebase-admin] auth unavailable (jose/jwks); using JWKS fallback",
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
 }
 
-export function getAdminDb() {
-  const a = getAdminApp();
-  return a ? getFirestore(a) : null;
-}
+let dbLoadFailed = false;
 
-export function isAdminConfigured() {
-  return Boolean(getAdminApp());
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getAdminDb(): any | null {
+  if (dbLoadFailed) return null;
+  const a = getAdminApp();
+  if (!a) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { getFirestore } = require("firebase-admin/firestore") as typeof import("firebase-admin/firestore");
+    return getFirestore(a);
+  } catch (err) {
+    dbLoadFailed = true;
+    console.warn(
+      "[firebase-admin] firestore unavailable",
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
 }

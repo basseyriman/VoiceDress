@@ -34,7 +34,31 @@ export function ChangePhotoButton({
         return;
       }
       onChanged?.(prepared.dataUrl);
-      await setAvatar(prepared.dataUrl, "ready");
+
+      // Extract face coordinates in the background (fail-safe so it doesn't block)
+      let faceBox: { x: number; y: number; w: number; h: number } | undefined;
+      try {
+        const res = await fetch("/api/photo/face-detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUrl: prepared.dataUrl }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.faceX !== undefined) {
+            faceBox = {
+              x: data.faceX,
+              y: data.faceY,
+              w: data.faceWidth,
+              h: data.faceHeight,
+            };
+          }
+        }
+      } catch (err) {
+        console.warn("Face detect failed:", err);
+      }
+
+      await setAvatar(prepared.dataUrl, "ready", faceBox);
     } catch {
       setError("Couldn’t use that photo. Try a JPG or PNG.");
     } finally {

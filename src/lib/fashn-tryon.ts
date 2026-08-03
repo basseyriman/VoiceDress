@@ -110,7 +110,8 @@ export function apparelPromptForPiece(
     return [
       KEEP_FACE,
       strip,
-      `Wear this exact ${piece.category === "dress" ? "dress" : "top"}: ${piece.name || "garment"}.`,
+      `Wear ONLY this exact ${piece.category === "dress" ? "dress" : "top"}: ${piece.name || "garment"}.`,
+      "Do NOT apply any inner shirts, collars, or ties visible in the product image. Apply ONLY the main garment.",
       colors ? `Keep the ${colors} color — do not darken or recolor it.` : "Keep the exact product color.",
       "Replace the current upper clothing completely.",
     ]
@@ -124,13 +125,10 @@ export function apparelPromptForPiece(
     return [
       KEEP_FACE,
       suitTrousers
-        ? `Wear ONLY the trousers from this suit product photo: ${piece.name || "suit trousers"}. Ignore the jacket in the product image — apply trousers only.`
+        ? `The person is wearing ONLY the suit trousers from the product image.`
         : `Wear these exact bottoms (trousers, skirt, or shorts): ${piece.name || "garment"}.`,
       colors ? `Exact color: ${colors}.` : "Keep the exact product color.",
       "Replace the current lower clothing. Keep the top already on the person.",
-      suitTrousers
-        ? "Do not add the matching jacket from the product — trousers only."
-        : "",
     ]
       .filter(Boolean)
       .join(" ");

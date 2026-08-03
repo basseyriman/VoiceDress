@@ -76,6 +76,44 @@ export function isUnderwearOrLounge(g: Named): boolean {
   );
 }
 
+/**
+ * Soft knit mid-layers (sweater, cardigan, quarter-zip, fleece).
+ * These are tops — not outerwear — and must not stack as top + "outer" sweater.
+ * Hoodies stay eligible as soft outerwear over a tee.
+ */
+export function isSoftKnitLayer(g: Named): boolean {
+  const t = blobOf(g);
+  // Real structured jackets win even if "knit blazer" appears
+  if (
+    /\b(blazer|suit\s*jacket|sport\s*coat|overcoat|trench|parka|puffer|peacoat|raincoat|bomber|windbreaker|anorak)\b/.test(
+      t
+    )
+  ) {
+    return false;
+  }
+  if (/\bhoodie\b/.test(t) && !/\b(sweater|cardigan|jumper)\b/.test(t)) {
+    return false;
+  }
+  return (
+    /\b(sweater|jumper|cardigan|pullover|fleece|crewneck|quarter[- ]?zip|half[- ]?zip)\b/.test(
+      t
+    ) ||
+    (/\bzip[- ]?up\b/.test(t) && !/\b(jacket|hoodie|coat)\b/.test(t))
+  );
+}
+
+/** Tailored / weather outerwear suitable over a knit top. */
+export function isStructuredOuterwear(g: Named): boolean {
+  const t = blobOf(g);
+  if (isSoftKnitLayer(g)) return false;
+  return (
+    g.category === "outerwear" ||
+    /\b(blazer|jacket|coat|trench|parka|overcoat|bomber|peacoat|raincoat|windbreaker|suit\s*jacket|sport\s*coat)\b/.test(
+      t
+    )
+  );
+}
+
 /** Real shoes/boots — never trust a shoes label on shirts/jeans/socks. */
 export function isRealFootwear(g: Named & { colors?: string[] }): boolean {
   if (isHosieryOrSocks(g) || isLikelySockPackMislabel(g)) return false;
@@ -105,6 +143,19 @@ export function inferCategoryFromText(
 ): GarmentCategory | null {
   const t = `${name} ${brand} ${tags.join(" ")}`.toLowerCase();
   if (!t.trim()) return null;
+  const n = name.toLowerCase();
+
+  // 1. Strict pass: If the NAME explicitly contains a category keyword, trust it immediately.
+  // This prevents background items in tags (like 'jeans' in a T-shirt photo) from overriding the main item.
+  if (/\b(cardigan|zip-up|quarter-zip|half-zip|shacket|overshirt)\b/.test(n)) return "outerwear";
+  if (/\b(shirt|tee|t-shirt|polo|blouse|tank|vest|camisole|bodysuit|sweater|jumper)\b/.test(n)) return "top";
+  if (/\b(jeans?|trousers?|pants?|chinos?|skirt|shorts?|joggers?|sweatpants?|leggings?|culottes?)\b/.test(n)) return "bottom";
+  if (/\b(jacket|coat|blazer|parka|windbreaker|overcoat|trench|puffer)\b/.test(n)) return "outerwear";
+  if (/\b(dress|gown|jumpsuit|romper)\b/.test(n)) return "dress";
+  if (/\b(shoes?|boots?|loafers?|sneakers?|trainers?|heels?|sandals?|oxfords?|derbys?|brogues?|mules?|pumps?|flats?)\b/.test(n)) return "shoes";
+  if (/\b(bag|tote|purse|clutch|satchel|backpack|crossbody)\b/.test(n)) return "bag";
+  if (/\b(watch|sunglasses|glasses|shades|belt|hat|cap|beanie|scarf|gloves|jewelry|necklace|bracelet|ring|earrings?|socks?|stockings?|tights|hosiery)\b/.test(n)) return "accessory";
+
 
   // Order matters: hosiery → bottoms/denim → tops → shoes …
   if (
@@ -121,13 +172,19 @@ export function inferCategoryFromText(
   ) {
     return "bottom";
   }
+  // Soft knits: cardigans and zip-ups are outerwear, standard sweaters/jumpers are tops
+  if (isSoftKnitLayer({ name, tags, brand })) {
+    if (/\b(hoodie|overshirt|cardigan|zip-up|quarter-zip|half-zip)\b/.test(t)) {
+      return "outerwear";
+    }
+    return "top";
+  }
   // Shirt / top BEFORE footwear — "Oxford Shirt" must not become shoes
   if (
-    /\b(shirt|tee|t-shirt|polo|blouse|knit|sweater|jumper|hoodie|crewneck|tank|vest|cardigan|camisole|bodysuit|quarter[- ]?zip)\b/.test(
+    /\b(shirt|tee|t-shirt|polo|blouse|knit|tank|vest|camisole|bodysuit)\b/.test(
       t
     )
   ) {
-    if (/\b(hoodie|overshirt)\b/.test(t)) return "outerwear";
     return "top";
   }
   if (
@@ -180,10 +237,12 @@ const CONFLICTS: Array<{
   { when: "top", inferred: "bottom", reason: "trousers_as_top" },
   { when: "top", inferred: "dress", reason: "dress_as_top" },
   { when: "top", inferred: "shoes", reason: "footwear_as_top" },
+  { when: "bottom", inferred: "top", reason: "shirt_as_bottom" },
   { when: "bottom", inferred: "shoes", reason: "footwear_as_bottom" },
   { when: "accessory", inferred: "shoes", reason: "footwear_as_accessory" },
   { when: "shoes", inferred: "outerwear", reason: "coat_as_shoes" },
   { when: "dress", inferred: "top", reason: "shirt_as_dress" },
+  { when: "outerwear", inferred: "top", reason: "knit_as_outer" },
 ];
 
 function shouldOverride(
@@ -194,6 +253,14 @@ function shouldOverride(
   if (current === inferred) return false;
   if (isHosieryOrSocks(g) || isUnderwearOrLounge(g)) {
     return inferred === "accessory";
+  }
+  // Always demote soft knits stored as outerwear (zip sweater ≠ blazer)
+  if (current === "outerwear" && isSoftKnitLayer(g)) {
+    return inferred === "top" || inferred === "outerwear";
+  }
+  // Always fix shirts mistagged as bottoms (e.g. "Basic T-Shirt" → bottom)
+  if (current === "bottom" && inferred === "top") {
+    return true;
   }
   // Always fix shirts (etc.) wrongly stored as shoes
   if (current === "shoes" && (inferred === "top" || inferred === "bottom")) {
@@ -269,6 +336,16 @@ export function sanitizeGarmentCategory<
     g.brand || ""
   );
   const best = inferredWithFabric || inferred;
+
+  // Soft knit mistagged as outerwear even with a vague name
+  if (g.category === "outerwear" && isSoftKnitLayer(g)) {
+    return {
+      ...g,
+      category: "top",
+      tags: Array.from(new Set([...(g.tags || []), "corrected_knit_as_outer"])),
+    };
+  }
+
   if (!best) {
     return g;
   }
@@ -335,6 +412,9 @@ export function assertGarmentCategoryGuards(): void {
     { name: "Indigo Slim Jeans", expect: "bottom" },
     { name: "Pleated Midi Skirt", expect: "bottom" },
     { name: "Ivory Ribbed Quarter-Zip", expect: "top" },
+    { name: "Zip-up Sweater", expect: "top" },
+    { name: "Navy Zip-Up Sweater", expect: "top" },
+    { name: "Cream Cardigan", expect: "top" },
     { name: "Silk Blouse", expect: "top" },
     { name: "Black Midi Dress", expect: "dress" },
     { name: "Linen Jumpsuit", expect: "dress" },
@@ -400,5 +480,17 @@ export function assertGarmentCategoryGuards(): void {
   }
   if (!isRealFootwear({ name: "Nude Ballet Flats", category: "shoes", colors: ["nude"] })) {
     throw new Error("real single-color ballet flats must still count as shoes");
+  }
+
+  const knitAsOuter = sanitizeGarmentCategory({
+    name: "Zip-up Sweater",
+    tags: [],
+    category: "outerwear" as GarmentCategory,
+  });
+  if (knitAsOuter.category !== "top" || !isSoftKnitLayer(knitAsOuter)) {
+    throw new Error("zip-up sweater stored as outerwear must become top");
+  }
+  if (isSoftKnitLayer({ name: "Navy Wool Blazer", category: "outerwear" })) {
+    throw new Error("blazer must not count as soft knit layer");
   }
 }

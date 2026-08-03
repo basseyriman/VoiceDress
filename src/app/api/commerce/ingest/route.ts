@@ -232,16 +232,23 @@ async function generateTextWithRateLimit(
                 text: `Extract clothing / footwear / accessory items from this receipt, order screenshot, or product photo for a wardrobe app.
 
 Set dominantProduct to what the photo is MAINLY selling (the product a shopper would buy) — never a prop.
-Examples:
-- Model in a midi dress holding a small clutch → dominantProduct=dress, items=[the dress only]. Do NOT return the clutch.
-- Close-up of a tote on a white background → dominantProduct=bag, items=[the bag].
-- Receipt with dress + sandals lines → dominantProduct can be dress or the first apparel line; include each purchased line item (still omit styling props not on the receipt).
+CRITICAL — dominant item focus:
+- If a person is wearing multiple items (e.g., T-shirt and jeans), determine the SINGLE main product the photo is selling (look at framing, lighting, or center focus). Do NOT extract the other styled items (props) unless it's a multi-item receipt.
+- For example, if the photo focuses on a T-shirt, name it "T-Shirt" and do NOT extract the jeans or shoes.
+- If the photo focuses on a pair of jeans, name it "Jeans" and do NOT extract the T-shirt or shoes.
+- If the photo focuses on shoes, name it "Shoes" (or specific type) and do NOT extract the jeans or trousers worn above them.
+
+CRITICAL — DE-DUPLICATION: 
+- NEVER extract multiple copies of the exact same item from a single photo (e.g., if a suit photo shows trousers folded over a hanger in a way that looks like two pairs, only extract ONE pair of trousers). 
+- Each distinct physical type of garment should only appear ONCE in the extraction.
 
 Return every distinct wearable item the shopper is actually buying. Prefer accurate names and brands.
 Category rules:
 - socks, stockings, tights, no-show socks, sock liners, invisible socks, multi-packs of footies → accessory (NEVER shoes). Name them "No-Show Socks" or "Socks" — never "Ballet Flat" or "Flats".
 - shoes/boots/loafers/sneakers/heels/pumps/leather ballet flats/sandals/wedges → shoes (only hard footwear with soles you walk on outdoors).
-- dresses/jumpsuits/rompers → dress. skirts → bottom. blouses/tops → top.
+- dresses/jumpsuits/rompers → dress. skirts → bottom. woven shirts/blouses/polos/tees → top.
+- sweaters, jumpers, cardigans, quarter-zips, zip-up knits, fleece pullovers → top (NEVER outerwear, NEVER "Dress Shirt"). Name them accurately (e.g. "Navy Zip-Up Sweater", "Ivory Quarter-Zip").
+- blazers, sport coats, tailored jackets, coats, trench, parkas → outerwear only. Do not call a knit zip sweater a dress shirt or a blazer.
 CRITICAL — socks vs shoes:
 - A product photo of several soft colored sock liners / no-shows laid out = accessory socks, NOT ballet flats.
 - Ballet flats are leather/fabric shoes with a sole and usually one pair — not a multi-color sock pack.

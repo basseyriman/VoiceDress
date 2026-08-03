@@ -17,7 +17,14 @@ import {
   blendStyleHints,
   resolvePrimaryStyle,
 } from "./style-options";
-import { isHosieryOrSocks, isRealFootwear, ensureLookHasFootwear, sanitizeWardrobe } from "./commerce";
+import {
+  isHosieryOrSocks,
+  isRealFootwear,
+  ensureLookHasFootwear,
+  sanitizeWardrobe,
+  isSoftKnitLayer,
+  isStructuredOuterwear,
+} from "./commerce";
 import { matchingSetMate } from "./suit-set";
 
 export type { OccasionProfile, TasteMemory };
@@ -522,7 +529,36 @@ function coherenceWithOutfit(
   }
 
   let score = 0;
+  const blobOf = (g: Garment) =>
+    `${g.name} ${g.brand} ${(g.tags || []).join(" ")}`.toLowerCase();
+  const isCasualTee = (g: Garment) =>
+    g.category === "top" &&
+    /\b(t-?shirt|tee|graphic|basic\s*t)\b/.test(blobOf(g));
+  const isSuitPiece = (g: Garment) =>
+    Boolean(g.setId) ||
+    /\b(suit|double[- ]?breast|blazer|tuxedo|suit\s*trousers|matching\s*suit)\b/.test(
+      blobOf(g)
+    );
+
   for (const piece of already) {
+    // Hard veto: two soft knits in one look (sweater under sweater)
+    if (
+      isSoftKnitLayer(candidate) &&
+      isSoftKnitLayer(piece) &&
+      (candidate.category === "outerwear" ||
+        piece.category === "outerwear" ||
+        candidate.category === "top" ||
+        piece.category === "top")
+    ) {
+      score -= 20;
+    }
+    // Hard veto: basic tee + suit / double-breasted (travel-day disaster)
+    if (
+      (isCasualTee(candidate) && isSuitPiece(piece)) ||
+      (isCasualTee(piece) && isSuitPiece(candidate))
+    ) {
+      score -= 24;
+    }
     if (
       formalityRank(formality) >= 3 &&
       candidate.formality === "casual" &&
@@ -747,19 +783,32 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       if (bottom) selected.push(bottom);
       if (!selected.length && dress) selected = [dress];
     }
-    const outerPool = byCat("outerwear");
-    // Mild formal events: prefer a blazer/jacket over a heavy coat
+    const outerPool = byCat("outerwear").filter((g) => !isSoftKnitLayer(g));
+    const topIsKnit = selected.some(
+      (g) => g.category === "top" && isSoftKnitLayer(g)
+    );
+    // Never stack sweater + sweater. Over a knit top, only structured jackets.
+    const outerCandidates = topIsKnit
+      ? outerPool.filter((g) => isStructuredOuterwear(g))
+      : outerPool;
+    // Mild formal / quiet luxury: prefer blazer over heavy coat or soft cardigan
     const mildFormal =
       input.weather.tempC > 18 && formalityRank(formality) >= 3;
-    const lightOuter = mildFormal
-      ? outerPool.filter(
+    const quietDressy =
+      /quiet|old money|dinner|date|business/i.test(
+        `${profile.label} ${style} ${input.occasion || ""}`
+      ) || formalityRank(formality) >= 3;
+    const lightOuter = (mildFormal || quietDressy
+      ? outerCandidates.filter(
           (g) =>
-            /blazer|jacket|overshirt|cardigan/i.test(g.name) ||
-            !/overcoat|parka|puffer|wool coat/i.test(g.name)
+            /blazer|sport\s*coat|suit\s*jacket|jacket/i.test(
+              `${g.name} ${(g.tags || []).join(" ")}`
+            ) || !/overcoat|parka|puffer|wool coat/i.test(g.name)
         )
-      : outerPool;
+      : outerCandidates
+    ).filter((g) => !isSoftKnitLayer(g));
     const outer = pick(
-      lightOuter.length ? lightOuter : outerPool,
+      lightOuter.length ? lightOuter : outerCandidates,
       selected
     );
     // Weather layers when cool; dressier events keep a blazer/coat even when mild.
@@ -772,15 +821,37 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       formalityRank(formality) <= 2
         ? input.weather.tempC < 15
         : input.weather.tempC < 19;
-    if (outer && (coolForOuter || wantOuterForOccasion)) {
+    // Skip outer entirely if the only options would double up soft knits
+    if (
+      outer &&
+      !isSoftKnitLayer(outer) &&
+      (coolForOuter || wantOuterForOccasion)
+    ) {
       selected.push(outer);
     }
 
-    // Suit sets: default to matching trousers with the jacket (full set).
-    // Swapping the bottom later still lets you mix the jacket with other pants,
-    // or wear the suit trousers with a different top and no jacket.
+    // Suit sets: matching jacket+trousers only when the look is dressy enough.
+    // Never force a cream suit onto a travel tee / casual top.
+    const selectedTop = selected.find((g) => g.category === "top");
+    const topTooCasualForSuit =
+      !!selectedTop &&
+      (selectedTop.formality === "casual" ||
+        /\b(t-?shirt|tee|graphic|hoodie|polo)\b/i.test(
+          `${selectedTop.name} ${(selectedTop.tags || []).join(" ")}`
+        ));
+    const allowSuitSet =
+      formalityRank(formality) >= 3 &&
+      !topTooCasualForSuit &&
+      !/travel|flight|airport|gym|workout/i.test(
+        `${profile.label} ${input.occasion || ""}`
+      );
+
     const selectedOuter = selected.find((g) => g.category === "outerwear");
-    if (selectedOuter?.setId && selectedOuter.setRole === "jacket") {
+    if (
+      allowSuitSet &&
+      selectedOuter?.setId &&
+      selectedOuter.setRole === "jacket"
+    ) {
       const mate = matchingSetMate(selectedOuter, wardrobe);
       if (mate && mate.category === "bottom") {
         const otherBottom = selected.find((g) => g.category === "bottom");
@@ -792,9 +863,8 @@ export function suggestOutfit(input: SuggestInput): Outfit {
           );
         }
       }
-    } else {
-      // Trousers-only path: if we picked suit trousers and no outer yet, leave
-      // jacket off so the user can mix — only auto-add jacket when formal.
+    } else if (allowSuitSet) {
+      // Trousers-only path: auto-add jacket only when formal.
       const selectedBottom = selected.find((g) => g.category === "bottom");
       if (
         selectedBottom?.setRole === "trousers" &&
@@ -804,6 +874,29 @@ export function suggestOutfit(input: SuggestInput): Outfit {
       ) {
         const mate = matchingSetMate(selectedBottom, wardrobe);
         if (mate && mate.category === "outerwear") selected.push(mate);
+      }
+    } else if (
+      // Drop suit halves that snuck in with a casual top / travel day
+      topTooCasualForSuit ||
+      /travel|flight|airport/i.test(`${profile.label} ${input.occasion || ""}`)
+    ) {
+      const isSuitHalf = (g: Garment) =>
+        Boolean(g.setId) ||
+        /\b(suit|double[- ]?breast|matching\s*suit)\b/i.test(
+          `${g.name} ${(g.tags || []).join(" ")}`
+        );
+      selected = selected.filter((g) => {
+        if (!isSuitHalf(g)) return true;
+        // Keep non-apparel suit mis-tags out of top/shoes; strip jacket + trousers
+        return g.category !== "outerwear" && g.category !== "bottom";
+      });
+      // If we stripped the bottom, put back a non-suit bottom
+      if (!selected.some((g) => g.category === "bottom")) {
+        const casualBottom = pick(
+          byCat("bottom").filter((g) => !isSuitHalf(g)),
+          selected
+        );
+        if (casualBottom) selected.push(casualBottom);
       }
     }
 

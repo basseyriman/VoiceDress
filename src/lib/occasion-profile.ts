@@ -155,8 +155,17 @@ export function inferOccasionProfile(
   ) {
     formality = "smart_casual";
     styleHints.push("minimal", "quiet luxury");
-    preferCategories.push("dress", "top", "bottom", "outerwear", "shoes", "bag");
-    notes = "Comfort for transit with a polished silhouette.";
+    // Transit: polished comfort — never a full suit + tee mashup
+    preferCategories.push("top", "bottom", "shoes", "bag");
+    avoid.push(
+      "suit",
+      "blazer",
+      "double-breasted",
+      "tuxedo",
+      "heels",
+      "leather dress shoes"
+    );
+    notes = "Comfort for transit — easy layers, no formal suit.";
   } else if (o.includes("cocktail") || o.includes("black tie") || o.includes("gala")) {
     formality = "formal";
     styleHints.push("romantic", "quiet luxury", "old money");
