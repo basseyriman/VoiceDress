@@ -4,7 +4,7 @@ export function VoiceRibbon({ position = "bottom" }: { position?: "top" | "botto
   return (
     <div
       className={`pointer-events-none absolute left-0 right-0 h-96 overflow-hidden opacity-40 select-none ${
-        isTop ? "-top-24" : "-bottom-32"
+        isTop ? "top-16" : "-bottom-32"
       }`}
     >
       <svg
