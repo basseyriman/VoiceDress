@@ -123,7 +123,7 @@ export default function SettingsPage() {
             className="rounded-2xl border border-champagne/35 bg-champagne/[0.07] px-4 py-3.5 text-sm text-ivory transition hover:border-champagne/50 hover:bg-champagne/10"
           >
             Add wardrobe pieces{" "}
-            <span className="text-mist">· Connect stores & uploads</span>
+            <span className="text-mist">· Upload photos</span>
           </Link>
           <Link
             href="/billing"
