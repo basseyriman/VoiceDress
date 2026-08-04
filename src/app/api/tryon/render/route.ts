@@ -1286,8 +1286,10 @@ export async function POST(req: NextRequest) {
     try {
       const burn = await consumeFreePhotoTryOn(auth.uid);
       consumedFreeTryOn = burn.consumed;
-    } catch {
-      // don't fail the dress if counter write fails
+    } catch (err) {
+      console.error("[FASHN] Failed to consume free photo try-on:", err);
+      // fallback to true on client so they don't get infinite loops if DB fails
+      consumedFreeTryOn = true;
     }
     // Full looks only (2+ garments) — surgical swaps stay free of the monthly cap
     if (garments.length >= 2) {
