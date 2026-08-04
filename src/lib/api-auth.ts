@@ -257,7 +257,9 @@ export async function consumeFreePhotoTryOn(
     if (process.env.ALLOW_INSECURE_API === "true") {
       return { consumed: true, used: 1 };
     }
-    return { consumed: false, used: 0 };
+    // IMPORTANT: If DB fails to load, fail closed (consumed = true).
+    // Otherwise, the client never triggers the paywall and users get infinite free try-ons!
+    return { consumed: true, used: 1 };
   }
   const ref = db.collection("users").doc(uid);
   const snap = await ref.get();
