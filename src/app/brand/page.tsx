@@ -41,19 +41,22 @@ export default function BrandFlyersPage() {
               <iframe src="/" className="w-[430px] h-[932px] border-0 scale-[1.0] origin-top-left pointer-events-none" />
             </div>
 
-            {/* Floating Clothes Hanger on the Left */}
-            <div className="absolute -left-64 top-40 w-[400px] aspect-square bg-white p-4 shadow-2xl -rotate-[6deg] rounded-lg z-20">
-              <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden relative">
+            {/* Overlapping Floating Polaroid/Photo (Left - Input) */}
+            <div className="absolute -left-72 top-32 w-[380px] aspect-[3/4] bg-white p-4 pb-16 shadow-2xl -rotate-[8deg] rounded-lg z-30">
+              <div className="w-full h-full bg-[#f4f2f0] rounded-sm overflow-hidden pb-0 relative">
                 <img 
-                  src="/hanger.png" 
-                  alt="Clothes Hanger" 
-                  className="w-full h-full object-cover"
+                  src="/clothes-hanger.png" 
+                  alt="Wardrobe Input" 
+                  className="w-full h-full object-cover scale-[1.1] object-center"
                 />
+              </div>
+              <div className="absolute bottom-6 right-6 font-medium text-ink/40 tracking-wider text-sm uppercase">
+                Your Wardrobe
               </div>
             </div>
 
-            {/* Overlapping Floating Polaroid/Photo */}
-            <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 pb-20 shadow-2xl rotate-[12deg] rounded-lg z-30">
+            {/* Overlapping Floating Polaroid/Photo (Right - Output) */}
+            <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 shadow-2xl rotate-[12deg] rounded-lg z-30">
               <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden pb-0 relative">
                 <img 
                   src="/model-outfit.jpg" 
@@ -62,7 +65,7 @@ export default function BrandFlyersPage() {
                 />
               </div>
               <div className="absolute top-8 left-8 bg-white/90 backdrop-blur-sm text-ink px-4 py-2 rounded-full font-medium tracking-wide shadow-md text-sm flex items-center gap-2">
-                <div className="w-2 h-2 bg-[#9A5B30] rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 Try on with VoiceDress
               </div>
             </div>
