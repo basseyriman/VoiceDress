@@ -336,6 +336,12 @@ export function speak(text: string) {
         resolve();
         return;
       }
+      const voices = window.speechSynthesis?.getVoices() || [];
+      if (voices.length > 0) {
+        // Voices are already populated. If Google UK Female isn't here, it won't appear.
+        resolve();
+        return;
+      }
       let done = false;
       const finish = () => {
         if (done) return;
@@ -350,8 +356,6 @@ export function speak(text: string) {
     });
 
     const googleFemale = findGoogleUkEnglishFemale();
-    await new Promise((r) => setTimeout(r, 40));
-
     if (googleFemale && window.speechSynthesis) {
       // Desktop Chrome — exact voice you liked
       for (const chunk of chunks) {
