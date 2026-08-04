@@ -860,12 +860,27 @@ export async function POST(req: NextRequest) {
       }
     }
     
+    if (steps.length > 0) {
+      try {
+        const burn = await consumeFreePhotoTryOn(auth.uid);
+        consumedFreeTryOn = burn.consumed;
+      } catch (err) {
+        console.error("[FASHN] Failed to consume free photo try-on:", err);
+        consumedFreeTryOn = true;
+      }
+      if (allPieces.length >= 2) {
+        try {
+          await consumeMonthlyPhotoTryOn(auth.uid, { email: auth.email });
+        } catch {}
+      }
+    }
+    
     return NextResponse.json({
       ok: true,
       imageUrl: current,
       steps,
       warnings,
-      consumedFreeTryOn,
+      consumedFreeTryOn: consumedFreeTryOn || undefined,
     });
   }
 
