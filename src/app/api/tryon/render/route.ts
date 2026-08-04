@@ -1278,6 +1278,7 @@ export async function POST(req: NextRequest) {
     stage === "apparel" ||
     stage === "auto" ||
     stage === "collage" ||
+    stage === "all" ||
     stage === "base";
   let photoTryOnsThisMonth: number | undefined;
   let photoTryOnsMonthKey: string | undefined;
