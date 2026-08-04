@@ -204,9 +204,9 @@ export async function POST(req: NextRequest) {
     
     let userError = message;
     if (rateLimited) {
-      userError = "AI is briefly busy extracting photos. We’ll retry automatically — or wait a moment and continue.";
+      userError = "VoiceDress is briefly busy extracting photos. We’ll retry automatically — or wait a moment and continue.";
     } else if (outOfCredits) {
-      userError = "Our AI is temporarily unavailable while we upgrade our server capacity. Please check back soon!";
+      userError = "VoiceDress is temporarily unavailable while we upgrade our server capacity. Please check back soon!";
     }
     
     return NextResponse.json(
