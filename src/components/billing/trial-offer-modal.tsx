@@ -32,7 +32,7 @@ export function TrialOfferModal({ open, onClose, mode = "soft" }: Props) {
         </h2>
         <p className="mt-3 text-sm leading-relaxed text-mist">
           {mode === "hard"
-            ? "You've used your free VoiceDress Try-on! Get more credits to instantly see how any outfit looks on you."
+            ? "You've enjoyed your complimentary VoiceDress Try-on! Get more credits to instantly see how any outfit looks on you."
             : "You have used your free try-on. Bank some more Credits to keep swapping pieces and dressing for every occasion."}
         </p>
         <div className="mt-6 flex flex-col gap-2">
