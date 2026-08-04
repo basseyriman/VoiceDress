@@ -50,7 +50,7 @@ export default function BrandFlyersPage() {
                   className="w-full h-full object-cover scale-[1.1] object-center"
                 />
               </div>
-              <div className="absolute bottom-6 right-6 font-medium text-ink/40 tracking-wider text-sm uppercase">
+              <div className="absolute bottom-6 left-6 font-medium text-ink/40 tracking-wider text-sm uppercase">
                 Your Wardrobe
               </div>
             </div>
@@ -72,8 +72,8 @@ export default function BrandFlyersPage() {
           </div>
           
           {/* Footer URL */}
-          <div className="absolute bottom-12 w-full text-center z-40">
-            <span className="text-white/60 tracking-[0.3em] uppercase text-xl font-medium">voicedress.com</span>
+          <div className="absolute bottom-10 left-12 z-40">
+            <span className="text-[#1C2621]/40 tracking-[0.3em] uppercase text-xl font-medium">voicedress.com</span>
           </div>
         </div>
       </div>
