@@ -169,8 +169,8 @@ function PhotoOnboardingInner() {
             One clear look at you
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-mist">
-            We dress looks onto this photo — take a clear full-body shot, then
-            start building your digital wardrobe.
+            Upload or take a clear, full-body photo of yourself. We will use this
+            photo to show you how different outfits look on you.
           </p>
 
           {phase === "intro" && (
