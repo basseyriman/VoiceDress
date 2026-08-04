@@ -9,9 +9,6 @@ function DownloadButton({ targetId, filename }: { targetId: string, filename: st
     const el = document.getElementById(targetId);
     if (!el) return;
     try {
-      // html-to-image takes the current layout of the element.
-      // Since these elements have fixed width/height (1200x1400, etc)
-      // the output PNG will be perfectly high-res!
       const dataUrl = await htmlToImage.toPng(el, { quality: 1, pixelRatio: 1 });
       const link = document.createElement('a');
       link.download = filename;
@@ -33,31 +30,76 @@ function DownloadButton({ targetId, filename }: { targetId: string, filename: st
   );
 }
 
+// A reusable component for the core mockup so we don't repeat the crazy absolute positioning code
+function PhoneAndPolaroids({ scale = "scale-[1.0]" }: { scale?: string }) {
+  return (
+    <div className={`relative flex justify-center items-center ${scale} origin-top mt-12`}>
+      <div className="relative z-10 w-[430px] h-[932px] rounded-[3.5rem] bg-black p-4 shadow-2xl shadow-black/40 border-[4px] border-[#3F3F3F]">
+        {/* Dynamic Island */}
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 w-32 h-9 bg-black rounded-full z-50"></div>
+        
+        {/* Screen Content (Live App iframe) */}
+        <div className="w-full h-full rounded-[3rem] overflow-hidden bg-ink relative">
+          <iframe src="/" className="w-[430px] h-[932px] border-0 scale-[1.0] origin-top-left pointer-events-none" />
+        </div>
+
+        {/* Overlapping Floating Polaroid/Photo (Left - Input) */}
+        <div className="absolute -left-64 top-40 w-[350px] aspect-[3/4] bg-white p-4 pb-16 shadow-2xl -rotate-[12deg] rounded-lg -z-10">
+          <div className="w-full h-full bg-[#f4f2f0] rounded-sm overflow-hidden pb-0 relative">
+            <img 
+              src="/clothes-hanger.png" 
+              alt="Wardrobe Input" 
+              className="w-full h-full object-cover scale-[1.1] object-center"
+            />
+          </div>
+          <div className="absolute bottom-6 left-6 font-medium text-ink/40 tracking-wider text-sm uppercase">
+            Your Wardrobe
+          </div>
+        </div>
+
+        {/* Overlapping Floating Polaroid/Photo (Right - Output) */}
+        <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 pt-12 shadow-2xl rotate-[12deg] rounded-lg z-30">
+          <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden pb-0 relative">
+            <img 
+              src="/model-outfit.jpg" 
+              alt="Fashion Model" 
+              className="w-full h-full object-cover scale-[1.2] object-top"
+            />
+          </div>
+          <div className="absolute top-4 right-6 font-medium text-ink/40 tracking-wider text-sm uppercase">
+            Try on with VoiceDress
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BrandFlyersPage() {
   return (
-    <div className="min-h-screen bg-ink/90 p-8 text-ivory flex flex-col items-center gap-16 pb-32">
-      <div className="text-center max-w-2xl">
-        <h1 className="font-display text-4xl mb-4 text-champagne">VoiceDress Brand Flyers</h1>
+    <div className="min-h-screen bg-ink/90 p-8 text-ivory flex flex-col items-center gap-24 pb-32">
+      <div className="text-center max-w-2xl mt-8">
+        <h1 className="font-display text-4xl mb-4 text-champagne">VoiceDress Marketing Kit</h1>
         <p className="text-mist">
-          Click the "Download PNG" button under any flyer to instantly save a high-res image optimized for social media!
+          Here is the exact same Mockup Showcase designed perfectly for every social media platform. 
+          Click Download and upload them directly!
         </p>
       </div>
 
-      {/* App Mockup Showcase (1200 x 1400) */}
+      {/* Instagram & LinkedIn Feed (1080 x 1350) - 4:5 Aspect Ratio */}
       <div className="flex flex-col items-center gap-2">
-        <span className="text-sm text-mist tracking-widest uppercase">App Mockup Showcase</span>
+        <span className="text-sm text-mist tracking-widest uppercase">Instagram Feed / LinkedIn Post (4:5)</span>
         <div 
-          id="flyer-mockup"
+          id="flyer-feed"
           className="relative overflow-hidden bg-gradient-to-b from-[#E8F0EE] to-[#E3E4E8] border border-line flex flex-col items-center pt-24"
-          style={{ width: 1200, height: 1400 }}
+          style={{ width: 1080, height: 1350 }}
         >
           {/* Header Text */}
-          <div className="relative z-20 flex flex-col items-center text-center px-12 mb-20 text-[#1C2621]">
+          <div className="relative z-20 flex flex-col items-center text-center px-8 mb-6 text-[#1C2621]">
             <div className="flex items-center gap-3 mb-8">
               <Logo variant="hero" theme="light" />
             </div>
-            
-            <h2 className="font-display text-[4.5rem] leading-[1.1] font-bold tracking-tight mb-6">
+            <h2 className="font-display text-[4.2rem] leading-[1.1] font-bold tracking-tight mb-6">
               Improve Your Outfits<br/>With VoiceDress!
             </h2>
             <p className="text-2xl font-light max-w-2xl opacity-80">
@@ -65,161 +107,47 @@ export default function BrandFlyersPage() {
             </p>
           </div>
 
-          {/* The Phone Mockup */}
-          <div className="relative z-10 w-[430px] h-[932px] rounded-[3.5rem] bg-black p-4 shadow-2xl shadow-black/40 border-[4px] border-[#3F3F3F]">
-            {/* Dynamic Island */}
-            <div className="absolute top-8 left-1/2 -translate-x-1/2 w-32 h-9 bg-black rounded-full z-50"></div>
-            
-            {/* Screen Content (Live App iframe) */}
-            <div className="w-full h-full rounded-[3rem] overflow-hidden bg-ink relative">
-              <iframe src="/" className="w-[430px] h-[932px] border-0 scale-[1.0] origin-top-left pointer-events-none" />
-            </div>
-
-            {/* Overlapping Floating Polaroid/Photo (Left - Input) */}
-            <div className="absolute -left-64 top-40 w-[350px] aspect-[3/4] bg-white p-4 pb-16 shadow-2xl -rotate-[12deg] rounded-lg -z-10">
-              <div className="w-full h-full bg-[#f4f2f0] rounded-sm overflow-hidden pb-0 relative">
-                <img 
-                  src="/clothes-hanger.png" 
-                  alt="Wardrobe Input" 
-                  className="w-full h-full object-cover scale-[1.1] object-center"
-                />
-              </div>
-              <div className="absolute bottom-6 left-6 font-medium text-ink/40 tracking-wider text-sm uppercase">
-                Your Wardrobe
-              </div>
-            </div>
-
-            {/* Overlapping Floating Polaroid/Photo (Right - Output) */}
-            <div className="absolute -right-64 -bottom-12 w-[450px] aspect-[3/4] bg-white p-4 pt-12 shadow-2xl rotate-[12deg] rounded-lg z-30">
-              <div className="w-full h-full bg-gray-100 rounded-sm overflow-hidden pb-0 relative">
-                <img 
-                  src="/model-outfit.jpg" 
-                  alt="Fashion Model" 
-                  className="w-full h-full object-cover scale-[1.2] object-top"
-                />
-              </div>
-              <div className="absolute top-4 right-6 font-medium text-ink/40 tracking-wider text-sm uppercase">
-                Try on with VoiceDress
-              </div>
-            </div>
-          </div>
+          {/* Grouped Mockup Scaled down slightly to fit 1080px width */}
+          <PhoneAndPolaroids scale="scale-[0.85]" />
           
-          {/* Footer URL */}
-          <div className="absolute bottom-10 left-12 z-40">
+          <div className="absolute bottom-10 left-10 z-40">
             <span className="text-[#1C2621]/40 tracking-[0.3em] uppercase text-xl font-medium">voicedress.com</span>
           </div>
         </div>
-        <DownloadButton targetId="flyer-mockup" filename="voicedress-app-mockup.png" />
+        <DownloadButton targetId="flyer-feed" filename="voicedress-ig-feed.png" />
       </div>
 
-      {/* Twitter / LinkedIn (1200 x 675) */}
+      {/* TikTok / Stories / WhatsApp Status (1080 x 1920) - 9:16 Aspect Ratio */}
       <div className="flex flex-col items-center gap-2">
-        <span className="text-sm text-mist tracking-widest uppercase">Twitter / LinkedIn Banner (16:9)</span>
-        <div 
-          id="flyer-banner"
-          className="relative overflow-hidden bg-ink border border-line flex flex-col justify-center items-center"
-          style={{ width: 1200, height: 675 }}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-champagne/10 via-ink to-ink"></div>
-          <div className="relative z-10 flex flex-col items-center text-center">
-            <Logo variant="hero" />
-            <h1 className="mt-8 font-display text-7xl font-medium italic text-ivory tracking-wide">
-              Dress without deciding.
-            </h1>
-            <p className="mt-6 text-2xl text-mist max-w-2xl leading-relaxed">
-              The world's first voice-powered AI stylist. Talk to your wardrobe and see yourself dressed in seconds.
-            </p>
-            <div className="mt-12 rounded-full border border-champagne/30 bg-champagne/10 px-8 py-3 text-champagne text-lg font-medium tracking-widest uppercase">
-              Now Live
-            </div>
-          </div>
-        </div>
-        <DownloadButton targetId="flyer-banner" filename="voicedress-linkedin-banner.png" />
-      </div>
-
-      {/* Instagram Square (1080 x 1080) */}
-      <div className="flex flex-col items-center gap-2">
-        <span className="text-sm text-mist tracking-widest uppercase">Instagram Post (1:1)</span>
-        <div 
-          id="flyer-square"
-          className="relative overflow-hidden bg-ink border border-line flex flex-col justify-between p-24"
-          style={{ width: 1080, height: 1080 }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-br from-ink via-ink to-champagne/10"></div>
-          
-          <div className="relative z-10 flex justify-between items-start w-full">
-            <Logo variant="header" />
-            <div className="text-champagne font-display italic text-2xl">v1.0</div>
-          </div>
-
-          <div className="relative z-10 w-full">
-            <h2 className="font-display text-[5.5rem] leading-[1.1] text-ivory mb-8">
-              Your virtual<br/>fitting room,<br/><span className="italic text-champagne">powered by voice.</span>
-            </h2>
-            <div className="flex flex-col gap-4 text-2xl text-mist font-light">
-              <div className="flex items-center gap-4">
-                <div className="w-2 h-2 rounded-full bg-champagne"></div>
-                Upload your clothes (or screenshots)
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="w-2 h-2 rounded-full bg-champagne"></div>
-                Say the occasion & weather
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="w-2 h-2 rounded-full bg-champagne"></div>
-                See the outfit styled on your body
-              </div>
-            </div>
-          </div>
-
-          <div className="relative z-10 text-xl tracking-[0.2em] uppercase text-champagne/70">
-            voicedress.com
-          </div>
-        </div>
-        <DownloadButton targetId="flyer-square" filename="voicedress-instagram-square.png" />
-      </div>
-
-      {/* Instagram Story (1080 x 1920) */}
-      <div className="flex flex-col items-center gap-2">
-        <span className="text-sm text-mist tracking-widest uppercase">Instagram / TikTok Story (9:16)</span>
+        <span className="text-sm text-mist tracking-widest uppercase">TikTok / IG Stories / WhatsApp Status (9:16)</span>
         <div 
           id="flyer-story"
-          className="relative overflow-hidden bg-ink border border-line flex flex-col items-center justify-center p-16"
+          className="relative overflow-hidden bg-gradient-to-b from-[#E8F0EE] to-[#E3E4E8] border border-line flex flex-col items-center pt-40"
           style={{ width: 1080, height: 1920 }}
         >
-          <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1200&q=80')] bg-cover bg-center opacity-20"></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/80 to-transparent"></div>
-          
-          <div className="relative z-10 flex flex-col items-center h-full justify-end pb-32 text-center">
-            <Logo variant="hero" />
-            
-            <div className="mt-16 bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 mb-16 max-w-sm">
-              <p className="text-3xl text-ivory font-display italic">
-                "I have a dinner date tonight. Give me something elegant."
-              </p>
+          {/* Header Text */}
+          <div className="relative z-20 flex flex-col items-center text-center px-8 mb-20 text-[#1C2621]">
+            <div className="flex items-center gap-3 mb-10">
+              <Logo variant="hero" theme="light" />
             </div>
-
-            <h2 className="font-display text-[6rem] leading-none text-ivory mb-6">
-              Stop scrolling.
+            <h2 className="font-display text-[4.5rem] leading-[1.1] font-bold tracking-tight mb-8">
+              Improve Your Outfits<br/>With VoiceDress!
             </h2>
-            <h2 className="font-display text-[6rem] leading-none text-champagne italic mb-12">
-              Start speaking.
-            </h2>
-            
-            <p className="text-3xl text-mist max-w-md mx-auto mb-16 leading-relaxed">
-              The AI stylist that dresses you in seconds.
+            <p className="text-3xl font-light max-w-2xl opacity-80 leading-relaxed">
+              Let VoiceDress suggest the perfect outfit based on your wardrobe, just by speaking to it.
             </p>
+          </div>
 
-            <div className="rounded-full border-2 border-champagne bg-champagne text-ink px-12 py-6 text-2xl font-bold tracking-widest uppercase">
-              Try It Now
-            </div>
-            
-            <div className="mt-12 text-2xl tracking-[0.2em] uppercase text-ivory/50">
-              voicedress.com
+          {/* Grouped Mockup Scaled down to fit mobile width beautifully */}
+          <PhoneAndPolaroids scale="scale-[0.85]" />
+          
+          <div className="absolute bottom-16 left-0 w-full flex justify-center z-40">
+            <div className="bg-[#1C2621]/10 px-8 py-4 rounded-full backdrop-blur-md">
+              <span className="text-[#1C2621]/60 tracking-[0.3em] uppercase text-xl font-bold">voicedress.com</span>
             </div>
           </div>
         </div>
-        <DownloadButton targetId="flyer-story" filename="voicedress-tiktok-story.png" />
+        <DownloadButton targetId="flyer-story" filename="voicedress-story.png" />
       </div>
 
     </div>
