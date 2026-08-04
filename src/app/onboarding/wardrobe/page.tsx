@@ -76,8 +76,7 @@ function WardrobeOnboardingInner() {
             Add what you already own
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-mist">
-            Connect a store or upload several receipts / product photos at once
-            so we can dress looks from your real pieces — not placeholders.
+            Upload photos of your clothes to build your digital wardrobe so we can style looks using your real pieces — not placeholders.
           </p>
 
           <div className="mt-8">
@@ -105,7 +104,7 @@ function WardrobeOnboardingInner() {
             <button
               type="button"
               onClick={() => router.push("/onboarding/photo")}
-              className="w-full text-center text-xs text-mist transition hover:text-ivory-muted"
+              className="w-full py-4 text-center text-xs text-mist transition hover:text-ivory-muted active:text-ivory"
             >
               Back to photo
             </button>

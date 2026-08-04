@@ -153,7 +153,7 @@ export default function PhotoOnboardingPage() {
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-mist">
             We dress looks onto this photo — take a clear full-body shot, then
-            set up your wardrobe.
+            start building your digital wardrobe.
           </p>
 
           {phase === "intro" && (
