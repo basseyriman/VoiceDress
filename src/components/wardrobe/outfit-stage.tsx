@@ -436,25 +436,6 @@ export function OutfitStage({
           if (appliedIds.size > 0 || appliedNames.size > 0) {
             confirmWear(outfit);
           }
-          // Soft paywall after the free aha dress
-          const after = {
-            subscriptionStatus: user?.subscriptionStatus || "none",
-            trialEndsAt: user?.trialEndsAt,
-            freePhotoTryOnsUsed: consumedFreeThisRun
-              ? Math.max(1, user?.freePhotoTryOnsUsed || 0)
-              : user?.freePhotoTryOnsUsed,
-          };
-          if (shouldOfferTrial(after)) {
-            setTrialOffer("soft");
-            try {
-              const { default: posthog } = await import("posthog-js");
-              if (posthog.__loaded) {
-                posthog.capture("trial_offer_shown", { mode: "soft" });
-              }
-            } catch {
-              // ignore
-            }
-          }
         }
       } catch (err) {
         if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
