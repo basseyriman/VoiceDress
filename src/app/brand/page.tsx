@@ -42,7 +42,7 @@ export default function BrandFlyersPage() {
             </div>
 
             {/* Overlapping Floating Polaroid/Photo (Left - Input) */}
-            <div className="absolute -left-72 top-32 w-[380px] aspect-[3/4] bg-white p-4 pb-16 shadow-2xl -rotate-[8deg] rounded-lg z-30">
+            <div className="absolute -left-64 bottom-24 w-[380px] aspect-[3/4] bg-white p-4 pb-16 shadow-2xl -rotate-[8deg] rounded-lg z-30">
               <div className="w-full h-full bg-[#f4f2f0] rounded-sm overflow-hidden pb-0 relative">
                 <img 
                   src="/clothes-hanger.png" 
