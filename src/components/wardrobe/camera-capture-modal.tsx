@@ -47,8 +47,6 @@ export function CameraCaptureModal({
           audio: false,
           video: {
             facingMode: { ideal: facing },
-            width: { ideal: 1280 },
-            height: { ideal: 1920 },
           },
         });
         if (cancelled) {
