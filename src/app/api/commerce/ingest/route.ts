@@ -190,6 +190,8 @@ export async function POST(req: NextRequest) {
         ? err.message
         : "Failed to extract garments from image";
     const rateLimited = /rate limit|tokens per min|TPM|429/i.test(message);
+    const outOfCredits = /no credits remaining|insufficient quota|billing/i.test(message);
+    
     const retryMatch = /try again in (\d+(?:\.\d+)?)(ms|s)/i.exec(message);
     let retryAfterMs = 1500;
     if (retryMatch) {
@@ -199,12 +201,19 @@ export async function POST(req: NextRequest) {
           ? Math.ceil(n * 1000)
           : Math.ceil(n);
     }
+    
+    let userError = message;
+    if (rateLimited) {
+      userError = "AI is briefly busy extracting photos. We’ll retry automatically — or wait a moment and continue.";
+    } else if (outOfCredits) {
+      userError = "Our AI is temporarily unavailable while we upgrade our server capacity. Please check back soon!";
+    }
+    
     return NextResponse.json(
       {
-        error: rateLimited
-          ? "AI is briefly busy extracting photos. We’ll retry automatically — or wait a moment and continue."
-          : message,
+        error: userError,
         ...(rateLimited ? { retryAfterMs, code: "rate_limited" } : {}),
+        ...(outOfCredits ? { code: "out_of_credits" } : {}),
       },
       { status: rateLimited ? 429 : 500 }
     );
