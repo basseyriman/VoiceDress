@@ -132,9 +132,9 @@ export function CameraCaptureModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-ink/85 p-3 backdrop-blur-sm sm:items-center sm:p-4">
-      <div className="glass shine-border relative w-full max-w-md overflow-hidden rounded-[1.5rem] sm:rounded-[1.75rem]">
-        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+    <div className="fixed inset-0 z-[80] flex flex-col bg-ink sm:items-center sm:justify-center sm:bg-ink/85 sm:p-4 sm:backdrop-blur-sm">
+      <div className="relative flex h-full w-full flex-col overflow-hidden bg-black sm:h-[800px] sm:max-h-[85vh] sm:max-w-md sm:rounded-[1.75rem] sm:border sm:border-line">
+        <div className="flex shrink-0 items-center justify-between border-b border-line/10 bg-ink px-4 py-3 sm:border-line sm:bg-transparent">
           <p className="font-display text-lg text-ivory">Take photo</p>
           <button
             type="button"
@@ -146,14 +146,14 @@ export function CameraCaptureModal({
           </button>
         </div>
 
-        <div className="relative aspect-[3/4] bg-black">
+        <div className="relative flex-1 bg-black">
           <video
             ref={videoRef}
             playsInline
             muted
             autoPlay
             className={cn(
-              "h-full w-full object-cover",
+              "absolute inset-0 h-full w-full object-cover",
               facing === "user" && "scale-x-[-1]"
             )}
           />
@@ -169,7 +169,7 @@ export function CameraCaptureModal({
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-3 p-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 bg-ink p-4 sm:bg-transparent">
           <button
             type="button"
             onClick={() =>
