@@ -33,6 +33,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         if (process.env.NEXT_PUBLIC_POSTHOG_KEY && posthog.__loaded) {
           posthog.reset();
         }
+        if (useAetherStore.getState().user) {
+          void useAetherStore.getState().signOutLocal();
+        }
         return;
       }
 
