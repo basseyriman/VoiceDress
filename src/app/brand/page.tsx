@@ -1,19 +1,53 @@
+"use client";
+
 import { Logo } from "@/components/ui/button";
+import { useCallback } from "react";
+import * as htmlToImage from "html-to-image";
+
+function DownloadButton({ targetId, filename }: { targetId: string, filename: string }) {
+  const download = useCallback(async () => {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    try {
+      // html-to-image takes the current layout of the element.
+      // Since these elements have fixed width/height (1200x1400, etc)
+      // the output PNG will be perfectly high-res!
+      const dataUrl = await htmlToImage.toPng(el, { quality: 1, pixelRatio: 1 });
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error("Failed to download image", err);
+      alert("Failed to generate image. Try screenshotting instead.");
+    }
+  }, [targetId, filename]);
+
+  return (
+    <button 
+      onClick={download}
+      className="mt-6 px-8 py-3 bg-champagne text-ink rounded-full font-medium tracking-wide hover:bg-champagne/80 transition-colors shadow-lg"
+    >
+      Download High-Res PNG
+    </button>
+  );
+}
 
 export default function BrandFlyersPage() {
   return (
-    <div className="min-h-screen bg-ink/90 p-8 text-ivory flex flex-col items-center gap-12 pb-32">
+    <div className="min-h-screen bg-ink/90 p-8 text-ivory flex flex-col items-center gap-16 pb-32">
       <div className="text-center max-w-2xl">
         <h1 className="font-display text-4xl mb-4 text-champagne">VoiceDress Brand Flyers</h1>
         <p className="text-mist">
-          Take a screenshot of these perfectly branded flyers to announce the app on social media. They use your exact app fonts, logo, and colors.
+          Click the "Download PNG" button under any flyer to instantly save a high-res image optimized for social media!
         </p>
       </div>
 
-      {/* Essembl-style App Mockup (1200 x 1400) */}
-      <div className="flex flex-col gap-2">
+      {/* App Mockup Showcase (1200 x 1400) */}
+      <div className="flex flex-col items-center gap-2">
         <span className="text-sm text-mist tracking-widest uppercase">App Mockup Showcase</span>
         <div 
+          id="flyer-mockup"
           className="relative overflow-hidden bg-gradient-to-b from-[#E8F0EE] to-[#E3E4E8] border border-line flex flex-col items-center pt-24"
           style={{ width: 1200, height: 1400 }}
         >
@@ -75,12 +109,14 @@ export default function BrandFlyersPage() {
             <span className="text-[#1C2621]/40 tracking-[0.3em] uppercase text-xl font-medium">voicedress.com</span>
           </div>
         </div>
+        <DownloadButton targetId="flyer-mockup" filename="voicedress-app-mockup.png" />
       </div>
 
       {/* Twitter / LinkedIn (1200 x 675) */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col items-center gap-2">
         <span className="text-sm text-mist tracking-widest uppercase">Twitter / LinkedIn Banner (16:9)</span>
         <div 
+          id="flyer-banner"
           className="relative overflow-hidden bg-ink border border-line flex flex-col justify-center items-center"
           style={{ width: 1200, height: 675 }}
         >
@@ -98,12 +134,14 @@ export default function BrandFlyersPage() {
             </div>
           </div>
         </div>
+        <DownloadButton targetId="flyer-banner" filename="voicedress-linkedin-banner.png" />
       </div>
 
       {/* Instagram Square (1080 x 1080) */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col items-center gap-2">
         <span className="text-sm text-mist tracking-widest uppercase">Instagram Post (1:1)</span>
         <div 
+          id="flyer-square"
           className="relative overflow-hidden bg-ink border border-line flex flex-col justify-between p-24"
           style={{ width: 1080, height: 1080 }}
         >
@@ -138,12 +176,14 @@ export default function BrandFlyersPage() {
             voicedress.com
           </div>
         </div>
+        <DownloadButton targetId="flyer-square" filename="voicedress-instagram-square.png" />
       </div>
 
       {/* Instagram Story (1080 x 1920) */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col items-center gap-2">
         <span className="text-sm text-mist tracking-widest uppercase">Instagram / TikTok Story (9:16)</span>
         <div 
+          id="flyer-story"
           className="relative overflow-hidden bg-ink border border-line flex flex-col items-center justify-center p-16"
           style={{ width: 1080, height: 1920 }}
         >
@@ -179,6 +219,7 @@ export default function BrandFlyersPage() {
             </div>
           </div>
         </div>
+        <DownloadButton targetId="flyer-story" filename="voicedress-tiktok-story.png" />
       </div>
 
     </div>
