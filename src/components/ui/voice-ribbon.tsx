@@ -10,7 +10,7 @@ export function VoiceRibbon() {
       >
         <path
           id="voice-path"
-          d="M -100,250 C 400,-100 800,400 1300,150 C 1800,-100 2200,400 2600,150"
+          d="M -500,400 Q 1250,-200 3000,400"
         />
         <text className="font-display text-4xl italic fill-champagne tracking-[0.1em]">
           <textPath href="#voice-path" startOffset="0%">
