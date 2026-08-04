@@ -64,7 +64,7 @@ export default function BrandFlyersPage() {
                   className="w-full h-full object-cover scale-[1.2] object-top"
                 />
               </div>
-              <div className="absolute top-4 right-6 font-medium text-ink/50 tracking-wider text-base uppercase">
+              <div className="absolute top-4 right-6 font-medium text-ink/40 tracking-wider text-sm uppercase">
                 Try on with VoiceDress
               </div>
             </div>
