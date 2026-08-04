@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Camera, ImageIcon, Loader2 } from "lucide-react";
 import { Button, Logo } from "@/components/ui/button";
@@ -28,11 +28,27 @@ type Phase = "intro" | "capture";
 type PhotoStatus = "empty" | "processing" | "ready";
 
 export default function PhotoOnboardingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center text-sm text-mist">
+          Preparing…
+        </div>
+      }
+    >
+      <PhotoOnboardingInner />
+    </Suspense>
+  );
+}
+
+function PhotoOnboardingInner() {
   const router = useRouter();
   const user = useAetherStore((s) => s.user);
   const hydrated = useAetherStore((s) => s.hydrated);
   const wardrobe = useAetherStore((s) => s.wardrobe);
   const setAvatar = useAetherStore((s) => s.setAvatar);
+  const searchParams = useSearchParams();
+  const isEdit = searchParams.get("edit") === "true";
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [beat, setBeat] = useState(0);
@@ -50,14 +66,15 @@ export default function PhotoOnboardingPage() {
       return;
     }
     // Skip if they already have a body photo (don’t restart setup on login)
-    if (!needsPhotoOnboarding(user)) {
+    // unless they explicitly clicked 'Back to photo' (?edit=true)
+    if (!needsPhotoOnboarding(user) && !isEdit) {
       router.replace(
         needsWardrobeSetup(wardrobe)
           ? "/onboarding/wardrobe"
           : "/today"
       );
     }
-  }, [hydrated, user, wardrobe, router]);
+  }, [hydrated, user, wardrobe, router, isEdit]);
 
   useEffect(() => {
     if (phase !== "intro") return;

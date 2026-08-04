@@ -103,7 +103,7 @@ function WardrobeOnboardingInner() {
             </Button>
             <button
               type="button"
-              onClick={() => router.push("/onboarding/photo")}
+              onClick={() => router.push("/onboarding/photo?edit=true")}
               className="w-full py-4 text-center text-xs text-mist transition hover:text-ivory-muted active:text-ivory"
             >
               Back to photo
