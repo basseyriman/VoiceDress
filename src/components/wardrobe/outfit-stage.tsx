@@ -461,9 +461,6 @@ export function OutfitStage({
     confirmWear,
     runTryOn,
     user?.uid,
-    user?.subscriptionStatus,
-    user?.freePhotoTryOnsUsed,
-    user?.trialEndsAt,
     updateUser,
   ]);
 
