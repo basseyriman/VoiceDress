@@ -63,7 +63,7 @@ export default function SignupPage() {
   return (
     <AuthShell
       title="Create VoiceDress"
-      subtitle="Create your account. Next: style, photo, then connect your wardrobe."
+      subtitle="Create your account. Next: add your photo and start building your digital wardrobe."
       footer={
         <>
           Already a member?{" "}
