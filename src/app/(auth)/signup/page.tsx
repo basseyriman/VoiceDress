@@ -48,9 +48,10 @@ export default function SignupPage() {
         email: cred.user.email || email,
         displayName: name || email.split("@")[0],
       });
-      const user = useAetherStore.getState().user;
-      const wardrobe = useAetherStore.getState().wardrobe;
-      router.push(postAuthPath(user, wardrobe));
+      
+      // Force user to log in manually instead of direct access
+      await useAetherStore.getState().signOutLocal();
+      router.push("/login?registered=true");
     } catch (err) {
       setError(
         authErrorMessage(err, "Couldn’t create your account. Please try again.")
