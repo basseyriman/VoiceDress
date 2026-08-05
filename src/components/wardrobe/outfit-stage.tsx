@@ -21,7 +21,7 @@ import {
   shouldOfferTrial,
 } from "@/lib/entitlement";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Download } from "lucide-react";
 
 type TryOnJson = {
   ok?: boolean;
@@ -120,6 +120,54 @@ export function OutfitStage({
   const [donePieceIds, setDonePieceIds] = useState<string[]>([]);
   /** Quick pick = outfit tiles instantly, no photo wait. Full = dress onto photo. */
   const [photoTryOn, setPhotoTryOn] = useState(true);
+  const [photoTryOnPref, setPhotoTryOnPref] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadPhoto = async (url: string) => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.src = url;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const canvas = document.createElement("canvas");
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0);
+
+      // Elegant watermark
+      ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.beginPath();
+      ctx.roundRect(canvas.width - 240, canvas.height - 60, 220, 40, 20);
+      ctx.fill();
+
+      ctx.font = "500 16px Inter, sans-serif";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Styled by VoiceDress", canvas.width - 130, canvas.height - 40);
+
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = "voicedress-look.jpg";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error("Failed to download image", e);
+    } finally {
+      setDownloading(false);
+    }
+  };
   const requestId = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -836,9 +884,20 @@ export function OutfitStage({
             </div>
           )}
           {!generating && !dressing && wornUrl && outfit && photoTryOn && missingIds.length === 0 && (
-            <p className="mt-4 text-xs text-champagne/80">
-              You’re ready to go.
-            </p>
+            <div className="mt-4 flex items-center justify-between">
+              <p className="text-xs text-champagne/80">
+                You’re ready to go.
+              </p>
+              <button
+                type="button"
+                onClick={() => handleDownloadPhoto(wornUrl)}
+                disabled={downloading}
+                className="flex items-center gap-1.5 rounded-full bg-champagne/15 px-3 py-1.5 text-[11px] text-champagne transition hover:bg-champagne/25 disabled:opacity-50"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {downloading ? "Saving..." : "Save Look"}
+              </button>
+            </div>
           )}
           {!generating && !dressing && wornUrl && outfit && photoTryOn && missingIds.length > 0 && (
             <p className="mt-4 text-xs text-mist">
