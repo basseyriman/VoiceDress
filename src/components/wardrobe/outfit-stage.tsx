@@ -120,7 +120,6 @@ export function OutfitStage({
   const [donePieceIds, setDonePieceIds] = useState<string[]>([]);
   /** Quick pick = outfit tiles instantly, no photo wait. Full = dress onto photo. */
   const [photoTryOn, setPhotoTryOn] = useState(true);
-  const [photoTryOnPref, setPhotoTryOnPref] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
   const handleDownloadPhoto = async (url: string) => {
