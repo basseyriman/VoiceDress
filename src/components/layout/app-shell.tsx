@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { PageTransition } from "@/components/layout/page-transition";
 import { FlowDock } from "@/components/voice/flow-dock";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { photoTryOnCredits } from "@/lib/photo-tryon-quota";
+import { freePhotoTryOnsUsed, FREE_PHOTO_TRYONS } from "@/lib/entitlement";
 
 const nav = [
   { href: "/today", label: "Today", icon: Sparkles },
@@ -34,6 +36,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAetherStore((s) => s.user);
   const weather = useAetherStore((s) => s.weather);
   const signOutLocal = useAetherStore((s) => s.signOutLocal);
+
+  const purchased = photoTryOnCredits(user);
+  const freeLeft = Math.max(0, FREE_PHOTO_TRYONS - freePhotoTryOnsUsed(user));
+  const totalCredits = purchased + (freeLeft * 10);
 
   return (
     <div className="relative min-h-screen overflow-x-clip pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-16">
@@ -69,6 +75,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
           <div className="relative z-[101] flex shrink-0 items-center gap-2 sm:gap-3">
+            {user && (
+              <div className="hidden items-center gap-3 rounded-full border border-line bg-white/[0.02] pl-2 pr-1 py-1 sm:flex">
+                {freeLeft > 0 && purchased === 0 && (
+                  <span className="rounded-full border border-line bg-white/[0.02] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-mist">
+                    Free
+                  </span>
+                )}
+                <span className="text-xs text-mist">
+                  <span className="font-medium text-ivory">{totalCredits}</span> app credits
+                </span>
+                <button
+                  onClick={() => router.push("/billing")}
+                  className="flex items-center gap-1 rounded-full bg-ink px-3 py-1 text-xs font-medium text-ivory transition hover:bg-ink-soft border border-line/50"
+                >
+                  <span className="text-mist">↑</span> Upgrade
+                </button>
+              </div>
+            )}
             {weather && (
               <div className="hidden items-center gap-2 rounded-full border border-line px-3 py-1.5 text-xs text-ivory-muted sm:flex">
                 <CloudSun className="h-3.5 w-3.5 text-champagne" />
