@@ -17,6 +17,7 @@ import { useAetherStore } from "@/store/aether-store";
 import {
   photoTryOnCredits,
 } from "@/lib/photo-tryon-quota";
+import { freePhotoTryOnsUsed, FREE_PHOTO_TRYONS } from "@/lib/entitlement";
 
 function TopUpGrid({
   loading,
@@ -192,11 +193,10 @@ export default function BillingPage() {
     }
   };
 
-  const credits = photoTryOnCredits(user);
-  const freeUsed =
-    typeof user?.freePhotoTryOnsUsed === "number"
-      ? user.freePhotoTryOnsUsed
-      : 0;
+  const isComped = user?.comped;
+  const purchased = photoTryOnCredits(user);
+  const freeLeft = Math.max(0, FREE_PHOTO_TRYONS - freePhotoTryOnsUsed(user));
+  const totalCredits = purchased + (freeLeft * 10);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 sm:py-20">
@@ -223,7 +223,7 @@ export default function BillingPage() {
           <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-champagne/30 bg-champagne/10 px-5 py-2">
             <span className="text-sm text-mist">Your Balance:</span>
             <span className="font-display text-lg text-champagne">
-              {credits} {credits === 1 ? "Credit" : "Credits"}
+              {isComped ? "∞" : totalCredits} {isComped || totalCredits !== 1 ? "Credits" : "Credit"}
             </span>
           </div>
         )}
