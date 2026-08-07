@@ -332,11 +332,11 @@ export async function consumeMonthlyPhotoTryOn(
   }
 
   const credits = photoTryOnCredits(profile);
-  if (credits < 1) {
+  if (credits < 10) {
     return { consumed: false, used, monthKey, credits: 0 };
   }
 
-  const nextCredits = credits - 1;
+  const nextCredits = credits - 10;
   await ref.set(
     {
       photoTryOnCredits: nextCredits,

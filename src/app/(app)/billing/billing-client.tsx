@@ -102,9 +102,9 @@ function TopUpGrid({
             Enter a number between {CUSTOM_LOOK_TOPUP_MIN} and{" "}
             {CUSTOM_LOOK_TOPUP_MAX}.
           </p>
-        ) : quote && quote.looks >= 25 ? (
+        ) : quote && quote.looks >= 250 ? (
           <p className="mt-3 text-sm text-mist">
-            {formatGbp(0.5)} per Credit · 25+ drops to {formatGbp(0.4)}.
+            {formatGbp(0.05)} per Credit · 250+ drops to {formatGbp(0.04)}.
           </p>
         ) : null}
         <Button
@@ -212,7 +212,7 @@ export default function BillingPage() {
           Purchase Credits
         </h1>
         <p className="mt-4 max-w-xl text-mist">
-          Each outfit generation or piece swap costs 1 Credit. Bank your Credits and use them whenever you need to see a new look.
+          Each outfit generation or piece swap costs 10 Credits. Bank your Credits and use them whenever you need to see a new look.
         </p>
 
         {user && (

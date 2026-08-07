@@ -11,17 +11,17 @@ export const TRIAL_DAYS = 7;
 export const LOOK_TOPUP_PACKS = [
   {
     id: "looks_10",
-    looks: 10,
+    looks: 100,
     priceGbp: 5,
-    label: "10 VoiceDress Try-ons",
+    label: "100 VoiceDress Credits",
     description: "A quick top-up to try out new outfits.",
     priceEnv: "STRIPE_PRICE_ID_LOOKS_10",
   },
   {
     id: "looks_25",
-    looks: 25,
+    looks: 250,
     priceGbp: 10,
-    label: "25 VoiceDress Try-ons",
+    label: "250 VoiceDress Credits",
     description: "Best value top-up — banked until you use them.",
     priceEnv: "STRIPE_PRICE_ID_LOOKS_25",
     badge: "Popular" as string | null,
@@ -31,12 +31,12 @@ export const LOOK_TOPUP_PACKS = [
 export type LookTopupPackId = (typeof LOOK_TOPUP_PACKS)[number]["id"];
 
 export const CUSTOM_LOOK_TOPUP_ID = "looks_custom";
-export const CUSTOM_LOOK_TOPUP_MIN = 5;
-export const CUSTOM_LOOK_TOPUP_MAX = 100;
+export const CUSTOM_LOOK_TOPUP_MIN = 50;
+export const CUSTOM_LOOK_TOPUP_MAX = 1000;
 
-/** Pence per look — matches fixed packs (10→£5, 25→£10). */
+/** Pence per look — matches fixed packs (100→£5, 250→£10). */
 export function lookTopupPencePerLook(looks: number): number {
-  return looks >= 25 ? 40 : 50;
+  return looks >= 250 ? 4 : 5;
 }
 
 export type LookTopupQuote = {
