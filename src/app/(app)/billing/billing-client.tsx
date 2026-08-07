@@ -177,6 +177,10 @@ export default function BillingPage() {
         window.location.href = data.url;
         return;
       }
+      if (data.message) {
+        setMessage(data.message);
+        return;
+      }
     } catch (err) {
       setMessage(
         err instanceof Error
