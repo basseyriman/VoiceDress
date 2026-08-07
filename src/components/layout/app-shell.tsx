@@ -94,7 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   ) : (
                     <span className="font-medium text-ivory">{totalCredits}</span>
                   )}
-                  <span className="hidden sm:inline"> app</span> credits
+                  <span className="hidden sm:inline"> VoiceDress</span> Credits
                 </span>
                 {!isComped && (
                   <button
