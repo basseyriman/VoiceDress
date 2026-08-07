@@ -63,7 +63,7 @@ export function Logo({
     >
       <span
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-[0.9rem] border border-champagne/30 bg-[#121110] shadow-[inset_0_1px_0_rgba(245,240,232,0.08),0_8px_24px_rgba(0,0,0,0.35)]",
+          "flex shrink-0 items-center justify-center rounded-[0.9rem] border border-champagne/30 bg-ink-soft shadow-[inset_0_1px_0_rgba(245,240,232,0.08),0_8px_24px_rgba(0,0,0,0.35)]",
           hero && "h-14 w-14 sm:h-16 sm:w-16",
           compact && "h-8 w-8 rounded-[0.65rem]",
           !hero && !compact && "h-9 w-9 sm:h-12 sm:w-12"

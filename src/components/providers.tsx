@@ -10,6 +10,7 @@ import {
 } from "@/lib/firebase";
 import { PostHogProvider } from "@/components/posthog-provider";
 import { authFetch } from "@/lib/auth-fetch";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const hydrateAvatar = useAetherStore((s) => s.hydrateAvatar);
@@ -89,5 +90,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     };
   }, [user?.uid, cloudReady, updateUser]);
 
-  return <PostHogProvider>{children}</PostHogProvider>;
+  return (
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <PostHogProvider>{children}</PostHogProvider>
+    </ThemeProvider>
+  );
 }

@@ -14,6 +14,7 @@ import { useAetherStore } from "@/store/aether-store";
 import { cn } from "@/lib/utils";
 import { PageTransition } from "@/components/layout/page-transition";
 import { FlowDock } from "@/components/voice/flow-dock";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const nav = [
   { href: "/today", label: "Today", icon: Sparkles },
@@ -74,6 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 {Math.round(weather.tempC)}° · {weather.condition}
               </div>
             )}
+            <ThemeToggle />
             <button
               type="button"
               onClick={() => {

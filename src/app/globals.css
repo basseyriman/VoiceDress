@@ -16,6 +16,18 @@
   --foreground: var(--ivory);
 }
 
+.light {
+  --ink: #ffffff;
+  --ink-soft: #f8f6f2;
+  --stone: #e8e4dc;
+  --champagne: #c9a87c;
+  --champagne-dim: #a88b5f;
+  --ivory: #0b0b0c;
+  --ivory-muted: #3f3e3a;
+  --mist: #767167;
+  --line: rgba(201, 168, 124, 0.4);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -46,9 +58,9 @@ html {
 
 body {
   background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(201, 168, 124, 0.12), transparent 55%),
+    radial-gradient(1200px 600px at 80% -10%, var(--line), transparent 55%),
     radial-gradient(900px 500px at -10% 30%, rgba(245, 240, 232, 0.05), transparent 50%),
-    linear-gradient(180deg, #0b0b0c 0%, #121110 45%, #0b0b0c 100%);
+    linear-gradient(180deg, var(--ink) 0%, var(--ink-soft) 45%, var(--ink) 100%);
   color: var(--ivory);
   font-family: var(--font-outfit), system-ui, sans-serif;
   min-height: 100vh;
