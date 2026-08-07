@@ -37,6 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const weather = useAetherStore((s) => s.weather);
   const signOutLocal = useAetherStore((s) => s.signOutLocal);
 
+  const isComped = user?.comped;
   const purchased = photoTryOnCredits(user);
   const freeLeft = Math.max(0, FREE_PHOTO_TRYONS - freePhotoTryOnsUsed(user));
   const totalCredits = purchased + (freeLeft * 10);
@@ -77,21 +78,32 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="relative z-[101] flex shrink-0 items-center gap-2 sm:gap-3">
             {user && (
               <div className="flex items-center gap-1.5 rounded-full border border-line bg-white/[0.02] pl-2 pr-1 py-1 sm:gap-3">
-                {freeLeft > 0 && purchased === 0 && (
+                {freeLeft > 0 && purchased === 0 && !isComped && (
                   <span className="hidden rounded-full border border-line bg-white/[0.02] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-mist sm:inline-block">
                     Free
                   </span>
                 )}
+                {isComped && (
+                  <span className="hidden rounded-full border border-champagne/50 bg-champagne/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-champagne sm:inline-block">
+                    Founder
+                  </span>
+                )}
                 <span className="text-[10px] sm:text-xs text-mist">
-                  <span className="font-medium text-ivory">{totalCredits}</span>
+                  {isComped ? (
+                    <span className="font-medium text-ivory text-sm">∞</span>
+                  ) : (
+                    <span className="font-medium text-ivory">{totalCredits}</span>
+                  )}
                   <span className="hidden sm:inline"> app</span> credits
                 </span>
-                <button
-                  onClick={() => router.push("/billing")}
-                  className="flex items-center gap-1 rounded-full bg-ink px-2 py-1 text-[10px] sm:text-xs font-medium text-ivory transition hover:bg-ink-soft border border-line/50 sm:px-3"
-                >
-                  <span className="text-mist">↑</span> <span className="hidden sm:inline">Upgrade</span>
-                </button>
+                {!isComped && (
+                  <button
+                    onClick={() => router.push("/billing")}
+                    className="flex items-center gap-1 rounded-full bg-ink px-2 py-1 text-[10px] sm:text-xs font-medium text-ivory transition hover:bg-ink-soft border border-line/50 sm:px-3"
+                  >
+                    <span className="text-mist">↑</span> <span className="hidden sm:inline">Upgrade</span>
+                  </button>
+                )}
               </div>
             )}
             {weather && (
