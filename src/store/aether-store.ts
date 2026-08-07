@@ -61,6 +61,8 @@ interface AetherState {
   weather: WeatherSnapshot | null;
   connections: CommerceConnection[];
   taste: TasteMemory;
+  currentTryOnUrl: string | null;
+  savedTryOns: { id: string; url: string; outfit: Outfit; timestamp: number }[];
   voiceListening: boolean;
   lastTranscript: string;
   hydrated: boolean;
@@ -119,6 +121,9 @@ interface AetherState {
   /** Log a confirmed wear (e.g. after successful try-on) — not every suggestion. */
   confirmWear: (outfit?: Outfit | null) => void;
   setCurrentOutfit: (o: Outfit | null) => void;
+  setCurrentTryOnUrl: (url: string | null) => void;
+  saveTryOn: (url: string, outfit: Outfit) => { success: boolean; error?: string };
+  deleteTryOn: (id: string) => void;
   markShopifyConnected: (shop: string, itemCount?: number) => void;
   disconnectStore: (source: CommerceSource) => void;
   addGarments: (items: Garment[]) => void;
@@ -219,6 +224,8 @@ export const useAetherStore = create<AetherState>()(
       user: null,
       wardrobe: [],
       currentOutfit: null,
+      currentTryOnUrl: null,
+      savedTryOns: [],
       weather: null,
       connections: defaultConnections(),
       taste: { rejectedIds: [], recentOutfitIds: [] },
@@ -460,6 +467,8 @@ export const useAetherStore = create<AetherState>()(
           user: null,
           wardrobe: [],
           currentOutfit: null,
+          currentTryOnUrl: null,
+          savedTryOns: [],
           lastTranscript: "",
           taste: { rejectedIds: [], recentOutfitIds: [] },
           cloudReady: false,
@@ -797,9 +806,22 @@ export const useAetherStore = create<AetherState>()(
         }
       },
       setCurrentOutfit: (o) => {
-        set({ currentOutfit: o });
+        set({ currentOutfit: o, currentTryOnUrl: null });
         const user = get().user;
         if (o) persistOutfitAndTaste(user?.uid, o, get().taste);
+      },
+      setCurrentTryOnUrl: (url) => set({ currentTryOnUrl: url }),
+      saveTryOn: (url, outfit) => {
+        const { savedTryOns } = get();
+        if (savedTryOns.length >= 5) {
+          return { success: false, error: "Gallery limit reached. Please delete a saved look first." };
+        }
+        const id = Math.random().toString(36).substring(2, 9);
+        set({ savedTryOns: [{ id, url, outfit, timestamp: Date.now() }, ...savedTryOns] });
+        return { success: true };
+      },
+      deleteTryOn: (id) => {
+        set((state) => ({ savedTryOns: state.savedTryOns.filter((t) => t.id !== id) }));
       },
       markShopifyConnected: (shop, itemCount = 0) => {
         const user = get().user;

@@ -21,7 +21,7 @@ import {
   shouldOfferTrial,
 } from "@/lib/entitlement";
 import Link from "next/link";
-import { Sparkles, Download } from "lucide-react";
+import { Sparkles, Download, Share, Bookmark, Trash2, X } from "lucide-react";
 
 type TryOnJson = {
   ok?: boolean;
@@ -71,6 +71,11 @@ export function OutfitStage({
   const swapFromVoice = useAetherStore((s) => s.swapFromVoice);
   const setCurrentOutfit = useAetherStore((s) => s.setCurrentOutfit);
   const confirmWear = useAetherStore((s) => s.confirmWear);
+  const wornUrl = useAetherStore((s) => s.currentTryOnUrl);
+  const setWornUrl = useAetherStore((s) => s.setCurrentTryOnUrl);
+  const savedTryOns = useAetherStore((s) => s.savedTryOns);
+  const saveTryOn = useAetherStore((s) => s.saveTryOn);
+  const deleteTryOn = useAetherStore((s) => s.deleteTryOn);
 
   const lookPieces = useMemo(() => {
     const pieces = lookPiecesForTryOn(garments);
@@ -103,7 +108,6 @@ export function OutfitStage({
     resolvedAvatar ||
     (avatarUrl && avatarUrl !== AVATAR_IDB_REF ? avatarUrl : undefined);
   const hasAvatar = Boolean(displayAvatar);
-  const [wornUrl, setWornUrl] = useState<string | null>(null);
   const [dressing, setDressing] = useState(false);
   const [needsKey, setNeedsKey] = useState(false);
   const [needsBilling, setNeedsBilling] = useState(false);
@@ -285,6 +289,19 @@ export function OutfitStage({
       setError("");
       setNotice("");
       setProgress(0);
+      setActivePieceId(null);
+      return () => {
+        ac.abort();
+      };
+    }
+
+    if (wornUrl && wornUrl !== displayAvatar) {
+      // If we already have a generated try-on image for this outfit (persisted in global state),
+      // we don't need to rerun the API call. It will be cleared when a new outfit is generated.
+      setDressing(false);
+      setProgress(100);
+      setMissingIds([]);
+      setDonePieceIds(lookPieces.map(p => p.id));
       setActivePieceId(null);
       return () => {
         ac.abort();
@@ -923,12 +940,25 @@ export function OutfitStage({
               </p>
               <button
                 type="button"
+                onClick={() => {
+                  if (wornUrl && outfit) {
+                    const res = saveTryOn(wornUrl, outfit);
+                    if (!res.success) alert(res.error);
+                  }
+                }}
+                className="flex items-center gap-1.5 rounded-full bg-champagne/15 px-3 py-1.5 text-[11px] text-champagne transition hover:bg-champagne/25"
+              >
+                <Bookmark className="h-3 w-3" />
+                Save Look
+              </button>
+              <button
+                type="button"
                 onClick={() => handleDownloadPhoto(wornUrl)}
                 disabled={downloading}
                 className="flex items-center gap-1.5 rounded-full bg-champagne/15 px-3 py-1.5 text-[11px] text-champagne transition hover:bg-champagne/25 disabled:opacity-50"
               >
-                <Download className="h-3.5 w-3.5" />
-                {downloading ? "Saving..." : "Save Look"}
+                <Share className="h-3 w-3" />
+                Share / Save
               </button>
             </div>
           )}
@@ -939,6 +969,45 @@ export function OutfitStage({
           )}
         </div>
       </div>
+
+      {savedTryOns.length > 0 && (
+        <div className="mt-8 border-t border-line/30 pt-8">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-xs font-medium uppercase tracking-[0.2em] text-mist">
+              Saved Looks ({savedTryOns.length}/5)
+            </h3>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory">
+            <AnimatePresence>
+              {savedTryOns.map((saved) => (
+                <motion.div
+                  key={saved.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="relative shrink-0 snap-start rounded-2xl border border-line bg-ink-soft p-2 overflow-hidden w-[140px] group"
+                >
+                  <img
+                    src={saved.url}
+                    alt="Saved try-on"
+                    className="h-40 w-full object-cover rounded-xl cursor-pointer"
+                    onClick={() => {
+                      setWornUrl(saved.url);
+                      setCurrentOutfit(saved.outfit);
+                    }}
+                  />
+                  <button
+                    onClick={() => deleteTryOn(saved.id)}
+                    className="absolute top-3 right-3 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        </div>
+      )}
 
       <TrialOfferModal
         open={trialOffer !== null}
