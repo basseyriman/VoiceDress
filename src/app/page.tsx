@@ -82,14 +82,19 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.85, delay: 0.24 }}
-            className="mt-10 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap"
+            className="mt-10 flex w-full flex-col gap-3 sm:flex-row sm:items-start"
           >
-            <Link href="/signup" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full sm:w-auto">
-                Try VoiceDress
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+            <div className="flex w-full flex-col sm:w-auto">
+              <Link href="/signup" className="w-full">
+                <Button size="lg" className="w-full">
+                  Try VoiceDress
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <p className="mt-2.5 text-center text-xs tracking-wide text-mist sm:text-left">
+                Includes <span className="font-medium text-champagne">10 Free Try-on Credits</span>
+              </p>
+            </div>
             <Link href="/login" className="w-full sm:w-auto">
               <Button size="lg" variant="outline" className="w-full sm:w-auto">
                 Enter wardrobe

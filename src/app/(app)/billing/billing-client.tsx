@@ -218,6 +218,9 @@ export default function BillingPage() {
         <p className="mt-4 max-w-xl text-mist">
           Each outfit generation or piece swap costs 10 Credits. Bank your Credits and use them whenever you need to see a new look.
         </p>
+        <p className="mt-2 text-sm text-champagne/80">
+          Every new account starts with 10 Free Try-on Credits.
+        </p>
 
         {user && (
           <div className="mt-6 inline-flex items-center gap-3 rounded-full border border-champagne/30 bg-champagne/10 px-5 py-2">
