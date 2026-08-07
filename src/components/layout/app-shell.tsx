@@ -57,8 +57,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "relative z-[101] inline-flex cursor-pointer items-center gap-2 rounded-full px-3.5 py-2 text-xs tracking-wide transition-colors",
                       active
-                        ? "bg-white/[0.07] text-champagne"
-                        : "text-mist hover:bg-white/[0.04] hover:text-ivory"
+                        ? "bg-black/[0.04] text-champagne dark:bg-white/[0.07]"
+                        : "text-mist hover:bg-black/5 hover:text-ink dark:hover:bg-white/[0.04] dark:hover:text-ivory"
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -114,7 +114,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   "relative z-[101] flex min-h-[3.25rem] min-w-0 flex-1 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] tracking-wide transition",
                   active
                     ? "bg-champagne/10 text-champagne"
-                    : "text-mist hover:text-ivory"
+                    : "text-mist hover:bg-black/5 hover:text-ink dark:hover:bg-white/[0.04] dark:hover:text-ivory"
                 )}
               >
                 <Icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />

@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import type { InputHTMLAttributes, ReactNode } from "react";
 
 export const fieldInputClass =
-  "w-full rounded-2xl border border-line bg-ink-soft px-4 py-3.5 text-sm text-ivory outline-none transition placeholder:text-mist/55 focus:border-champagne/45 focus:bg-[#1a1917] focus:ring-1 focus:ring-champagne/20";
+  "w-full rounded-2xl border border-line bg-ink-soft px-4 py-3.5 text-sm text-ivory outline-none transition placeholder:text-mist/55 focus:border-champagne/45 focus:bg-ink focus:ring-1 focus:ring-champagne/20";
 
 export function FieldLabel({
   children,

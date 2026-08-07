@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --ink: #0b0b0c;
   --ink-soft: #161618;
@@ -100,10 +102,20 @@ body {
   backdrop-filter: blur(16px);
 }
 
+.light .glass {
+  background: rgba(255, 255, 255, 0.65);
+}
+
 .shine-border {
   box-shadow:
     inset 0 1px 0 rgba(245, 240, 232, 0.06),
     0 20px 50px rgba(0, 0, 0, 0.35);
+}
+
+.light .shine-border {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 12px 40px rgba(0, 0, 0, 0.04);
 }
 
 @keyframes pulse-ring {

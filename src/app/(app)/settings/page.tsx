@@ -127,7 +127,7 @@ export default function SettingsPage() {
           </Link>
           <Link
             href="/billing"
-            className="flex flex-col rounded-2xl border border-line px-4 py-3.5 transition hover:border-champagne/40 hover:bg-white/[0.02]"
+            className="flex flex-col rounded-2xl border border-line px-4 py-3.5 transition hover:border-champagne/40 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
           >
             <span className="text-sm text-ivory">Credits & Billing</span>
             <span className="mt-0.5 text-xs text-mist">Top up your try-ons</span>

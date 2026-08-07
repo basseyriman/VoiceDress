@@ -231,7 +231,7 @@ export default function TodayPage() {
                 ? "border-champagne/50 bg-champagne/15 shadow-[0_0_40px_rgba(201,168,124,0.18)]"
                 : composing
                   ? "border-champagne/30 bg-champagne/[0.08]"
-                  : "border-line bg-white/[0.03] hover:border-champagne/35"
+                  : "border-line bg-black/[0.03] dark:bg-white/[0.03] hover:border-champagne/35"
             )}
           >
             <span
