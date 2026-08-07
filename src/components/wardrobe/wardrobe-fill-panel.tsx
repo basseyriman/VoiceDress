@@ -270,7 +270,7 @@ export function WardrobeFillPanel({
         <input
           ref={fileRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*"
           multiple
           className="hidden"
           onChange={(e) => void onIngestFiles(e.target.files)}

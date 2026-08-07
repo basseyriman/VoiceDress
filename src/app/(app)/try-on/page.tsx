@@ -91,7 +91,7 @@ export default function TryOnPage() {
           <input
             ref={libraryRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
             className="hidden"
             onChange={(e) => onUpload(e.target.files?.[0])}
           />

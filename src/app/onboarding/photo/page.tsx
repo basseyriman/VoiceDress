@@ -277,7 +277,7 @@ function PhotoOnboardingInner() {
                   <input
                     ref={libraryRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/*"
                     className="hidden"
                     onChange={(e) => void onPhoto(e.target.files?.[0])}
                   />
