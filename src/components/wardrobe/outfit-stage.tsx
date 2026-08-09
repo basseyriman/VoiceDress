@@ -1041,6 +1041,7 @@ export function GarmentTile({
   onClick?: () => void;
   /** Bigger thumb — wardrobe grid on phones */
   large?: boolean;
+  actions?: React.ReactNode;
 }) {
   const [broken, setBroken] = useState(false);
   const [src, setSrc] = useState(() =>
@@ -1142,9 +1143,12 @@ export function GarmentTile({
             </span>
           )}
         </div>
-        <p className="truncate text-xs text-mist">
-          {garment.brand} · {garment.category}
-        </p>
+        <div className="flex items-center justify-between mt-0.5">
+          <p className="truncate text-xs text-mist">
+            {garment.brand} · {garment.category}
+          </p>
+          {actions && <div className="flex items-center gap-3 shrink-0 ml-2">{actions}</div>}
+        </div>
         {!large && (
           <p className="mt-2 text-xs text-mist">
             {dressing

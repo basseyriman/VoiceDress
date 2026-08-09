@@ -137,40 +137,34 @@ export default function WardrobePage() {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((g) => (
             <div key={g.id} className="relative group/card">
-              <GarmentTile garment={g} large />
-              {/* Archive / Restore Button (Top Left) */}
-              <div className="absolute left-3 top-3 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  aria-label={g.isArchived ? `Restore ${g.name}` : `Archive ${g.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void updateGarment(g.id, { isArchived: !g.isArchived });
-                  }}
-                  className="rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-champagne/50 hover:text-champagne"
-                >
-                  {g.isArchived ? (
-                    <ArchiveRestore className="h-3.5 w-3.5" />
-                  ) : (
-                    <Archive className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              </div>
-
-              {/* Delete Button (Top Right) */}
-              <div className="absolute right-3 top-3 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  aria-label={`Remove ${g.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPendingDelete(g);
-                  }}
-                  className="rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-danger/50 hover:text-danger"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              <GarmentTile 
+                garment={g} 
+                large 
+                actions={
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void updateGarment(g.id, { isArchived: !g.isArchived });
+                      }}
+                      className="text-[10px] font-bold tracking-wide uppercase text-mist hover:text-champagne transition-colors"
+                    >
+                      {g.isArchived ? "Restore" : "Archive"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingDelete(g);
+                      }}
+                      className="text-[10px] font-bold tracking-wide uppercase text-mist hover:text-danger transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </>
+                }
+              />
             </div>
           ))}
         </div>
