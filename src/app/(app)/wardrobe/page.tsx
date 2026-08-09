@@ -144,23 +144,29 @@ export default function WardrobePage() {
                   <>
                     <button
                       type="button"
+                      aria-label={g.isArchived ? "Restore" : "Archive"}
                       onClick={(e) => {
                         e.stopPropagation();
                         void updateGarment(g.id, { isArchived: !g.isArchived });
                       }}
-                      className="text-[10px] font-bold tracking-wide uppercase text-mist hover:text-champagne transition-colors"
+                      className="text-mist hover:text-champagne transition-colors p-1"
                     >
-                      {g.isArchived ? "Restore" : "Archive"}
+                      {g.isArchived ? (
+                        <ArchiveRestore className="h-4 w-4" />
+                      ) : (
+                        <Archive className="h-4 w-4" />
+                      )}
                     </button>
                     <button
                       type="button"
+                      aria-label="Delete"
                       onClick={(e) => {
                         e.stopPropagation();
                         setPendingDelete(g);
                       }}
-                      className="text-[10px] font-bold tracking-wide uppercase text-mist hover:text-danger transition-colors"
+                      className="text-mist hover:text-danger transition-colors p-1 ml-1"
                     >
-                      Delete
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </>
                 }
