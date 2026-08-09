@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Garment, Outfit } from "@/lib/types";
 import { authFetch } from "@/lib/auth-fetch";
@@ -75,7 +76,9 @@ export function OutfitStage({
   const setWornUrl = useAetherStore((s) => s.setCurrentTryOnUrl);
   const savedTryOns = useAetherStore((s) => s.savedTryOns);
   const saveTryOn = useAetherStore((s) => s.saveTryOn);
+  const setPendingSwapTryOn = useAetherStore((s) => s.setPendingSwapTryOn);
   const deleteTryOn = useAetherStore((s) => s.deleteTryOn);
+  const router = useRouter();
 
   const lookPieces = useMemo(() => {
     const pieces = lookPiecesForTryOn(garments);
@@ -943,7 +946,21 @@ export function OutfitStage({
                 onClick={() => {
                   if (wornUrl && outfit) {
                     const res = saveTryOn(wornUrl, outfit);
-                    if (!res.success) alert(res.error);
+                    if (!res.success) {
+                      if (res.error === "limit_reached") {
+                        const swap = window.confirm(
+                          "You have reached your saved look limit (5/5). Do you want to swap this look with another saved look in your gallery?"
+                        );
+                        if (swap) {
+                          setPendingSwapTryOn({ url: wornUrl, outfit });
+                          router.push("/saved-looks");
+                        }
+                      } else {
+                        alert(res.error);
+                      }
+                    } else {
+                      alert("Look saved successfully!");
+                    }
                   }
                 }}
                 className="flex items-center gap-1.5 rounded-full bg-champagne/15 px-3 py-1.5 text-[11px] text-champagne transition hover:bg-champagne/25"
@@ -970,44 +987,7 @@ export function OutfitStage({
         </div>
       </div>
 
-      {savedTryOns.length > 0 && (
-        <div className="mt-8 border-t border-line/30 pt-8">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-xs font-medium uppercase tracking-[0.2em] text-mist">
-              Saved Looks ({savedTryOns.length}/5)
-            </h3>
-          </div>
-          <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory">
-            <AnimatePresence>
-              {savedTryOns.map((saved) => (
-                <motion.div
-                  key={saved.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  className="relative shrink-0 snap-start rounded-2xl border border-line bg-ink-soft p-2 overflow-hidden w-[140px] group"
-                >
-                  <img
-                    src={saved.url}
-                    alt="Saved try-on"
-                    className="h-40 w-full object-cover rounded-xl cursor-pointer"
-                    onClick={() => {
-                      setWornUrl(saved.url);
-                      setCurrentOutfit(saved.outfit);
-                    }}
-                  />
-                  <button
-                    onClick={() => deleteTryOn(saved.id)}
-                    className="absolute top-3 right-3 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        </div>
-      )}
+
 
       <TrialOfferModal
         open={trialOffer !== null}

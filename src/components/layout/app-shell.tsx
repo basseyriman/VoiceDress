@@ -8,6 +8,7 @@ import {
   Shirt,
   Sparkles,
   UserRound,
+  Bookmark,
 } from "lucide-react";
 import { Logo } from "@/components/ui/button";
 import { useAetherStore } from "@/store/aether-store";
@@ -22,6 +23,7 @@ const nav = [
   { href: "/today", label: "Today", icon: Sparkles },
   { href: "/try-on", label: "Photo", icon: UserRound },
   { href: "/wardrobe", label: "Wardrobe", icon: Shirt },
+  { href: "/saved-looks", label: "Saved", icon: Bookmark },
   { href: "/settings", label: "More", icon: Ellipsis },
 ];
 

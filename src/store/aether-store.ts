@@ -64,6 +64,7 @@ interface AetherState {
   taste: TasteMemory;
   currentTryOnUrl: string | null;
   savedTryOns: { id: string; url: string; outfit: Outfit; timestamp: number }[];
+  pendingSwapTryOn: { url: string; outfit: Outfit } | null;
   voiceListening: boolean;
   lastTranscript: string;
   hydrated: boolean;
@@ -124,6 +125,8 @@ interface AetherState {
   setCurrentOutfit: (o: Outfit | null) => void;
   setCurrentTryOnUrl: (url: string | null) => void;
   saveTryOn: (url: string, outfit: Outfit) => { success: boolean; error?: string };
+  setPendingSwapTryOn: (val: { url: string; outfit: Outfit } | null) => void;
+  swapTryOn: (deleteId: string, url: string, outfit: Outfit) => { success: boolean };
   deleteTryOn: (id: string) => void;
   markShopifyConnected: (shop: string, itemCount?: number) => void;
   disconnectStore: (source: CommerceSource) => void;
@@ -228,6 +231,7 @@ export const useAetherStore = create<AetherState>()(
       currentOutfit: null,
       currentTryOnUrl: null,
       savedTryOns: [],
+      pendingSwapTryOn: null,
       weather: null,
       connections: defaultConnections(),
       taste: { rejectedIds: [], recentOutfitIds: [] },
@@ -816,10 +820,18 @@ export const useAetherStore = create<AetherState>()(
       saveTryOn: (url, outfit) => {
         const { savedTryOns } = get();
         if (savedTryOns.length >= 5) {
-          return { success: false, error: "Gallery limit reached. Please delete a saved look first." };
+          return { success: false, error: "limit_reached" };
         }
         const id = Math.random().toString(36).substring(2, 9);
         set({ savedTryOns: [{ id, url, outfit, timestamp: Date.now() }, ...savedTryOns] });
+        return { success: true };
+      },
+      setPendingSwapTryOn: (val) => set({ pendingSwapTryOn: val }),
+      swapTryOn: (deleteId, url, outfit) => {
+        const { savedTryOns } = get();
+        const filtered = savedTryOns.filter((t) => t.id !== deleteId);
+        const id = Math.random().toString(36).substring(2, 9);
+        set({ savedTryOns: [{ id, url, outfit, timestamp: Date.now() }, ...filtered] });
         return { success: true };
       },
       deleteTryOn: (id) => {
