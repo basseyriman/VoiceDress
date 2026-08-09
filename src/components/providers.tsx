@@ -91,7 +91,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }, [user?.uid, cloudReady, updateUser]);
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark">
+    <ThemeProvider attribute="class" defaultTheme="dark" storageKey="vd-theme">
       <PostHogProvider>{children}</PostHogProvider>
     </ThemeProvider>
   );
