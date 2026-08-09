@@ -1054,8 +1054,9 @@ export function GarmentTile({
   };
 
   return (
-    <button
-      type="button"
+    <div
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
       aria-busy={dressing || undefined}
       className={cn(
@@ -1148,6 +1149,6 @@ export function GarmentTile({
           </div>
         )}
       </div>
-    </button>
+    </div>
   );
 }
