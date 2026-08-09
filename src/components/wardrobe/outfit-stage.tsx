@@ -1148,7 +1148,7 @@ export function GarmentTile({
           <p className="truncate text-xs text-mist">
             {garment.brand} · {garment.category}
           </p>
-          {actions && <div className="flex items-center gap-5 shrink-0 ml-2">{actions}</div>}
+          {actions && <div className="flex items-center gap-8 shrink-0 ml-2">{actions}</div>}
         </div>
         {!large && (
           <p className="mt-2 text-xs text-mist">
