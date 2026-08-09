@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Trash2, Archive, Undo2 } from "lucide-react";
+import { Trash2, Archive, Undo2, Upload } from "lucide-react";
+import Link from "next/link";
 import { GarmentTile } from "@/components/wardrobe/outfit-stage";
 import { useAetherStore } from "@/store/aether-store";
 import type { Garment, GarmentCategory } from "@/lib/types";
@@ -80,6 +81,15 @@ export default function WardrobePage() {
           {wardrobe.length} pieces. Add via Connect — remove mistakes with the
           bin.
         </p>
+        <div className="mt-6">
+          <Link
+            href="/connect"
+            className="inline-flex items-center gap-2 rounded-full bg-champagne/15 border border-champagne/30 px-5 py-2.5 text-sm font-medium text-champagne transition hover:bg-champagne/25"
+          >
+            <Upload className="h-4 w-4" />
+            Upload Garments
+          </Link>
+        </div>
       </motion.div>
 
       <div className="flex flex-wrap gap-2">
