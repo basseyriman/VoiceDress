@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Trash2, Archive, ArchiveRestore } from "lucide-react";
+import { Trash2, Archive, RotateCcw } from "lucide-react";
 import { GarmentTile } from "@/components/wardrobe/outfit-stage";
 import { useAetherStore } from "@/store/aether-store";
 import type { Garment, GarmentCategory } from "@/lib/types";
@@ -152,7 +152,7 @@ export default function WardrobePage() {
                       className="text-mist hover:text-champagne transition-colors p-1"
                     >
                       {g.isArchived ? (
-                        <ArchiveRestore className="h-5 w-5" />
+                        <RotateCcw className="h-5 w-5" />
                       ) : (
                         <Archive className="h-5 w-5" />
                       )}
