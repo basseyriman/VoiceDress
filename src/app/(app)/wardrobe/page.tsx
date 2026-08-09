@@ -124,46 +124,57 @@ export default function WardrobePage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((g) => (
-          <div key={g.id} className="relative group/card">
-            <GarmentTile garment={g} large />
-            {/* Archive / Restore Button (Top Left) */}
-            <div className="absolute left-3 top-3 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
-              <button
-                type="button"
-                aria-label={g.isArchived ? `Restore ${g.name}` : `Archive ${g.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void updateGarment(g.id, { isArchived: !g.isArchived });
-                }}
-                className="rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-champagne/50 hover:text-champagne"
-              >
-                {g.isArchived ? (
-                  <ArchiveRestore className="h-3.5 w-3.5" />
-                ) : (
-                  <Archive className="h-3.5 w-3.5" />
-                )}
-              </button>
-            </div>
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-line bg-ink/30 px-6 py-20 text-center">
+          <Archive className="h-8 w-8 text-mist/50 mb-4" />
+          <p className="text-sm text-mist">
+            {viewMode === "archived" 
+              ? "You haven't archived any pieces yet." 
+              : "Your wardrobe is empty for this category."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((g) => (
+            <div key={g.id} className="relative group/card">
+              <GarmentTile garment={g} large />
+              {/* Archive / Restore Button (Top Left) */}
+              <div className="absolute left-3 top-3 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  aria-label={g.isArchived ? `Restore ${g.name}` : `Archive ${g.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void updateGarment(g.id, { isArchived: !g.isArchived });
+                  }}
+                  className="rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-champagne/50 hover:text-champagne"
+                >
+                  {g.isArchived ? (
+                    <ArchiveRestore className="h-3.5 w-3.5" />
+                  ) : (
+                    <Archive className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              </div>
 
-            {/* Delete Button (Top Right) */}
-            <div className="absolute right-3 top-3 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
-              <button
-                type="button"
-                aria-label={`Remove ${g.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPendingDelete(g);
-                }}
-                className="rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-danger/50 hover:text-danger"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
+              {/* Delete Button (Top Right) */}
+              <div className="absolute right-3 top-3 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
+                <button
+                  type="button"
+                  aria-label={`Remove ${g.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPendingDelete(g);
+                  }}
+                  className="rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-danger/50 hover:text-danger"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {pendingDelete &&
         portalReady &&
