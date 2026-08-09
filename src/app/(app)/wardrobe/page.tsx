@@ -128,7 +128,8 @@ export default function WardrobePage() {
         {items.map((g) => (
           <div key={g.id} className="relative group/card">
             <GarmentTile garment={g} large />
-            <div className="absolute right-3 top-3 z-10 flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
+            {/* Archive / Restore Button (Top Left) */}
+            <div className="absolute left-3 top-3 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
               <button
                 type="button"
                 aria-label={g.isArchived ? `Restore ${g.name}` : `Archive ${g.name}`}
@@ -144,6 +145,10 @@ export default function WardrobePage() {
                   <Archive className="h-3.5 w-3.5" />
                 )}
               </button>
+            </div>
+
+            {/* Delete Button (Top Right) */}
+            <div className="absolute right-3 top-3 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
               <button
                 type="button"
                 aria-label={`Remove ${g.name}`}
