@@ -152,9 +152,9 @@ export default function WardrobePage() {
                       className="text-mist hover:text-champagne transition-colors p-1"
                     >
                       {g.isArchived ? (
-                        <ArchiveRestore className="h-4 w-4" />
+                        <ArchiveRestore className="h-5 w-5" />
                       ) : (
-                        <Archive className="h-4 w-4" />
+                        <Archive className="h-5 w-5" />
                       )}
                     </button>
                     <button
@@ -164,9 +164,9 @@ export default function WardrobePage() {
                         e.stopPropagation();
                         setPendingDelete(g);
                       }}
-                      className="text-mist hover:text-danger transition-colors p-1 ml-1"
+                      className="text-mist hover:text-danger transition-colors p-1"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-5 w-5" />
                     </button>
                   </>
                 }
