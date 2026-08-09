@@ -1028,6 +1028,7 @@ export function GarmentTile({
   progressPct,
   onClick,
   large,
+  actions,
 }: {
   garment: Garment;
   active?: boolean;
