@@ -7,9 +7,10 @@ export function matchGarmentFromSpeech(
   category?: GarmentCategory
 ): Garment | null {
   const t = speech.toLowerCase().replace(/[^\w\s-]/g, " ");
+  const activeWardrobe = wardrobe.filter((g) => !g.isArchived);
   const pool = category
-    ? wardrobe.filter((g) => g.category === category)
-    : wardrobe;
+    ? activeWardrobe.filter((g) => g.category === category)
+    : activeWardrobe;
   if (!pool.length) return null;
 
   const ranked = pool

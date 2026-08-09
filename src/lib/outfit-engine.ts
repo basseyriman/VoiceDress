@@ -671,7 +671,7 @@ export function suggestOutfit(input: SuggestInput): Outfit {
     styleHints: blendStyleHints(stylePrefs, baseProfile.styleHints),
   };
   // Live guard: fix socks-as-shoes and other mis-tags before scoring
-  const wardrobe = sanitizeWardrobe(input.wardrobe);
+  const wardrobe = sanitizeWardrobe(input.wardrobe).filter((g) => !g.isArchived);
   const currentOutfit = input.currentOutfit
     ? sanitizeWardrobe(input.currentOutfit)
     : undefined;

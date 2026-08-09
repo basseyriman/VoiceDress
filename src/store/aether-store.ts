@@ -47,6 +47,7 @@ import {
   saveUserProfile,
   uploadUserAvatar,
   upsertGarments,
+  upsertGarment,
 } from "@/lib/cloud-sync";
 import {
   getFirebaseAuth,
@@ -127,6 +128,7 @@ interface AetherState {
   markShopifyConnected: (shop: string, itemCount?: number) => void;
   disconnectStore: (source: CommerceSource) => void;
   addGarments: (items: Garment[]) => void;
+  updateGarment: (garmentId: string, updates: Partial<Garment>) => Promise<void>;
   removeGarment: (garmentId: string) => Promise<void>;
   setVoiceListening: (v: boolean) => void;
   setTranscript: (t: string) => void;
@@ -900,6 +902,27 @@ export const useAetherStore = create<AetherState>()(
               });
             })
             .catch(() => undefined);
+        }
+      },
+      updateGarment: async (garmentId, updates) => {
+        const user = get().user;
+        let updatedGarment: Garment | undefined;
+        set((state) => {
+          const next = [...state.wardrobe];
+          const idx = next.findIndex((g) => g.id === garmentId);
+          if (idx !== -1) {
+            next[idx] = { ...next[idx], ...updates, updatedAt: new Date().toISOString() };
+            updatedGarment = next[idx];
+          }
+          return { wardrobe: next };
+        });
+
+        if (isCloudUid(user?.uid) && updatedGarment) {
+          try {
+            await upsertGarment(user!.uid, updatedGarment);
+          } catch (error) {
+            console.error("Failed to update garment in cloud:", error);
+          }
         }
       },
       removeGarment: async (garmentId) => {

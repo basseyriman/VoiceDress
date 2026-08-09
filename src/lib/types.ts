@@ -39,6 +39,8 @@ export interface Garment {
   currency?: string;
   orderId?: string;
   tags: string[];
+  /** If true, the garment is hidden from AI suggestions and the active wardrobe view */
+  isArchived?: boolean;
   /**
    * Linked suit / matching set. Jacket + trousers share one setId so the
    * engine can wear them as a full set or mix either piece separately.

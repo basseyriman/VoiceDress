@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Trash2 } from "lucide-react";
+import { Trash2, Archive, ArchiveRestore } from "lucide-react";
 import { GarmentTile } from "@/components/wardrobe/outfit-stage";
 import { useAetherStore } from "@/store/aether-store";
 import type { Garment, GarmentCategory } from "@/lib/types";
@@ -23,7 +23,9 @@ const filters: (GarmentCategory | "all")[] = [
 export default function WardrobePage() {
   const wardrobe = useAetherStore((s) => s.wardrobe);
   const removeGarment = useAetherStore((s) => s.removeGarment);
+  const updateGarment = useAetherStore((s) => s.updateGarment);
   const [filter, setFilter] = useState<(typeof filters)[number]>("all");
+  const [viewMode, setViewMode] = useState<"active" | "archived">("active");
   const [pendingDelete, setPendingDelete] = useState<Garment | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
@@ -41,11 +43,14 @@ export default function WardrobePage() {
     };
   }, [pendingDelete]);
 
-  const items = useMemo(
-    () =>
-      filter === "all" ? wardrobe : wardrobe.filter((g) => g.category === filter),
-    [wardrobe, filter]
-  );
+  const items = useMemo(() => {
+    const modeFiltered = wardrobe.filter((g) =>
+      viewMode === "archived" ? g.isArchived : !g.isArchived
+    );
+    return filter === "all"
+      ? modeFiltered
+      : modeFiltered.filter((g) => g.category === filter);
+  }, [wardrobe, filter, viewMode]);
 
   const confirmDelete = async () => {
     if (!pendingDelete) return;
@@ -94,21 +99,63 @@ export default function WardrobePage() {
         ))}
       </div>
 
+      <div className="flex rounded-full border border-line p-1 max-w-[200px]">
+        <button
+          onClick={() => setViewMode("active")}
+          className={cn(
+            "flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition",
+            viewMode === "active"
+              ? "bg-ink-soft text-ivory"
+              : "text-mist hover:text-ivory/80"
+          )}
+        >
+          Active
+        </button>
+        <button
+          onClick={() => setViewMode("archived")}
+          className={cn(
+            "flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition",
+            viewMode === "archived"
+              ? "bg-ink-soft text-ivory"
+              : "text-mist hover:text-ivory/80"
+          )}
+        >
+          Archived
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((g) => (
-          <div key={g.id} className="relative">
+          <div key={g.id} className="relative group/card">
             <GarmentTile garment={g} large />
-            <button
-              type="button"
-              aria-label={`Remove ${g.name}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setPendingDelete(g);
-              }}
-              className="absolute right-3 top-3 z-10 rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-champagne/50 hover:text-champagne"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            <div className="absolute right-3 top-3 z-10 flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity">
+              <button
+                type="button"
+                aria-label={g.isArchived ? `Restore ${g.name}` : `Archive ${g.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void updateGarment(g.id, { isArchived: !g.isArchived });
+                }}
+                className="rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-champagne/50 hover:text-champagne"
+              >
+                {g.isArchived ? (
+                  <ArchiveRestore className="h-3.5 w-3.5" />
+                ) : (
+                  <Archive className="h-3.5 w-3.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                aria-label={`Remove ${g.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPendingDelete(g);
+                }}
+                className="rounded-full border border-line bg-ink/80 p-2 text-mist backdrop-blur-sm transition hover:border-danger/50 hover:text-danger"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         ))}
       </div>
