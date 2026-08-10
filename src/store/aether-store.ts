@@ -823,19 +823,46 @@ export const useAetherStore = create<AetherState>()(
           return { success: false, error: "limit_reached" };
         }
         const id = Math.random().toString(36).substring(2, 9);
-        set({ savedTryOns: [{ id, url, outfit, timestamp: Date.now() }, ...savedTryOns] });
+        const isDataUrl = url.startsWith("data:");
+        const storedUrl = isDataUrl ? `idb:tryon-${id}` : url;
+        
+        set({ savedTryOns: [{ id, url: storedUrl, outfit, timestamp: Date.now() }, ...savedTryOns] });
+        
+        if (isDataUrl) {
+          import("@/lib/avatar-storage").then(m => m.saveBlob(`tryon-${id}`, url));
+        }
         return { success: true };
       },
       setPendingSwapTryOn: (val) => set({ pendingSwapTryOn: val }),
       swapTryOn: (deleteId, url, outfit) => {
         const { savedTryOns } = get();
         const filtered = savedTryOns.filter((t) => t.id !== deleteId);
+        
+        const old = savedTryOns.find(t => t.id === deleteId);
+        if (old && old.url.startsWith("idb:")) {
+          const oldKey = old.url.replace("idb:", "");
+          import("@/lib/avatar-storage").then(m => m.deleteBlob(oldKey));
+        }
+
         const id = Math.random().toString(36).substring(2, 9);
-        set({ savedTryOns: [{ id, url, outfit, timestamp: Date.now() }, ...filtered] });
+        const isDataUrl = url.startsWith("data:");
+        const storedUrl = isDataUrl ? `idb:tryon-${id}` : url;
+
+        set({ savedTryOns: [{ id, url: storedUrl, outfit, timestamp: Date.now() }, ...filtered] });
+        
+        if (isDataUrl) {
+          import("@/lib/avatar-storage").then(m => m.saveBlob(`tryon-${id}`, url));
+        }
         return { success: true };
       },
       deleteTryOn: (id) => {
-        set((state) => ({ savedTryOns: state.savedTryOns.filter((t) => t.id !== id) }));
+        const { savedTryOns } = get();
+        const old = savedTryOns.find(t => t.id === id);
+        if (old && old.url.startsWith("idb:")) {
+          const oldKey = old.url.replace("idb:", "");
+          import("@/lib/avatar-storage").then(m => m.deleteBlob(oldKey));
+        }
+        set({ savedTryOns: savedTryOns.filter((t) => t.id !== id) });
       },
       markShopifyConnected: (shop, itemCount = 0) => {
         const user = get().user;

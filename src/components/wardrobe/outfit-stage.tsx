@@ -111,6 +111,20 @@ export function OutfitStage({
     resolvedAvatar ||
     (avatarUrl && avatarUrl !== AVATAR_IDB_REF ? avatarUrl : undefined);
   const hasAvatar = Boolean(displayAvatar);
+
+  const [resolvedWornUrl, setResolvedWornUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (wornUrl?.startsWith("idb:")) {
+      import("@/lib/avatar-storage").then(m => m.loadBlob(wornUrl.replace("idb:", ""))).then((url) => {
+        if (!cancelled && url) setResolvedWornUrl(url);
+      });
+    } else {
+      setResolvedWornUrl(wornUrl);
+    }
+    return () => { cancelled = true; };
+  }, [wornUrl]);
+
   const [dressing, setDressing] = useState(false);
   const [needsKey, setNeedsKey] = useState(false);
   const [needsBilling, setNeedsBilling] = useState(false);
@@ -666,10 +680,10 @@ export function OutfitStage({
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_30%,rgba(201,168,124,0.08),transparent_60%)]" />
 
             <AnimatePresence mode="sync">
-              {(wornUrl || displayAvatar) && (
+              {(resolvedWornUrl || displayAvatar) && (
                 <motion.img
-                  key={wornUrl || displayAvatar || "empty"}
-                  src={wornUrl || displayAvatar || undefined}
+                  key={resolvedWornUrl || displayAvatar || "empty"}
+                  src={resolvedWornUrl || displayAvatar || undefined}
                   alt="You in this outfit"
                   initial={{ opacity: 0.55, filter: "brightness(0.96)" }}
                   animate={{

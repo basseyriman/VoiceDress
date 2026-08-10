@@ -8,6 +8,21 @@ import { X, Bookmark, ArrowLeftRight, Share } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ExportModal } from "@/components/wardrobe/export-modal";
 import type { Outfit } from "@/lib/types";
+import { useEffect } from "react";
+
+function TryOnImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [url, setUrl] = useState(src);
+  useEffect(() => {
+    if (src.startsWith("idb:")) {
+      import("@/lib/avatar-storage").then(m => m.loadBlob(src.replace("idb:", ""))).then(res => {
+        if (res) setUrl(res);
+      });
+    } else {
+      setUrl(src);
+    }
+  }, [src]);
+  return <img src={url} alt={alt} className={className} />;
+}
 
 export default function SavedLooksPage() {
   const router = useRouter();
@@ -91,7 +106,7 @@ export default function SavedLooksPage() {
                 }}
               >
                 <div className="aspect-[3/4] w-full">
-                  <img
+                  <TryOnImage
                     src={saved.url}
                     alt="Saved try-on"
                     className="h-full w-full object-cover"
