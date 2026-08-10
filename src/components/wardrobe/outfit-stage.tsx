@@ -350,14 +350,8 @@ export function OutfitStage({
       let consumedFreeThisRun = false;
       let current = displayAvatar;
       let identityPhoto = displayAvatar;
-      try {
-        current = await letterboxForTryOn(displayAvatar);
-        identityPhoto = current;
-        if (cancelled || myId !== requestId.current || ac.signal.aborted) return;
-        setWornUrl(current);
-      } catch {
-        // Keep original if letterbox fails
-      }
+      // We removed the letterboxForTryOn step here to maintain full frame without black borders
+      setWornUrl(current);
 
       const failOrBilling = (data: {
         needsKey?: boolean;
