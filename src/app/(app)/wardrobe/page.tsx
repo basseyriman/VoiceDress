@@ -7,6 +7,7 @@ import { Trash2, Archive, Undo2, Upload } from "lucide-react";
 import Link from "next/link";
 import { GarmentTile } from "@/components/wardrobe/outfit-stage";
 import { useAetherStore } from "@/store/aether-store";
+import { useGarmentUpload } from "@/hooks/use-garment-upload";
 import type { Garment, GarmentCategory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,8 @@ export default function WardrobePage() {
   const [pendingDelete, setPendingDelete] = useState<Garment | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [portalReady, setPortalReady] = useState(false);
+
+  const { fileRef, syncing, uploadProgress, progressLabel, onIngestFiles, toast, error, setToast, setError } = useGarmentUpload();
 
   useEffect(() => {
     setPortalReady(true);
@@ -81,15 +84,6 @@ export default function WardrobePage() {
           {wardrobe.length} pieces. Upload new garments below — remove mistakes with the
           bin.
         </p>
-        <div className="mt-6">
-          <Link
-            href="/connect"
-            className="inline-flex items-center gap-2 rounded-full bg-champagne/15 border border-champagne/30 px-5 py-2.5 text-sm font-medium text-champagne transition hover:bg-champagne/25"
-          >
-            <Upload className="h-4 w-4" />
-            Upload Garments
-          </Link>
-        </div>
       </motion.div>
 
       <div className="flex flex-wrap gap-2">
@@ -109,30 +103,79 @@ export default function WardrobePage() {
         ))}
       </div>
 
-      <div className="flex rounded-full border border-line p-1 max-w-[200px]">
-        <button
-          onClick={() => setViewMode("active")}
-          className={cn(
-            "flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition",
-            viewMode === "active"
-              ? "bg-ink-soft text-ivory"
-              : "text-mist hover:text-ivory/80"
+      <div className="flex items-center gap-4">
+        <div className="flex rounded-full border border-line p-1 w-[200px]">
+          <button
+            onClick={() => setViewMode("active")}
+            className={cn(
+              "flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition",
+              viewMode === "active"
+                ? "bg-ink-soft text-ivory"
+                : "text-mist hover:text-ivory/80"
+            )}
+          >
+            Active
+          </button>
+          <button
+            onClick={() => setViewMode("archived")}
+            className={cn(
+              "flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition",
+              viewMode === "archived"
+                ? "bg-ink-soft text-ivory"
+                : "text-mist hover:text-ivory/80"
+            )}
+          >
+            Archived
+          </button>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => void onIngestFiles(e.target.files)}
+          />
+          <button
+            disabled={!!syncing}
+            onClick={() => fileRef.current?.click()}
+            className="inline-flex items-center gap-2 rounded-full bg-champagne/15 border border-champagne/30 px-4 py-1.5 text-xs font-medium text-champagne transition hover:bg-champagne/25 disabled:opacity-50 disabled:pointer-events-none"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            {progressLabel || "Upload Garments"}
+          </button>
+          
+          {uploadProgress && uploadProgress.total > 1 && (
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-champagne transition-all duration-300"
+                  style={{
+                    width: `${Math.round(
+                      (uploadProgress.done / uploadProgress.total) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
           )}
-        >
-          Active
-        </button>
-        <button
-          onClick={() => setViewMode("archived")}
-          className={cn(
-            "flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition",
-            viewMode === "archived"
-              ? "bg-ink-soft text-ivory"
-              : "text-mist hover:text-ivory/80"
-          )}
-        >
-          Archived
-        </button>
+        </div>
       </div>
+      
+      {toast && (
+        <div className="rounded-2xl border border-champagne/30 bg-champagne/10 px-4 py-3 text-sm text-ivory flex justify-between items-center">
+          {toast}
+          <button onClick={() => setToast("")} className="text-mist hover:text-ivory">✕</button>
+        </div>
+      )}
+      {error && (
+        <div className="rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-ivory flex justify-between items-center">
+          {error}
+          <button onClick={() => setError("")} className="text-mist hover:text-ivory">✕</button>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-line bg-ink/30 px-6 py-20 text-center">
