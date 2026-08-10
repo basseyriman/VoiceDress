@@ -34,7 +34,7 @@ export default function SavedLooksPage() {
   const setWornUrl = useAetherStore((s) => s.setCurrentTryOnUrl);
   const setCurrentOutfit = useAetherStore((s) => s.setCurrentOutfit);
   
-  const [exportingOutfit, setExportingOutfit] = useState<Outfit | null>(null);
+  const [expandedLook, setExpandedLook] = useState<{ id: string; url: string; outfit: Outfit } | null>(null);
 
   return (
     <motion.div
@@ -99,9 +99,7 @@ export default function SavedLooksPage() {
                     setPendingSwapTryOn(null);
                     alert("Look successfully swapped!");
                   } else {
-                    setWornUrl(saved.url);
-                    setCurrentOutfit(saved.outfit);
-                    router.push("/today");
+                    setExpandedLook(saved);
                   }
                 }}
               >
@@ -124,9 +122,14 @@ export default function SavedLooksPage() {
                 {!pendingSwapTryOn && (
                   <div className="absolute top-2 right-2 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
                     <button
-                      onClick={(e) => {
+                      onClick={async (e) => {
                         e.stopPropagation();
-                        setExportingOutfit(saved.outfit);
+                        try {
+                          const { downloadAndSharePhoto } = await import("@/lib/share-utils");
+                          await downloadAndSharePhoto(saved.url, `voicedress-look-${saved.id}.jpg`);
+                        } catch (err) {
+                          // error handled in utility
+                        }
                       }}
                       className="bg-black/60 text-white p-1.5 rounded-full hover:bg-champagne hover:text-black transition"
                       aria-label="Share saved look"
@@ -151,13 +154,55 @@ export default function SavedLooksPage() {
         </div>
       )}
 
-      {exportingOutfit && (
-        <ExportModal 
-          outfit={exportingOutfit} 
-          garments={exportingOutfit.garments || []} 
-          onClose={() => setExportingOutfit(null)} 
-        />
-      )}
+      <AnimatePresence>
+        {expandedLook && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex flex-col bg-black/95 backdrop-blur-md"
+          >
+            <div className="flex h-16 items-center justify-between px-4">
+              <button
+                onClick={() => setExpandedLook(null)}
+                className="p-2 text-white/70 hover:text-white"
+              >
+                <X className="h-6 w-6" />
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const { downloadAndSharePhoto } = await import("@/lib/share-utils");
+                    await downloadAndSharePhoto(expandedLook.url, `voicedress-look-${expandedLook.id}.jpg`);
+                  } catch (err) {}
+                }}
+                className="p-2 text-white/70 hover:text-champagne"
+              >
+                <Share className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden p-4 flex items-center justify-center">
+              <TryOnImage
+                src={expandedLook.url}
+                alt="Saved try-on"
+                className="max-h-full max-w-full object-contain rounded-2xl"
+              />
+            </div>
+            <div className="p-6 pb-[calc(24px+env(safe-area-inset-bottom))]">
+              <button
+                onClick={() => {
+                  setWornUrl(expandedLook.url);
+                  setCurrentOutfit(expandedLook.outfit);
+                  router.push("/today");
+                }}
+                className="w-full rounded-full bg-champagne py-4 text-sm font-semibold text-ink shadow-lg transition-transform active:scale-[0.98]"
+              >
+                Wear this Outfit Again
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
