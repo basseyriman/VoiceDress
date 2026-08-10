@@ -1043,6 +1043,7 @@ export const useAetherStore = create<AetherState>()(
         connections: state.connections,
         taste: state.taste,
         currentOutfit: null,
+        savedTryOns: state.savedTryOns,
       }),
       onRehydrateStorage: () => (state) => {
         state?.setHydrated(true);
