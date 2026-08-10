@@ -119,8 +119,11 @@ export default function ShopperPage() {
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden bg-black/50">
                   <img 
-                    src={item.imageUrl} 
+                    src={item.imageUrl && item.imageUrl !== 'placeholder' ? item.imageUrl : "https://images.unsplash.com/photo-1434389678369-183423d6a0ce?w=400"} 
                     alt={item.name} 
+                    onError={(e) => {
+                      e.currentTarget.src = "https://images.unsplash.com/photo-1434389678369-183423d6a0ce?w=400";
+                    }}
                     className="h-full w-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500 group-hover:scale-105"
                   />
                   <div className="absolute top-4 right-4 bg-ink/80 backdrop-blur-md rounded-full px-3 py-1 border border-line">
