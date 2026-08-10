@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Trash2, Archive, Undo2, Upload, Sparkles, PieChart } from "lucide-react";
+import { Trash2, Archive, Undo2, Upload, Sparkles, PieChart, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { GarmentTile } from "@/components/wardrobe/outfit-stage";
 import { useAetherStore } from "@/store/aether-store";
@@ -79,6 +79,10 @@ export default function WardrobePage() {
             Closet
           </p>
           <div className="flex items-center gap-2">
+            <Link href="/shopper" className="flex items-center gap-1.5 rounded-full border border-champagne/30 bg-champagne/10 px-3 py-1 text-xs font-medium text-champagne transition hover:bg-champagne/20">
+              <ShoppingBag className="h-3 w-3" />
+              Shopper
+            </Link>
             <Link href="/insights" className="flex items-center gap-1.5 rounded-full border border-champagne/30 bg-champagne/10 px-3 py-1 text-xs font-medium text-champagne transition hover:bg-champagne/20">
               <PieChart className="h-3 w-3" />
               Insights
