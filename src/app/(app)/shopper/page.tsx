@@ -154,7 +154,10 @@ export default function ShopperPage() {
                     </div>
                   </div>
 
-                  <button className="mt-6 w-full inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-ivory text-ink text-sm font-medium transition hover:bg-champagne">
+                  <button 
+                    onClick={() => window.open(`https://www.google.com/search?tbm=shop&q=${encodeURIComponent(item.name)}`, '_blank')}
+                    className="mt-6 w-full inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-ivory text-ink text-sm font-medium transition hover:bg-champagne"
+                  >
                     <ShoppingBag className="h-4 w-4" />
                     Find Similar Items
                   </button>
