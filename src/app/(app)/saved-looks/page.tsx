@@ -3,8 +3,11 @@
 import { useAetherStore } from "@/store/aether-store";
 import { motion, AnimatePresence } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { X, Bookmark, ArrowLeftRight } from "lucide-react";
+import { useState } from "react";
+import { X, Bookmark, ArrowLeftRight, Share } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ExportModal } from "@/components/wardrobe/export-modal";
+import type { Outfit } from "@/lib/types";
 
 export default function SavedLooksPage() {
   const router = useRouter();
@@ -15,6 +18,8 @@ export default function SavedLooksPage() {
   const deleteTryOn = useAetherStore((s) => s.deleteTryOn);
   const setWornUrl = useAetherStore((s) => s.setCurrentTryOnUrl);
   const setCurrentOutfit = useAetherStore((s) => s.setCurrentOutfit);
+  
+  const [exportingOutfit, setExportingOutfit] = useState<Outfit | null>(null);
 
   return (
     <motion.div
@@ -102,21 +107,41 @@ export default function SavedLooksPage() {
                 )}
 
                 {!pendingSwapTryOn && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteTryOn(saved.id);
-                    }}
-                    className="absolute top-2 right-2 bg-black/60 text-white p-1.5 rounded-full opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition hover:bg-danger/80"
-                    aria-label="Delete saved look"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="absolute top-2 right-2 flex gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExportingOutfit(saved.outfit);
+                      }}
+                      className="bg-black/60 text-white p-1.5 rounded-full hover:bg-champagne hover:text-black transition"
+                      aria-label="Share saved look"
+                    >
+                      <Share className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteTryOn(saved.id);
+                      }}
+                      className="bg-black/60 text-white p-1.5 rounded-full hover:bg-danger/80 transition"
+                      aria-label="Delete saved look"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 )}
               </motion.div>
             ))}
           </AnimatePresence>
         </div>
+      )}
+
+      {exportingOutfit && (
+        <ExportModal 
+          outfit={exportingOutfit} 
+          garments={exportingOutfit.garments || []} 
+          onClose={() => setExportingOutfit(null)} 
+        />
       )}
     </motion.div>
   );
