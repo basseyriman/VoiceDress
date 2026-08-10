@@ -49,7 +49,7 @@ export default function WardrobePage() {
 
   const items = useMemo(() => {
     const modeFiltered = wardrobe.filter((g) =>
-      viewMode === "archived" ? g.isArchived : !g.isArchived
+      !g.isWishlist && (viewMode === "archived" ? g.isArchived : !g.isArchived)
     );
     return filter === "all"
       ? modeFiltered
@@ -74,9 +74,15 @@ export default function WardrobePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       >
-        <p className="text-xs uppercase tracking-[0.28em] text-champagne">
-          Closet
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs uppercase tracking-[0.28em] text-champagne">
+            Closet
+          </p>
+          <Link href="/wishlist" className="flex items-center gap-1.5 rounded-full border border-champagne/30 bg-champagne/10 px-3 py-1 text-xs font-medium text-champagne transition hover:bg-champagne/20">
+            <Sparkles className="h-3 w-3" />
+            Wishlist
+          </Link>
+        </div>
         <h1 className="mt-3 font-display text-4xl text-ivory sm:text-5xl">
           Your wardrobe
         </h1>

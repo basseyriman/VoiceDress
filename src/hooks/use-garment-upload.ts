@@ -110,7 +110,8 @@ export function useGarmentUpload() {
 
   const onIngestFiles = async (
     list?: FileList | null,
-    source: CommerceSource = "receipt"
+    source: CommerceSource = "receipt",
+    isWishlist: boolean = false
   ) => {
     const files = list
       ? Array.from(list).filter(
@@ -150,8 +151,11 @@ export function useGarmentUpload() {
             if (i > 0) await sleep(350);
             const result = await ingestOnePhoto(batch[i], source);
             if (result.items.length) {
-              addGarments(result.items);
-              added += result.items.length;
+              const processedItems = isWishlist
+                ? result.items.map((g) => ({ ...g, isWishlist: true }))
+                : result.items;
+              addGarments(processedItems);
+              added += processedItems.length;
               photosOk += 1;
             } else if (result.error) {
               failures.push(result.error);

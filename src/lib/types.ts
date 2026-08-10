@@ -41,6 +41,12 @@ export interface Garment {
   tags: string[];
   /** If true, the garment is hidden from AI suggestions and the active wardrobe view */
   isArchived?: boolean;
+  /** If true, the item is not yet owned and is part of the wishlist */
+  isWishlist?: boolean;
+  /** Score from 0-100 indicating how well this wishlist item fits the wardrobe */
+  styleScore?: number;
+  /** AI explanation for the style score */
+  styleAdvice?: string;
   /**
    * Linked suit / matching set. Jacket + trousers share one setId so the
    * engine can wear them as a full set or mix either piece separately.
