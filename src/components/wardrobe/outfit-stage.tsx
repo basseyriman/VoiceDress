@@ -1095,6 +1095,12 @@ export function GarmentTile({
             onError={onImgError}
           />
         )}
+        
+        {large && actions && (
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+            {actions}
+          </div>
+        )}
       </div>
       <div className={cn("min-w-0 flex-1", large && "px-1 pb-1")}>
         <div className="flex items-start justify-between gap-2">
@@ -1125,11 +1131,11 @@ export function GarmentTile({
             </span>
           )}
         </div>
-        <div className="flex items-center justify-between mt-0.5">
+        <div className="mt-0.5">
           <p className="truncate text-xs text-mist">
             {garment.brand} · {garment.category}
           </p>
-          {actions && <div className="flex items-center gap-8 shrink-0 ml-2">{actions}</div>}
+          {!large && actions && <div className="flex items-center gap-8 mt-2">{actions}</div>}
         </div>
         {!large && (
           <p className="mt-2 text-xs text-mist">

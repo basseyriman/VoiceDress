@@ -202,12 +202,12 @@ export default function WardrobePage() {
                         e.stopPropagation();
                         void updateGarment(g.id, { isArchived: !g.isArchived });
                       }}
-                      className="text-mist hover:text-champagne transition-colors p-1"
+                      className="bg-black/60 backdrop-blur-md rounded-full text-white p-2 hover:bg-black/80 transition-colors"
                     >
                       {g.isArchived ? (
-                        <Undo2 className="h-5 w-5" />
+                        <Undo2 className="h-4 w-4" />
                       ) : (
-                        <Archive className="h-5 w-5" />
+                        <Archive className="h-4 w-4" />
                       )}
                     </button>
                     <button
@@ -217,9 +217,9 @@ export default function WardrobePage() {
                         e.stopPropagation();
                         setPendingDelete(g);
                       }}
-                      className="text-mist hover:text-danger transition-colors p-1"
+                      className="bg-black/60 backdrop-blur-md rounded-full text-white p-2 hover:bg-danger/80 transition-colors"
                     >
-                      <Trash2 className="h-5 w-5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </>
                 }
