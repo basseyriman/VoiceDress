@@ -613,7 +613,7 @@ export const useAetherStore = create<AetherState>()(
           preferredStyle: stylePrefs?.[0] || outfit.style,
           recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
         };
-        set({ currentOutfit: outfit, taste: nextTaste });
+        set({ currentOutfit: outfit, taste: nextTaste, currentTryOnUrl: null });
         persistOutfitAndTaste(user?.uid, outfit, nextTaste);
         return outfit;
       },
@@ -717,7 +717,7 @@ export const useAetherStore = create<AetherState>()(
           preferredStyle: stylePrefs?.[0] || outfit.style,
           recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
         };
-        set({ currentOutfit: outfit, taste: nextTaste });
+        set({ currentOutfit: outfit, taste: nextTaste, currentTryOnUrl: null });
         persistOutfitAndTaste(user?.uid, outfit, nextTaste);
         return outfit;
       },
@@ -742,7 +742,7 @@ export const useAetherStore = create<AetherState>()(
             preferredStyle: stylePrefs?.[0] || outfit.style,
             recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
           };
-          set({ currentOutfit: outfit, taste: nextTaste });
+          set({ currentOutfit: outfit, taste: nextTaste, currentTryOnUrl: null });
           persistOutfitAndTaste(user?.uid, outfit, nextTaste);
           return outfit;
         }
@@ -767,7 +767,7 @@ export const useAetherStore = create<AetherState>()(
           preferredStyle: stylePrefs?.[0] || outfit.style,
           recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
         };
-        set({ currentOutfit: outfit, taste: nextTaste });
+        set({ currentOutfit: outfit, taste: nextTaste, currentTryOnUrl: null });
         persistOutfitAndTaste(user?.uid, outfit, nextTaste);
         return outfit;
       },
@@ -785,7 +785,7 @@ export const useAetherStore = create<AetherState>()(
           preferredStyle: user?.stylePrefs?.[0] || outfit.style,
           recentOutfitIds: [outfit.id, ...taste.recentOutfitIds].slice(0, 20),
         };
-        set({ currentOutfit: outfit, taste: nextTaste });
+        set({ currentOutfit: outfit, taste: nextTaste, currentTryOnUrl: null });
         persistOutfitAndTaste(user?.uid, outfit, nextTaste);
         return outfit;
       },
