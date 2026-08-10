@@ -373,8 +373,10 @@ export async function hydrateUserFromCloud(uid: string): Promise<{
   if (!isFirebaseConfigured || !getDb()) return null;
   const profile = await loadUserProfile(uid);
   if (!profile) return null;
-  const wardrobe = await listGarments(uid);
-  const outfit = await loadLatestOutfit(uid);
-  const tryOns = await listTryOns(uid);
+  const [wardrobe, outfit, tryOns] = await Promise.all([
+    listGarments(uid),
+    loadLatestOutfit(uid),
+    listTryOns(uid)
+  ]);
   return { profile, wardrobe, outfit, tryOns };
 }
