@@ -50,9 +50,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="relative min-h-screen overflow-x-clip pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-16">
       <header className="sticky top-0 z-[100] isolate border-b border-line/50 bg-ink/80 backdrop-blur-2xl pt-[env(safe-area-inset-top)]">
         <div className="mx-auto flex h-[4.25rem] max-w-7xl items-center justify-between gap-3 px-4 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:h-[4.5rem] sm:gap-4 sm:px-6">
-          <div className="flex min-w-0 items-center gap-4 sm:gap-10">
-            <Logo variant="header" className="min-w-0 shrink" />
-            <nav className="relative z-[101] hidden items-center gap-1 md:flex">
+          <div className="flex min-w-0 items-center gap-4 lg:gap-8 xl:gap-10">
+            <Logo variant="header" className="min-w-0 shrink-0" />
+            <nav className="relative z-[101] hidden items-center gap-1 lg:flex">
               {nav.map((item) => {
                 const Icon = item.icon;
                 const active = pathname.startsWith(item.href);
@@ -98,7 +98,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   ) : (
                     <span className="font-medium text-ivory">{totalCredits}</span>
                   )}
-                  <span className="hidden sm:inline"> VoiceDress</span> Credits
+                  <span className="hidden sm:inline"> Credits</span>
                 </span>
                 {!isComped && (
                   <button
@@ -128,7 +128,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => {
-                void signOutLocal().then(() => router.push("/"));
+                void signOutLocal().then(() => {
+                  window.location.assign("/");
+                });
               }}
               className="inline-flex items-center gap-2 rounded-full px-2 py-2 text-xs text-mist transition hover:text-ivory sm:px-3"
             >
@@ -145,7 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <FlowDock />
 
-      <nav className="fixed inset-x-0 bottom-0 z-[100] isolate border-t border-line/50 bg-ink/95 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-[100] isolate border-t border-line/50 bg-ink/95 backdrop-blur-2xl pb-[env(safe-area-inset-bottom)] lg:hidden">
         <div className="flex w-full max-w-full items-stretch justify-between gap-0 px-1 py-2 pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.25rem,env(safe-area-inset-right))]">
           {nav.map((item) => {
             const Icon = item.icon;
