@@ -61,7 +61,14 @@ Your task:
 1. Select a minimalist but versatile capsule wardrobe from their exact wardrobe items that suits the climate and vibe of ${destination}.
 2. Provide a checklist grouped by category.
 3. Suggest ${days * 2} outfits (one for the day, one for the night for each day of the trip), using ONLY the selected capsule items.
-Use the exact garment IDs provided. Do NOT hallucinate items they don't own.
+
+CRITICAL STYLING RULES:
+- Every outfit MUST have exactly ONE top (unless it's a dress/one-piece).
+- Every outfit MUST have exactly ONE bottom (unless it's a dress/one-piece). NEVER suggest two bottoms (e.g., two trousers) in a single outfit.
+- Every outfit MUST have exactly ONE pair of shoes.
+- You may optionally include ONE piece of outerwear or an accessory.
+- Night outfits should generally be more elevated/formal than day outfits.
+- Use the exact garment IDs provided. Do NOT hallucinate items they don't own.
 `
     });
 
