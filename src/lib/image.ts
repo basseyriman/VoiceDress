@@ -64,6 +64,8 @@ async function prepareImageUpload(
  * Extra margin around the person so feet/head don’t get clipped by the model.
  */
 export async function letterboxForTryOn(src: string): Promise<string> {
+  return src;
+  
   const img = await loadHtmlImage(src);
   const targetRatio = 2 / 3; // width / height — FASHN native
   // Keep breathing room so FASHN/Kontext don’t chew the head or shoes
