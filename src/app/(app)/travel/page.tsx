@@ -173,7 +173,7 @@ export default function TravelPage() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
                 {getGarments(plan.capsule).map((g) => (
                   <div key={g.id} className="relative group">
-                    <GarmentTile garment={g} />
+                    <GarmentTile garment={g} large />
                   </div>
                 ))}
               </div>
@@ -201,8 +201,8 @@ export default function TravelPage() {
                       </div>
                       <div className="flex gap-3 overflow-x-auto pb-2 hide-scrollbar">
                         {items.map((g) => (
-                          <div key={g.id} className="w-24 shrink-0">
-                            <GarmentTile garment={g} />
+                          <div key={g.id} className="w-32 shrink-0">
+                            <GarmentTile garment={g} large />
                           </div>
                         ))}
                       </div>
