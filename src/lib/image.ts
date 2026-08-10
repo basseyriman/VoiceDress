@@ -65,53 +65,6 @@ async function prepareImageUpload(
  */
 export async function letterboxForTryOn(src: string): Promise<string> {
   return src;
-  
-  const img = await loadHtmlImage(src);
-  const targetRatio = 2 / 3; // width / height — FASHN native
-  // Keep breathing room so FASHN/Kontext don’t chew the head or shoes
-  const edgePad = 0.08;
-  const contentW = img.width;
-  const contentH = img.height;
-  const paddedW = contentW * (1 + edgePad * 2);
-  const paddedH = contentH * (1 + edgePad * 2);
-  const paddedRatio = paddedW / paddedH;
-
-  let canvasW: number;
-  let canvasH: number;
-  if (paddedRatio > targetRatio) {
-    canvasW = paddedW;
-    canvasH = paddedW / targetRatio;
-  } else {
-    canvasH = paddedH;
-    canvasW = paddedH * targetRatio;
-  }
-
-  const maxEdge = 2048;
-  const scale = Math.min(1, maxEdge / Math.max(canvasW, canvasH));
-  canvasW = Math.max(1, Math.round(canvasW * scale));
-  canvasH = Math.max(1, Math.round(canvasH * scale));
-  const drawW = Math.round(contentW * scale);
-  const drawH = Math.round(contentH * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = canvasW;
-  canvas.height = canvasH;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return src;
-
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.fillStyle = "#0e0e0d";
-  ctx.fillRect(0, 0, canvasW, canvasH);
-  ctx.drawImage(
-    img,
-    Math.round((canvasW - drawW) / 2),
-    Math.round((canvasH - drawH) / 2),
-    drawW,
-    drawH
-  );
-
-  return canvas.toDataURL("image/jpeg", 0.97);
 }
 
 /**
