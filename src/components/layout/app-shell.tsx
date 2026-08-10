@@ -10,6 +10,7 @@ import {
   UserRound,
   Bookmark,
   Plane,
+  Settings,
 } from "lucide-react";
 import { Logo } from "@/components/ui/button";
 import { useAetherStore } from "@/store/aether-store";
@@ -116,6 +117,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => router.push("/settings")}
+              className="inline-flex items-center justify-center rounded-full p-2 text-mist transition hover:bg-black/5 hover:text-ink dark:hover:bg-white/[0.04] dark:hover:text-ivory"
+              aria-label="Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={() => {

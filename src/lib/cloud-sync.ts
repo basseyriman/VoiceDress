@@ -23,6 +23,7 @@ import type {
   Outfit,
   TasteMemory,
   UserProfile,
+  SavedTryOn,
 } from "@/lib/types";
 import { normalizeGarmentPublicUrl } from "@/lib/garment-url";
 
@@ -206,6 +207,54 @@ export async function deleteGarmentCloud(
   }
 }
 
+export async function upsertTryOn(uid: string, tryOn: SavedTryOn): Promise<void> {
+  const { db } = assertCloud();
+  let url = tryOn.url;
+  
+  if (url.startsWith("idb:")) {
+    // We must load the blob from IndexedDB to get the dataUrl before uploading
+    try {
+      const { loadBlob } = await import("@/lib/avatar-storage");
+      const dataUrl = await loadBlob(url.replace("idb:", ""));
+      if (dataUrl) {
+        url = await uploadDataUrl(`users/${uid}/tryons/${tryOn.id}.jpg`, dataUrl);
+      }
+    } catch {
+      console.warn("Failed to upload try-on from IDB");
+    }
+  } else if (url.startsWith("data:")) {
+    url = await uploadDataUrl(`users/${uid}/tryons/${tryOn.id}.jpg`, url);
+  }
+
+  const clean = JSON.parse(
+    JSON.stringify({ ...tryOn, url })
+  ) as SavedTryOn;
+  
+  await setDoc(doc(db, "users", uid, "tryons", tryOn.id), clean, { merge: true });
+}
+
+export async function listTryOns(uid: string): Promise<SavedTryOn[]> {
+  const { db } = assertCloud();
+  const q = query(collection(db, "users", uid, "tryons"), orderBy("timestamp", "desc"));
+  try {
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => d.data() as SavedTryOn);
+  } catch {
+    const snap = await getDocs(collection(db, "users", uid, "tryons"));
+    return snap.docs.map((d) => d.data() as SavedTryOn).sort((a, b) => b.timestamp - a.timestamp);
+  }
+}
+
+export async function deleteTryOnCloud(uid: string, id: string): Promise<void> {
+  const { db, storage } = assertCloud();
+  try {
+    await deleteDoc(doc(db, "users", uid, "tryons", id));
+    await deleteObject(ref(storage, `users/${uid}/tryons/${id}.jpg`));
+  } catch {
+    // Ignore
+  }
+}
+
 export async function saveCurrentOutfit(
   uid: string,
   outfit: Outfit
@@ -319,11 +368,13 @@ export async function hydrateUserFromCloud(uid: string): Promise<{
   profile: Partial<UserProfile> & { taste?: TasteMemory };
   wardrobe: Garment[];
   outfit: Outfit | null;
+  tryOns: SavedTryOn[];
 } | null> {
   if (!isFirebaseConfigured || !getDb()) return null;
   const profile = await loadUserProfile(uid);
   if (!profile) return null;
   const wardrobe = await listGarments(uid);
   const outfit = await loadLatestOutfit(uid);
-  return { profile, wardrobe, outfit };
+  const tryOns = await listTryOns(uid);
+  return { profile, wardrobe, outfit, tryOns };
 }

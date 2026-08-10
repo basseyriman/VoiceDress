@@ -42,12 +42,14 @@ import {
 import {
   bootstrapUserCloud,
   deleteGarmentCloud,
+  deleteTryOnCloud,
   hydrateUserFromCloud,
   saveCurrentOutfit,
   saveUserProfile,
   uploadUserAvatar,
   upsertGarments,
   upsertGarment,
+  upsertTryOn,
 } from "@/lib/cloud-sync";
 import {
   getFirebaseAuth,
@@ -77,6 +79,7 @@ interface AetherState {
     wardrobe: Garment[];
     outfit?: Outfit | null;
     taste?: TasteMemory;
+    tryOns?: { id: string; url: string; outfit: Outfit; timestamp: number }[];
   }) => void;
   /** Bootstrap new Firebase user: profile + seed wardrobe + optional avatar. */
   bootstrapCloudUser: (input: {
@@ -257,7 +260,7 @@ export const useAetherStore = create<AetherState>()(
           });
         }
       },
-      applyCloudSession: ({ profile, wardrobe, outfit, taste }) => {
+      applyCloudSession: ({ profile, wardrobe, outfit, taste, tryOns }) => {
         const prev = get().user;
         // Don't let a stale/empty cloud profile wipe a photo we just saved locally
         const keepLocalPhoto =
@@ -298,6 +301,7 @@ export const useAetherStore = create<AetherState>()(
           currentOutfit: safeOutfit,
           taste: taste || { rejectedIds: [], recentOutfitIds: [] },
           cloudReady: true,
+          ...(tryOns ? { savedTryOns: tryOns } : {}),
         });
         if (merged.avatarUrl?.startsWith("http")) {
           void saveAvatarBlob(merged.avatarUrl).catch(() => undefined);
@@ -392,6 +396,7 @@ export const useAetherStore = create<AetherState>()(
             wardrobe,
             outfit: null,
             taste: data.profile.taste,
+            tryOns: data.tryOns,
           });
           return true;
         } catch {
@@ -818,24 +823,32 @@ export const useAetherStore = create<AetherState>()(
       },
       setCurrentTryOnUrl: (url) => set({ currentTryOnUrl: url }),
       saveTryOn: (url, outfit) => {
-        const { savedTryOns } = get();
+        const { savedTryOns, user } = get();
         if (savedTryOns.length >= 5) {
           return { success: false, error: "limit_reached" };
         }
         const id = Math.random().toString(36).substring(2, 9);
         const isDataUrl = url.startsWith("data:");
         const storedUrl = isDataUrl ? `idb:tryon-${id}` : url;
+        const timestamp = Date.now();
+        const newTryOn = { id, url: storedUrl, outfit, timestamp };
         
-        set({ savedTryOns: [{ id, url: storedUrl, outfit, timestamp: Date.now() }, ...savedTryOns] });
+        set({ savedTryOns: [newTryOn, ...savedTryOns] });
         
         if (isDataUrl) {
           import("@/lib/avatar-storage").then(m => m.saveBlob(`tryon-${id}`, url));
         }
+        
+        if (isCloudUid(user?.uid)) {
+          // Cloud sync
+          upsertTryOn(user!.uid, { ...newTryOn, url }).catch(e => console.warn("Failed to sync try-on", e));
+        }
+        
         return { success: true };
       },
       setPendingSwapTryOn: (val) => set({ pendingSwapTryOn: val }),
       swapTryOn: (deleteId, url, outfit) => {
-        const { savedTryOns } = get();
+        const { savedTryOns, user } = get();
         const filtered = savedTryOns.filter((t) => t.id !== deleteId);
         
         const old = savedTryOns.find(t => t.id === deleteId);
@@ -847,20 +860,31 @@ export const useAetherStore = create<AetherState>()(
         const id = Math.random().toString(36).substring(2, 9);
         const isDataUrl = url.startsWith("data:");
         const storedUrl = isDataUrl ? `idb:tryon-${id}` : url;
+        const timestamp = Date.now();
+        const newTryOn = { id, url: storedUrl, outfit, timestamp };
 
-        set({ savedTryOns: [{ id, url: storedUrl, outfit, timestamp: Date.now() }, ...filtered] });
+        set({ savedTryOns: [newTryOn, ...filtered] });
         
         if (isDataUrl) {
           import("@/lib/avatar-storage").then(m => m.saveBlob(`tryon-${id}`, url));
         }
+
+        if (isCloudUid(user?.uid)) {
+          deleteTryOnCloud(user!.uid, deleteId).catch(() => {});
+          upsertTryOn(user!.uid, { ...newTryOn, url }).catch(() => {});
+        }
+
         return { success: true };
       },
       deleteTryOn: (id) => {
-        const { savedTryOns } = get();
+        const { savedTryOns, user } = get();
         const old = savedTryOns.find(t => t.id === id);
         if (old && old.url.startsWith("idb:")) {
           const oldKey = old.url.replace("idb:", "");
           import("@/lib/avatar-storage").then(m => m.deleteBlob(oldKey));
+        }
+        if (isCloudUid(user?.uid)) {
+          deleteTryOnCloud(user!.uid, id).catch(() => {});
         }
         set({ savedTryOns: savedTryOns.filter((t) => t.id !== id) });
       },

@@ -186,3 +186,10 @@ export interface CommerceConnection {
   itemCount: number;
   status: "idle" | "syncing" | "error";
 }
+
+export interface SavedTryOn {
+  id: string;
+  url: string;
+  outfit: Outfit;
+  timestamp: number;
+}
