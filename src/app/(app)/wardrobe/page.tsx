@@ -78,7 +78,7 @@ export default function WardrobePage() {
           Your wardrobe
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-mist">
-          {wardrobe.length} pieces. Add via Connect — remove mistakes with the
+          {wardrobe.length} pieces. Upload new garments below — remove mistakes with the
           bin.
         </p>
         <div className="mt-6">
