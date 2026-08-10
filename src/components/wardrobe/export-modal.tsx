@@ -32,10 +32,20 @@ export function ExportModal({ outfit, garments, onClose }: ExportModalProps) {
 
         if (!mounted) return;
 
-        const link = document.createElement("a");
-        link.download = `voicedress-ootd-${outfit.id}.png`;
-        link.href = dataUrl;
-        link.click();
+        const blob = await (await fetch(dataUrl)).blob();
+        const file = new File([blob], `voicedress-ootd-${outfit.id}.png`, { type: "image/png" });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: "My VoiceDress Look",
+          });
+        } else {
+          const link = document.createElement("a");
+          link.download = `voicedress-ootd-${outfit.id}.png`;
+          link.href = dataUrl;
+          link.click();
+        }
       } catch (err) {
         console.error("Failed to export image:", err);
       } finally {
